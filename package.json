@@ -7,13 +7,13 @@
     "dev": "vercel dev"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^123.0.1",
-    "puppeteer-core": "^22.13.1"
+    "@sparticuz/chromium": "^149.0.0",
+    "puppeteer-core": "^25.2.1"
   },
   "devDependencies": {
-    "puppeteer": "^22.13.1"
+    "puppeteer": "^25.2.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   }
 }
