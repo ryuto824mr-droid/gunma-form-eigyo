@@ -168,6 +168,55 @@
   .btn-bulk:hover:not(:disabled) { background: #1a6617; }
   .btn-bulk:disabled { background: #aaa; cursor: not-allowed; }
   .bulk-progress { font-size: 13px; color: #555; }
+
+  /* Discover section */
+  .discover-section {
+    background: white; border-radius: 8px; padding: 20px 24px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .discover-section h2 { margin: 0 0 14px; font-size: 15px; color: var(--deep-green); }
+  .discover-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .discover-row input {
+    flex: 1 1 280px; padding: 9px 12px; font-size: 14px;
+    border: 1px solid #ccc; border-radius: 6px; font-family: inherit;
+  }
+  .discover-row button {
+    padding: 9px 20px; background: var(--main-green); color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    font-family: inherit; white-space: nowrap;
+  }
+  .discover-row button:hover:not(:disabled) { background: var(--deep-green); }
+  .discover-row button:disabled { background: #aaa; cursor: not-allowed; }
+  .discover-unconfigured {
+    margin-top: 14px; padding: 12px 16px; background: #f5f5f5;
+    border-left: 3px solid #bbb; border-radius: 4px; font-size: 13px; color: #666;
+  }
+  .discover-status { margin-top: 12px; font-size: 13px; color: #888; }
+  .discover-error  { margin-top: 12px; font-size: 13px; color: #c0392b; }
+  .discover-count  { margin: 12px 0 8px; font-size: 13px; color: #555; }
+  .discover-list {
+    list-style: none; margin: 0 0 14px; padding: 0;
+    border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden;
+  }
+  .discover-list li { border-bottom: 1px solid #eee; }
+  .discover-list li:last-child { border-bottom: none; }
+  .discover-list label {
+    display: flex; align-items: center; gap: 10px; padding: 9px 14px;
+    cursor: pointer; font-size: 13px;
+  }
+  .discover-list label:hover { background: #fafff9; }
+  .discover-list input[type="checkbox"] { flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
+  .discover-name { font-weight: 500; flex-shrink: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .discover-url  { color: #2563eb; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-decoration: none; }
+  .discover-url:hover { text-decoration: underline; }
+  .btn-add-selected {
+    padding: 8px 18px; font-size: 13px; border-radius: 6px;
+    background: var(--main-green); color: white; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-add-selected:hover:not(:disabled) { background: var(--deep-green); }
+  .btn-add-selected:disabled { background: #aaa; cursor: not-allowed; }
+  .add-selected-progress { margin-left: 12px; font-size: 13px; color: #555; }
 </style>
 </head>
 <body>
@@ -178,6 +227,16 @@
 </header>
 
 <div class="container">
+
+  <!-- 企業を自動検索 -->
+  <section class="discover-section">
+    <h2>企業を自動検索</h2>
+    <div class="discover-row">
+      <input type="text" id="discoverQuery" placeholder="例: 群馬県 IT企業" />
+      <button id="discoverBtn" onclick="discoverCompanies()">検索</button>
+    </div>
+    <div id="discoverResult"></div>
+  </section>
 
   <!-- 追加フォーム -->
   <section class="add-section">
@@ -412,6 +471,114 @@
       if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error" };
       renderTable();
     }
+  }
+
+  // ---- 企業を自動検索 ----
+  async function discoverCompanies() {
+    const query = document.getElementById("discoverQuery").value.trim();
+    const btn   = document.getElementById("discoverBtn");
+    const resultEl = document.getElementById("discoverResult");
+
+    if (!query) return;
+
+    btn.disabled = true;
+    resultEl.innerHTML = '<p class="discover-status">検索中...</p>';
+
+    try {
+      const res = await fetch("/api/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`;
+        return;
+      }
+
+      if (!data.configured) {
+        resultEl.innerHTML = `<p class="discover-unconfigured">この機能はまだ使えません。Brave Search APIキーの設定が必要です。</p>`;
+        return;
+      }
+
+      if (!data.results || data.results.length === 0) {
+        resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。</p>`;
+        return;
+      }
+
+      resultEl.innerHTML = `
+        <p class="discover-count">${data.results.length}件見つかりました（追加したい企業にチェックを入れてください）</p>
+        <ul class="discover-list">
+          ${data.results.map((r, i) => `
+            <li>
+              <label>
+                <input type="checkbox" class="discover-check" data-index="${i}" data-name="${esc(r.name)}" data-url="${esc(r.url)}" checked />
+                <span class="discover-name">${esc(r.name)}</span>
+                <a href="${esc(r.url)}" target="_blank" rel="noopener" class="discover-url">${esc(r.url)}</a>
+              </label>
+            </li>`).join("")}
+        </ul>
+        <button class="btn-add-selected" id="addSelectedBtn" onclick="addSelectedCompanies()">選んだ企業を追加</button>
+        <span class="add-selected-progress" id="addSelectedProgress"></span>`;
+    } catch (err) {
+      resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function addSelectedCompanies() {
+    const checks = Array.from(document.querySelectorAll(".discover-check:checked"));
+    if (checks.length === 0) return;
+
+    const btn      = document.getElementById("addSelectedBtn");
+    const progress = document.getElementById("addSelectedProgress");
+    btn.disabled   = true;
+
+    const total = checks.length;
+    let added = 0;
+
+    for (let i = 0; i < checks.length; i++) {
+      const check = checks[i];
+      const name  = check.dataset.name;
+      const url   = check.dataset.url;
+
+      progress.textContent = `${i + 1}/${total}件 登録中...(${name})`;
+
+      // 登録
+      let newCompany;
+      try {
+        const res = await fetch("/api/companies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, url }),
+        });
+        const data = await res.json();
+        if (!res.ok) continue;
+        newCompany = data;
+        companies.unshift({ ...newCompany, status: "researching" });
+        renderTable();
+      } catch {
+        continue;
+      }
+
+      // 自動リサーチ
+      progress.textContent = `${i + 1}/${total}件 リサーチ中...(${name})`;
+      try {
+        const { data: updated } = await callResearchAPI(newCompany.id);
+        updateCompany(updated);
+      } catch (err) {
+        const idx = companies.findIndex(c => c.id === newCompany.id);
+        if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
+        renderTable();
+      }
+
+      added++;
+    }
+
+    progress.textContent = `完了しました（${added}件追加）`;
+    btn.disabled = false;
   }
 
   // ---- モーダル表示 ----
