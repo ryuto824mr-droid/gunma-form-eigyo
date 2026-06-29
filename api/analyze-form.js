@@ -148,7 +148,7 @@ module.exports = async function handler(req, res) {
 async function launchBrowser() {
   // Vercel本番環境では @sparticuz/chromium、ローカル開発では puppeteer 本体のChromiumを使う
   if (process.env.VERCEL) {
-    const chromium = require("@sparticuz/chromium");
+    const chromium = (await import("@sparticuz/chromium")).default;
     const puppeteer = require("puppeteer-core");
     const executablePath = await chromium.executablePath();
     process.env.LD_LIBRARY_PATH = `${path.dirname(executablePath)}:${process.env.LD_LIBRARY_PATH || ""}`;
