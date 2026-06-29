@@ -16,6 +16,8 @@
 //     複雑なウィジェット(独自JSコンポーネント)は誤検出する可能性があります。
 //     本番投入前に必ず数十社サンプルで目視チェックしてください。
 
+const path = require("path");
+
 const CONTACT_LINK_KEYWORDS = [
   "お問い合わせ", "お問合せ", "おといあわせ", "ご相談", "ご依頼",
   "contact", "inquiry", "inquiries", "get in touch", "コンタクト",
@@ -146,12 +148,9 @@ module.exports = async function handler(req, res) {
 async function launchBrowser() {
   // Vercel本番環境では @sparticuz/chromium、ローカル開発では puppeteer 本体のChromiumを使う
   if (process.env.VERCEL) {
-    const path = require("path");
     const chromium = require("@sparticuz/chromium");
     const puppeteer = require("puppeteer-core");
     const executablePath = await chromium.executablePath();
-    // Chromium本体と一緒に展開される共有ライブラリ(libnss3.so等)を
-    // 動的リンカが見つけられるように明示しておく
     process.env.LD_LIBRARY_PATH = `${path.dirname(executablePath)}:${process.env.LD_LIBRARY_PATH || ""}`;
     return puppeteer.launch({
       args: chromium.args,
