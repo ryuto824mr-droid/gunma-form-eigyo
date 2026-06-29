@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>フォーム解析テスト - ぐんまフォーム営業ツール</title>
+<style>
+  :root { --main-green: #44B13F; --deep-green: #2F8A2A; }
+  body { font-family: "Noto Sans JP", sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; color: #222; }
+  h1 { color: var(--deep-green); font-size: 20px; }
+  input[type="url"] { width: 100%; padding: 10px; font-size: 14px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px; }
+  button { margin-top: 10px; padding: 10px 20px; background: var(--main-green); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  pre { background: #f5f5f5; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  .status { margin-top: 12px; font-size: 13px; color: #555; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: white; }
+  .ok { background: var(--main-green); }
+  .ng { background: #c0392b; }
+</style>
+</head>
+<body>
+  <h1>フォーム発見・解析テスト (Phase 1)</h1>
+  <p>企業サイトのURLを入力すると、お問い合わせフォームを探してフィールド構成と自動化可否を判定します。</p>
+  <input type="url" id="urlInput" placeholder="https://example.co.jp" />
+  <br />
+  <button id="runBtn">解析する</button>
+  <div class="status" id="status"></div>
+  <pre id="result"></pre>
+
+  <script>
+    const btn = document.getElementById("runBtn");
+    const input = document.getElementById("urlInput");
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+
+    btn.addEventListener("click", async () => {
+      const url = input.value.trim();
+      if (!url) {
+        statusEl.textContent = "URLを入力してください";
+        return;
+      }
+      btn.disabled = true;
+      statusEl.textContent = "解析中... (ヘッドレスブラウザでページを読み込んでいます。数秒~20秒程度かかります)";
+      resultEl.textContent = "";
+
+      try {
+        const res = await fetch("/api/analyze-form", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          statusEl.innerHTML = `<span class="badge ng">エラー</span> ${data.error || "不明なエラー"}`;
+        } else {
+          const badge = data.automatable
+            ? '<span class="badge ok">自動化OK</span>'
+            : '<span class="badge ng">自動化NG</span>';
+          statusEl.innerHTML = `${badge} フォーム発見: ${data.formFound ? "あり" : "なし"} / CAPTCHA: ${data.captchaDetected ? "検出" : "なし"}`;
+        }
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        statusEl.innerHTML = `<span class="badge ng">エラー</span> ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
