@@ -146,11 +146,16 @@ module.exports = async function handler(req, res) {
 async function launchBrowser() {
   // Vercel本番環境では @sparticuz/chromium、ローカル開発では puppeteer 本体のChromiumを使う
   if (process.env.VERCEL) {
+    const path = require("path");
     const chromium = require("@sparticuz/chromium");
     const puppeteer = require("puppeteer-core");
+    const executablePath = await chromium.executablePath();
+    // Chromium本体と一緒に展開される共有ライブラリ(libnss3.so等)を
+    // 動的リンカが見つけられるように明示しておく
+    process.env.LD_LIBRARY_PATH = `${path.dirname(executablePath)}:${process.env.LD_LIBRARY_PATH || ""}`;
     return puppeteer.launch({
       args: chromium.args,
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: chromium.headless,
     });
   }
