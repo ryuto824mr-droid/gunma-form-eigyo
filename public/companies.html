@@ -151,6 +151,23 @@
   }
   .source-ai        { background: #6366f1; }
   .source-heuristic { background: #64748b; }
+
+  .badge-researching { background: #6366f1; }
+
+  /* Bulk toolbar */
+  .bulk-toolbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 14px 20px; border-bottom: 1px solid #eee;
+  }
+  .bulk-toolbar h2 { margin: 0; font-size: 15px; color: var(--deep-green); flex: 1; }
+  .btn-bulk {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px; border: none;
+    background: var(--deep-green); color: white; cursor: pointer;
+    font-family: inherit; font-weight: 700; white-space: nowrap;
+  }
+  .btn-bulk:hover:not(:disabled) { background: #1a6617; }
+  .btn-bulk:disabled { background: #aaa; cursor: not-allowed; }
+  .bulk-progress { font-size: 13px; color: #555; }
 </style>
 </head>
 <body>
@@ -175,7 +192,11 @@
 
   <!-- 一覧テーブル -->
   <section class="table-section">
-    <h2 style="padding-bottom:14px">登録企業一覧</h2>
+    <div class="bulk-toolbar">
+      <h2>登録企業一覧</h2>
+      <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
+      <span class="bulk-progress" id="bulkProgress"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -210,6 +231,7 @@
 
 <script>
   let companies = [];
+  let isBulkResearching = false;
 
   // ---- 起動時に読み込み ----
   loadCompanies();
@@ -237,6 +259,8 @@
       const updatedAt = c.updated_at
         ? new Date(c.updated_at).toLocaleString("ja-JP", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" })
         : "—";
+      const isResearching = c.status === "researching";
+      const btnDisabled = isBulkResearching || isResearching;
       return `
         <tr id="row-${c.id}">
           <td class="name">${esc(c.name)}</td>
@@ -245,18 +269,30 @@
           <td>${automatableBadge(result)}</td>
           <td style="white-space:nowrap">${updatedAt}</td>
           <td style="white-space:nowrap">
-            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})">リサーチする</button>
-            ${result && !result.error ? `<button class="btn-detail" onclick="showDetail(${c.id})">詳細</button>` : ""}
+            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${isResearching ? "リサーチ中..." : "リサーチする"}</button>
+            ${result && !result.error && !isResearching ? `<button class="btn-detail" onclick="showDetail(${c.id})">詳細</button>` : ""}
           </td>
         </tr>`;
     }).join("");
   }
 
-  // ---- 企業追加 ----
+  // ---- Research API 共通ヘルパー ----
+  async function callResearchAPI(id) {
+    const res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
+    const data = await res.json();
+    return { ok: res.ok, data };
+  }
+
+  function updateCompany(updated) {
+    const idx = companies.findIndex(c => c.id === updated.id);
+    if (idx !== -1) companies[idx] = updated;
+    renderTable();
+  }
+
+  // ---- 企業追加 + 自動リサーチ ----
   async function addCompany() {
     const name = document.getElementById("inputName").value.trim();
     const url  = document.getElementById("inputUrl").value.trim();
-    const msg  = document.getElementById("addMsg");
     const btn  = document.getElementById("addBtn");
 
     if (!name) { showMsg("企業名を入力してください", "error"); return; }
@@ -264,6 +300,8 @@
 
     btn.disabled = true;
     showMsg("登録中...", "");
+
+    let newCompany;
     try {
       const res = await fetch("/api/companies", {
         method: "POST",
@@ -271,15 +309,35 @@
         body: JSON.stringify({ name, url }),
       });
       const data = await res.json();
-      if (!res.ok) { showMsg(data.error || "登録エラー", "error"); return; }
-      companies.unshift(data);
-      renderTable();
+      if (!res.ok) { showMsg(data.error || "登録エラー", "error"); btn.disabled = false; return; }
+      newCompany = data;
       document.getElementById("inputName").value = "";
       document.getElementById("inputUrl").value  = "";
-      showMsg("登録しました", "ok");
     } catch (err) {
       showMsg(err.message, "error");
-    } finally {
+      btn.disabled = false;
+      return;
+    }
+
+    // リサーチ中状態で一覧に追加
+    companies.unshift({ ...newCompany, status: "researching" });
+    renderTable();
+    showMsg("登録しました。リサーチ中...", "");
+
+    // 自動リサーチ
+    try {
+      const { ok, data: updated } = await callResearchAPI(newCompany.id);
+      updateCompany(updated);
+      showMsg(
+        ok ? "登録・リサーチ完了" : `リサーチエラー: ${updated.research_result?.error || updated.error || "不明"}`,
+        ok ? "ok" : "error"
+      );
+      btn.disabled = false;
+    } catch (err) {
+      const idx = companies.findIndex(c => c.id === newCompany.id);
+      if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
+      renderTable();
+      showMsg("リサーチ中にエラーが発生しました", "error");
       btn.disabled = false;
     }
   }
@@ -290,26 +348,69 @@
     el.className = "add-msg" + (type ? " " + type : "");
   }
 
-  // ---- リサーチ実行 ----
+  // ---- 一括リサーチ ----
+  async function bulkResearch() {
+    if (isBulkResearching) return;
+
+    const pending = companies.filter(c => c.status === "pending");
+    if (pending.length === 0) {
+      document.getElementById("bulkProgress").textContent = "未リサーチの企業はありません";
+      return;
+    }
+
+    isBulkResearching = true;
+    document.getElementById("bulkBtn").disabled = true;
+    renderTable();
+
+    let success = 0, failure = 0;
+    const total = pending.length;
+
+    for (let i = 0; i < pending.length; i++) {
+      const company = pending[i];
+      document.getElementById("bulkProgress").textContent =
+        `${i + 1}/${total}件 処理中...(${company.name})`;
+
+      const idx = companies.findIndex(c => c.id === company.id);
+      if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
+      renderTable();
+
+      try {
+        const { ok, data: updated } = await callResearchAPI(company.id);
+        updateCompany(updated);
+        if (ok && updated.status !== "error") success++;
+        else failure++;
+      } catch (err) {
+        const idx2 = companies.findIndex(c => c.id === company.id);
+        if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error", research_result: { error: err.message } };
+        renderTable();
+        failure++;
+      }
+    }
+
+    isBulkResearching = false;
+    document.getElementById("bulkBtn").disabled = false;
+    document.getElementById("bulkProgress").textContent =
+      `完了しました（成功: ${success}件 / 失敗: ${failure}件）`;
+    renderTable();
+  }
+
+  // ---- 個別リサーチ ----
   async function research(id) {
-    const btn = document.getElementById(`rbtn-${id}`);
-    btn.disabled = true;
-    btn.textContent = "リサーチ中...";
+    if (isBulkResearching) return;
+
+    const idx = companies.findIndex(c => c.id === id);
+    if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
+    renderTable();
 
     try {
-      const res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
-      const updated = await res.json();
-      if (!res.ok) {
-        alert("エラー: " + (updated.error || "不明なエラー"));
-        return;
-      }
-      const idx = companies.findIndex(c => c.id === id);
-      if (idx !== -1) companies[idx] = updated;
-      renderTable();
+      const { ok, data: updated } = await callResearchAPI(id);
+      if (!ok) alert("エラー: " + (updated.error || "不明なエラー"));
+      updateCompany(updated);
     } catch (err) {
       alert("エラー: " + err.message);
-      btn.disabled = false;
-      btn.textContent = "リサーチする";
+      const idx2 = companies.findIndex(c => c.id === id);
+      if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error" };
+      renderTable();
     }
   }
 
@@ -403,11 +504,12 @@
 
   function statusBadge(status) {
     const map = {
-      pending:        { label: "未リサーチ", cls: "badge-pending" },
-      researched:     { label: "完了",       cls: "badge-researched" },
+      pending:        { label: "未リサーチ",   cls: "badge-pending" },
+      researching:    { label: "リサーチ中...", cls: "badge-researching" },
+      researched:     { label: "完了",         cls: "badge-researched" },
       no_form:        { label: "フォームなし", cls: "badge-no_form" },
-      captcha_blocked:{ label: "CAPTCHA",    cls: "badge-captcha" },
-      error:          { label: "エラー",     cls: "badge-error" },
+      captcha_blocked:{ label: "CAPTCHA",      cls: "badge-captcha" },
+      error:          { label: "エラー",       cls: "badge-error" },
     };
     const s = map[status] || { label: status, cls: "badge-pending" };
     return `<span class="badge ${s.cls}">${s.label}</span>`;
