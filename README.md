@@ -28,16 +28,21 @@ npm install -g vercel
 vercel dev
 ```
 
-`.env.example` を参考に `.env` を作成し、Claude APIキーを設定してください。
+**`ANTHROPIC_API_KEY` の設定は任意です。** 設定しなくても、キーワードベースの
+推定（`mappingSource: "heuristic"`）でフィールドの役割推定が動きます。
+Anthropic Consoleでキーを取得し課金設定をした場合のみ、より精度の高いAI推定
+（`mappingSource: "ai"`）に切り替わります。`.env.example` を参考に `.env` を
+作成してください。
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Vercelにデプロイする場合は、Project Settings > Environment Variables に
+Vercelにデプロイする場合、設定するなら Project Settings > Environment Variables に
 同じ変数を登録してください（前回のgunma-SaaSで起きた「認証ヘッダー漏れで
 AI機能が無言で空になる」問題を踏まえて、このコードではAPIエラー時に
-必ずエラーメッセージを返すようにしています。`aiError` フィールドを確認してください）。
+必ずエラーメッセージを返し、かつheuristic推定の結果は消えないようにしています。
+`aiError` フィールドと `mappingSource` フィールドを確認してください）。
 
 ## 使い方
 

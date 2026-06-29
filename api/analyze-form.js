@@ -104,13 +104,19 @@ module.exports = async function handler(req, res) {
 
     const automatable = forms.length > 0 && !captchaDetected;
 
-    let fieldMapping = null;
+    // まずキーワードベースで推定（APIキーなしで常に動く）
+    let fieldMapping = forms.length > 0 ? heuristicFieldMapping(forms) : null;
+    let mappingSource = "heuristic";
     let aiError = null;
-    if (forms.length > 0) {
+
+    // ANTHROPIC_API_KEYが設定されていればAIでの推定を試みて、成功すれば上書きする
+    if (forms.length > 0 && process.env.ANTHROPIC_API_KEY) {
       try {
         fieldMapping = await mapFieldsWithAI(forms);
+        mappingSource = "ai";
       } catch (err) {
         aiError = err.message;
+        // 失敗してもheuristicFieldMappingの結果が残るので、fieldMappingはnullにならない
       }
     }
 
@@ -122,6 +128,7 @@ module.exports = async function handler(req, res) {
       captchaDetected,
       automatable,
       fieldMapping,
+      mappingSource,
       aiError,
     });
   } catch (err) {
@@ -254,6 +261,60 @@ async function detectCaptcha(page) {
     ];
     return patterns.some((p) => html.includes(p));
   });
+}
+
+// キーワードマッチによる簡易フィールド推定（APIキー不要・常に動作する）
+const HEURISTIC_RULES = [
+  { role: "email", patterns: [/mail/i, /メール/, /Eメール/i] },
+  { role: "phone", patterns: [/tel/i, /phone/i, /電話/, /TEL/] },
+  { role: "company_name", patterns: [/company/i, /会社/, /企業/, /法人/, /貴社/] },
+  { role: "contact_person_name_kana", patterns: [/kana/i, /フリガナ/, /ふりがな/, /カナ/] },
+  { role: "contact_person_name", patterns: [/name/i, /氏名/, /お名前/, /担当者/, /姓/, /名/] },
+  { role: "department", patterns: [/department/i, /部署/, /部門/] },
+  { role: "postal_code", patterns: [/zip/i, /postal/i, /郵便番号/, /〒/] },
+  { role: "address", patterns: [/address/i, /住所/, /所在地/] },
+  { role: "subject", patterns: [/subject/i, /件名/, /タイトル/, /種別/, /category/i] },
+  { role: "budget", patterns: [/budget/i, /予算/, /金額/] },
+  { role: "url_website", patterns: [/url/i, /website/i, /ホームページ/, /サイトURL/i] },
+  { role: "agreement_checkbox", patterns: [/agree/i, /privacy/i, /個人情報/, /同意/, /プライバシー/] },
+  {
+    role: "message",
+    patterns: [/message/i, /content/i, /本文/, /内容/, /ご相談/, /お問い合わせ内容/, /詳細/, /comment/i],
+  },
+];
+
+function guessRole(field) {
+  const haystack = [field.name, field.id, field.label, field.placeholder]
+    .filter(Boolean)
+    .join(" ");
+
+  // textarea は内容欄の可能性が高いのでヒント無くてもmessageを優先候補にする
+  for (const rule of HEURISTIC_RULES) {
+    if (rule.patterns.some((p) => p.test(haystack))) {
+      return { role: rule.role, confidence: "medium" };
+    }
+  }
+  if (field.tag === "textarea") {
+    return { role: "message", confidence: "low" };
+  }
+  return { role: "other", confidence: "low" };
+}
+
+function heuristicFieldMapping(forms) {
+  const result = [];
+  for (const form of forms) {
+    for (const field of form.fields) {
+      const { role, confidence } = guessRole(field);
+      result.push({
+        formIndex: form.formIndex,
+        name: field.name,
+        id: field.id,
+        role,
+        confidence,
+      });
+    }
+  }
+  return result;
 }
 
 async function mapFieldsWithAI(forms) {
