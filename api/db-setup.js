@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const sql = neon(databaseUrl);
-    await sql(schemaSql);
+    await sql.query(schemaSql);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました" });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
