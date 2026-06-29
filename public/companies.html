@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>企業リスト - ぐんまフォーム営業ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --main-green: #44B13F; --deep-green: #2F8A2A; --bg: #f7f9f7; }
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans JP", sans-serif; background: var(--bg); margin: 0; color: #222; }
+
+  .page-header {
+    background: var(--deep-green);
+    color: white;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .page-header h1 { margin: 0; font-size: 18px; font-weight: 700; }
+  .page-header a { color: rgba(255,255,255,0.8); font-size: 13px; text-decoration: none; }
+  .page-header a:hover { color: white; }
+
+  .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Add form */
+  .add-section {
+    background: white;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .add-section h2 { margin: 0 0 14px; font-size: 15px; color: var(--deep-green); }
+  .add-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .add-row input {
+    padding: 9px 12px; font-size: 14px; border: 1px solid #ccc;
+    border-radius: 6px; font-family: inherit;
+  }
+  .add-row input[name="name"] { flex: 0 0 200px; }
+  .add-row input[name="url"]  { flex: 1 1 280px; }
+  .add-row button {
+    padding: 9px 20px; background: var(--main-green); color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    font-family: inherit; white-space: nowrap;
+  }
+  .add-row button:hover { background: var(--deep-green); }
+  .add-row button:disabled { background: #aaa; cursor: not-allowed; }
+  .add-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
+  .add-msg.error { color: #c0392b; }
+  .add-msg.ok    { color: var(--deep-green); }
+
+  /* Table */
+  .table-section {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    overflow: hidden;
+  }
+  .table-section h2 { margin: 0; font-size: 15px; color: var(--deep-green); padding: 16px 20px 0; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #f0f5f0; text-align: left; padding: 10px 14px;
+    font-weight: 700; color: #444; border-bottom: 1px solid #ddd;
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #eee; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #fafff9; }
+  td { padding: 10px 14px; vertical-align: middle; }
+  td.url a { color: #2563eb; word-break: break-all; }
+  td.name { font-weight: 500; }
+  .empty-row td { text-align: center; color: #888; padding: 32px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block; padding: 2px 9px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; color: white; white-space: nowrap;
+  }
+  .badge-pending   { background: #888; }
+  .badge-researched{ background: var(--main-green); }
+  .badge-no_form   { background: #e67e22; }
+  .badge-captcha   { background: #c0392b; }
+  .badge-error     { background: #7f1d1d; }
+  .badge-ok        { background: var(--main-green); }
+  .badge-ng        { background: #c0392b; }
+
+  /* Action buttons */
+  .btn-research {
+    padding: 5px 12px; font-size: 12px; border-radius: 5px;
+    border: 1px solid var(--main-green); color: var(--main-green);
+    background: white; cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn-research:hover:not(:disabled) { background: var(--main-green); color: white; }
+  .btn-research:disabled { border-color: #ccc; color: #aaa; cursor: not-allowed; }
+  .btn-detail {
+    margin-left: 6px; padding: 5px 12px; font-size: 12px; border-radius: 5px;
+    border: 1px solid #999; color: #555; background: white; cursor: pointer;
+    font-family: inherit; transition: all 0.15s;
+  }
+  .btn-detail:hover { background: #f0f0f0; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: white; border-radius: 10px; max-width: 760px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid #eee;
+  }
+  .modal-header h3 { margin: 0; font-size: 16px; color: var(--deep-green); }
+  .modal-close {
+    background: none; border: none; font-size: 20px; cursor: pointer;
+    color: #888; line-height: 1; padding: 2px 6px;
+  }
+  .modal-close:hover { color: #333; }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+  .info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; margin-bottom: 20px; }
+  .info-grid dt { font-weight: 700; color: #555; white-space: nowrap; }
+  .info-grid dd { margin: 0; }
+  .info-grid dd a { color: #2563eb; word-break: break-all; }
+
+  .fields-title { font-size: 14px; font-weight: 700; color: var(--deep-green); margin: 0 0 10px; }
+  .fields-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .fields-table th {
+    background: #f0f5f0; padding: 7px 10px; text-align: left;
+    font-weight: 700; color: #444; border-bottom: 1px solid #ddd;
+  }
+  .fields-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+  .fields-table tr:last-child td { border-bottom: none; }
+  .conf-high   { color: var(--deep-green); font-weight: 700; }
+  .conf-medium { color: #e67e22; }
+  .conf-low    { color: #888; }
+
+  .source-label {
+    display: inline-block; margin-left: 8px; padding: 1px 7px;
+    border-radius: 8px; font-size: 11px; color: white; vertical-align: middle;
+  }
+  .source-ai        { background: #6366f1; }
+  .source-heuristic { background: #64748b; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>企業リスト</h1>
+  <a href="/index.html">← 解析テスト画面</a>
+</header>
+
+<div class="container">
+
+  <!-- 追加フォーム -->
+  <section class="add-section">
+    <h2>企業を追加</h2>
+    <div class="add-row">
+      <input type="text" name="name" id="inputName" placeholder="企業名" />
+      <input type="url"  name="url"  id="inputUrl"  placeholder="https://example.co.jp" />
+      <button id="addBtn" onclick="addCompany()">追加</button>
+    </div>
+    <div class="add-msg" id="addMsg"></div>
+  </section>
+
+  <!-- 一覧テーブル -->
+  <section class="table-section">
+    <h2 style="padding-bottom:14px">登録企業一覧</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>企業名</th>
+            <th>URL</th>
+            <th>ステータス</th>
+            <th>自動化</th>
+            <th>更新日時</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr class="empty-row"><td colspan="6">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- モーダル -->
+<div class="modal-overlay" id="modal" onclick="closeModalOnOverlay(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modalTitle">リサーチ結果</h3>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+  let companies = [];
+
+  // ---- 起動時に読み込み ----
+  loadCompanies();
+
+  async function loadCompanies() {
+    try {
+      const res = await fetch("/api/companies");
+      companies = await res.json();
+      renderTable();
+    } catch (err) {
+      document.getElementById("tableBody").innerHTML =
+        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  // ---- テーブル描画 ----
+  function renderTable() {
+    const tbody = document.getElementById("tableBody");
+    if (!companies.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">企業が登録されていません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = companies.map(c => {
+      const result = c.research_result;
+      const updatedAt = c.updated_at
+        ? new Date(c.updated_at).toLocaleString("ja-JP", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" })
+        : "—";
+      return `
+        <tr id="row-${c.id}">
+          <td class="name">${esc(c.name)}</td>
+          <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
+          <td>${statusBadge(c.status)}</td>
+          <td>${automatableBadge(result)}</td>
+          <td style="white-space:nowrap">${updatedAt}</td>
+          <td style="white-space:nowrap">
+            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})">リサーチする</button>
+            ${result && !result.error ? `<button class="btn-detail" onclick="showDetail(${c.id})">詳細</button>` : ""}
+          </td>
+        </tr>`;
+    }).join("");
+  }
+
+  // ---- 企業追加 ----
+  async function addCompany() {
+    const name = document.getElementById("inputName").value.trim();
+    const url  = document.getElementById("inputUrl").value.trim();
+    const msg  = document.getElementById("addMsg");
+    const btn  = document.getElementById("addBtn");
+
+    if (!name) { showMsg("企業名を入力してください", "error"); return; }
+    if (!url)  { showMsg("URLを入力してください", "error"); return; }
+
+    btn.disabled = true;
+    showMsg("登録中...", "");
+    try {
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || "登録エラー", "error"); return; }
+      companies.unshift(data);
+      renderTable();
+      document.getElementById("inputName").value = "";
+      document.getElementById("inputUrl").value  = "";
+      showMsg("登録しました", "ok");
+    } catch (err) {
+      showMsg(err.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function showMsg(text, type) {
+    const el = document.getElementById("addMsg");
+    el.textContent = text;
+    el.className = "add-msg" + (type ? " " + type : "");
+  }
+
+  // ---- リサーチ実行 ----
+  async function research(id) {
+    const btn = document.getElementById(`rbtn-${id}`);
+    btn.disabled = true;
+    btn.textContent = "リサーチ中...";
+
+    try {
+      const res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
+      const updated = await res.json();
+      if (!res.ok) {
+        alert("エラー: " + (updated.error || "不明なエラー"));
+        return;
+      }
+      const idx = companies.findIndex(c => c.id === id);
+      if (idx !== -1) companies[idx] = updated;
+      renderTable();
+    } catch (err) {
+      alert("エラー: " + err.message);
+      btn.disabled = false;
+      btn.textContent = "リサーチする";
+    }
+  }
+
+  // ---- モーダル表示 ----
+  function showDetail(id) {
+    const company = companies.find(c => c.id === id);
+    if (!company || !company.research_result) return;
+
+    const r = company.research_result;
+    document.getElementById("modalTitle").textContent = company.name + " のリサーチ結果";
+
+    const sourceLabel = r.mappingSource === "ai"
+      ? '<span class="source-label source-ai">AI推定</span>'
+      : '<span class="source-label source-heuristic">キーワード推定</span>';
+
+    let html = `
+      <dl class="info-grid">
+        <dt>フォーム</dt><dd>${r.formFound ? "あり" : "なし"}</dd>
+        <dt>CAPTCHA</dt><dd>${r.captchaDetected ? "<span style='color:#c0392b'>検出</span>" : "なし"}</dd>
+        <dt>自動化可否</dt><dd>${r.automatable
+          ? '<span class="badge badge-ok">OK</span>'
+          : '<span class="badge badge-ng">NG</span>'}</dd>
+        <dt>フォームページ</dt><dd>${r.formPageUrl
+          ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>`
+          : "—"}</dd>
+        ${r.aiError ? `<dt>AI推定エラー</dt><dd style="color:#c0392b">${esc(r.aiError)}</dd>` : ""}
+      </dl>`;
+
+    if (r.fieldMapping && r.fieldMapping.length > 0) {
+      // forms と fieldMapping をマージして表示
+      const fieldMap = {};
+      (r.fieldMapping || []).forEach(m => {
+        const key = `${m.formIndex}:${m.name || ""}:${m.id || ""}`;
+        fieldMap[key] = m;
+      });
+
+      const rows = (r.forms || []).flatMap(form =>
+        form.fields.map(f => {
+          const key = `${form.formIndex}:${f.name || ""}:${f.id || ""}`;
+          const m = fieldMap[key];
+          return {
+            label: f.label || f.placeholder || "—",
+            nameId: [f.name, f.id].filter(Boolean).join(" / ") || "—",
+            type: f.type,
+            role: m ? m.role : "—",
+            confidence: m ? m.confidence : "—",
+          };
+        })
+      );
+
+      html += `<p class="fields-title">フィールド一覧 ${sourceLabel}</p>
+      <table class="fields-table">
+        <thead><tr><th>ラベル</th><th>name / id</th><th>type</th><th>推定役割</th><th>信頼度</th></tr></thead>
+        <tbody>
+          ${rows.map(f => `
+            <tr>
+              <td>${esc(f.label)}</td>
+              <td style="font-family:monospace;font-size:11px">${esc(f.nameId)}</td>
+              <td>${esc(f.type)}</td>
+              <td>${esc(f.role)}</td>
+              <td class="conf-${f.confidence}">${f.confidence}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+    } else {
+      html += `<p style="color:#888;font-size:13px">フィールドマッピングデータがありません。</p>`;
+    }
+
+    document.getElementById("modalBody").innerHTML = html;
+    document.getElementById("modal").classList.add("open");
+  }
+
+  function closeModal() {
+    document.getElementById("modal").classList.remove("open");
+  }
+
+  function closeModalOnOverlay(e) {
+    if (e.target === document.getElementById("modal")) closeModal();
+  }
+
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+
+  // ---- ヘルパー ----
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function statusBadge(status) {
+    const map = {
+      pending:        { label: "未リサーチ", cls: "badge-pending" },
+      researched:     { label: "完了",       cls: "badge-researched" },
+      no_form:        { label: "フォームなし", cls: "badge-no_form" },
+      captcha_blocked:{ label: "CAPTCHA",    cls: "badge-captcha" },
+      error:          { label: "エラー",     cls: "badge-error" },
+    };
+    const s = map[status] || { label: status, cls: "badge-pending" };
+    return `<span class="badge ${s.cls}">${s.label}</span>`;
+  }
+
+  function automatableBadge(result) {
+    if (!result || result.error) return "—";
+    return result.automatable
+      ? '<span class="badge badge-ok">OK</span>'
+      : '<span class="badge badge-ng">NG</span>';
+  }
+</script>
+</body>
+</html>
