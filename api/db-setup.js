@@ -38,10 +38,14 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: `schema.sql の読み込みに失敗しました: ${err.message}` });
   }
 
-  const statements = schemaSql
+  const stripped = schemaSql
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("--"))
+    .join("\n");
+  const statements = stripped
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && !s.startsWith("--"));
+    .filter((s) => s.length > 0);
 
   try {
     const sql = neon(databaseUrl);
