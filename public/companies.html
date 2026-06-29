@@ -177,8 +177,13 @@
   .discover-section h2 { margin: 0 0 14px; font-size: 15px; color: var(--deep-green); }
   .discover-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .discover-row input {
-    flex: 1 1 280px; padding: 9px 12px; font-size: 14px;
+    flex: 1 1 160px; padding: 9px 12px; font-size: 14px;
     border: 1px solid #ccc; border-radius: 6px; font-family: inherit;
+  }
+  .badge-places {
+    flex-shrink: 0; display: inline-block; padding: 1px 6px;
+    background: #4285f4; color: white; font-size: 10px;
+    border-radius: 3px; white-space: nowrap;
   }
   .discover-row button {
     padding: 9px 20px; background: var(--main-green); color: white;
@@ -232,7 +237,8 @@
   <section class="discover-section">
     <h2>企業を自動検索</h2>
     <div class="discover-row">
-      <input type="text" id="discoverQuery" placeholder="例: 群馬県 IT企業" />
+      <input type="text" id="discoverRegion"  placeholder="例: 群馬県" />
+      <input type="text" id="discoverKeyword" placeholder="例: IT企業、Web制作" />
       <button id="discoverBtn" onclick="discoverCompanies()">検索</button>
     </div>
     <div id="discoverResult"></div>
@@ -475,11 +481,12 @@
 
   // ---- 企業を自動検索 ----
   async function discoverCompanies() {
-    const query = document.getElementById("discoverQuery").value.trim();
-    const btn   = document.getElementById("discoverBtn");
+    const region  = document.getElementById("discoverRegion").value.trim();
+    const keyword = document.getElementById("discoverKeyword").value.trim();
+    const btn     = document.getElementById("discoverBtn");
     const resultEl = document.getElementById("discoverResult");
 
-    if (!query) return;
+    if (!region && !keyword) return;
 
     btn.disabled = true;
     resultEl.innerHTML = '<p class="discover-status">検索中...</p>';
@@ -488,7 +495,7 @@
       const res = await fetch("/api/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ region, keyword }),
       });
       const data = await res.json();
 
@@ -515,6 +522,7 @@
               <label>
                 <input type="checkbox" class="discover-check" data-index="${i}" data-name="${esc(r.name)}" data-url="${esc(r.url)}" checked />
                 <span class="discover-name">${esc(r.name)}</span>
+                ${r.source === "places" ? '<span class="badge-places">Googleマップ</span>' : ""}
                 <a href="${esc(r.url)}" target="_blank" rel="noopener" class="discover-url">${esc(r.url)}</a>
               </label>
             </li>`).join("")}
