@@ -38,10 +38,17 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: `schema.sql の読み込みに失敗しました: ${err.message}` });
   }
 
+  const statements = schemaSql
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !s.startsWith("--"));
+
   try {
     const sql = neon(databaseUrl);
-    await sql.query(schemaSql);
-    return res.status(200).json({ message: "スキーマのセットアップが完了しました" });
+    for (const statement of statements) {
+      await sql.query(statement);
+    }
+    return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
   }
