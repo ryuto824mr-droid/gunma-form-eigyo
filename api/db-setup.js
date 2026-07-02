@@ -52,6 +52,8 @@ module.exports = async function handler(req, res) {
     for (const statement of statements) {
       await sql.query(statement);
     }
+    // emailカラム追加（IF NOT EXISTSなので冪等）
+    await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS email TEXT");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
