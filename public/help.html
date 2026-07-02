@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ヘルプ - LOCLE営業ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-50: #f0faf0;  --green-100: #d8f0d8;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter","Noto Sans JP",sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .page-header {
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+
+  /* Layout */
+  .help-layout {
+    display: flex; gap: 0; max-width: 1100px; margin: 0 auto;
+    padding: 32px 16px; animation: fadeInUp 0.4s ease-out;
+  }
+
+  /* Sidebar */
+  .help-sidebar {
+    width: 220px; flex-shrink: 0; margin-right: 28px;
+  }
+  .sidebar-inner {
+    position: sticky; top: 72px;
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 16px 0;
+    box-shadow: var(--shadow-sm);
+  }
+  .sidebar-inner p {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--gray-400);
+    margin: 0 0 8px; padding: 0 16px;
+  }
+  .sidebar-inner a {
+    display: block; padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--gray-500); text-decoration: none; border-left: 2px solid transparent;
+    transition: all 150ms;
+  }
+  .sidebar-inner a:hover { color: var(--green-700); background: var(--green-50); border-left-color: var(--green-500); }
+  .sidebar-inner a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); border-left-color: var(--green-500); }
+
+  /* Main content */
+  .help-main { flex: 1; min-width: 0; }
+
+  .help-section {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 28px;
+    margin-bottom: 20px; box-shadow: var(--shadow-sm);
+  }
+  .help-section h2 {
+    font-size: 18px; font-weight: 700; color: var(--gray-900);
+    border-left: 3px solid var(--green-500); padding-left: 12px;
+    margin: 0 0 18px;
+  }
+  .help-section p { font-size: 14px; color: var(--gray-600, #475569); line-height: 1.75; margin: 0 0 14px; }
+  .help-section p:last-child { margin-bottom: 0; }
+  .help-section ol, .help-section ul { font-size: 14px; color: var(--gray-700); line-height: 1.8; padding-left: 20px; margin: 0 0 14px; }
+  .help-section li { margin-bottom: 4px; }
+  .help-section ul li { list-style: disc; }
+
+  .sub-h3 {
+    font-size: 14px; font-weight: 700; color: var(--gray-900);
+    margin: 20px 0 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .sub-h3 svg { width: 15px; height: 15px; color: var(--green-500); }
+
+  .status-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  .status-table th {
+    background: var(--gray-50); text-align: left; padding: 8px 12px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray-500); border-bottom: 2px solid var(--gray-200);
+  }
+  .status-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); vertical-align: top; }
+  .status-table tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-pending    { background: var(--gray-100); color: var(--gray-500); }
+  .badge-researched { background: var(--green-50); color: var(--green-700); }
+  .badge-captcha    { background: #fffbeb; color: #b45309; }
+  .badge-no_form    { background: #fff7ed; color: #c2410c; }
+  .badge-error      { background: #fff5f5; color: #dc2626; }
+
+  .code-inline {
+    display: inline-block; background: var(--gray-100); color: var(--green-700);
+    font-family: monospace; font-size: 13px; padding: 1px 7px; border-radius: 4px;
+  }
+
+  /* FAQ */
+  .faq-item {
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+    padding: 16px 20px; margin-bottom: 12px;
+    transition: border-color 150ms;
+  }
+  .faq-item:last-child { margin-bottom: 0; }
+  .faq-item:hover { border-color: var(--green-100); }
+  .faq-q { font-size: 14px; font-weight: 600; color: var(--gray-900); margin: 0 0 8px; display: flex; gap: 10px; }
+  .faq-q::before { content: "Q"; color: var(--green-500); font-weight: 800; flex-shrink: 0; }
+  .faq-a { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin: 0; display: flex; gap: 10px; }
+  .faq-a::before { content: "A"; color: var(--gray-400); font-weight: 700; flex-shrink: 0; }
+
+  @media (max-width: 700px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .help-layout { flex-direction: column; padding: 16px 8px; }
+    .help-sidebar { display: none; }
+    .help-section { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/index.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" style="height:28px; width:auto; object-fit:contain; background:white; padding:3px 8px; border-radius:6px;">
+  </a></h1>
+  <nav class="page-nav">
+    <a href="/index.html">ホーム</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html">送信管理</a>
+    <a href="/analytics.html">分析</a>
+    <a href="/help.html" class="active">ヘルプ</a>
+  </nav>
+</header>
+
+<div class="help-layout">
+
+  <!-- Sidebar -->
+  <aside class="help-sidebar">
+    <div class="sidebar-inner">
+      <p>目次</p>
+      <a href="#intro">はじめに</a>
+      <a href="#companies">企業リスト</a>
+      <a href="#variants">メッセージ管理</a>
+      <a href="#send">送信管理</a>
+      <a href="#analytics">分析</a>
+      <a href="#faq">よくある質問</a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="help-main">
+
+    <section class="help-section" id="intro">
+      <h2>はじめに</h2>
+      <p>LOCLE営業ツールは「企業リサーチ → フォーム/メール送信 → 反応分析」を自動化するツールです。</p>
+      <p><strong>基本的な使い方の流れ：</strong></p>
+      <ol>
+        <li>企業リストに営業先企業を登録する</li>
+        <li>自動リサーチでフォームを解析する</li>
+        <li>メッセージ管理でバリアント（文面テンプレート）を作成する</li>
+        <li>送信管理で企業と文面を選んで送信する</li>
+        <li>分析ページで反応率を確認して文面を改善する</li>
+      </ol>
+    </section>
+
+    <section class="help-section" id="companies">
+      <h2>企業リストページ</h2>
+
+      <p class="sub-h3"><i data-lucide="plus-circle"></i>企業の追加方法</p>
+      <ul>
+        <li><strong>手動追加：</strong>企業名・URL・メールアドレスを入力して「追加」ボタンをクリック。追加後に自動でリサーチが開始されます。</li>
+        <li><strong>CSV一括インポート：</strong><span class="code-inline">name,url,email</span> 形式の CSV ファイルを選択して「インポート」。1行目はヘッダー行、email 列は任意。既存 URL との重複はスキップされます。</li>
+        <li><strong>自動検索：</strong>地域とキーワードを入力して「検索」ボタンで候補企業を一覧表示し、選んでまとめて追加できます。</li>
+      </ul>
+
+      <p class="sub-h3"><i data-lucide="search"></i>自動リサーチの使い方</p>
+      <ul>
+        <li><strong>個別リサーチ：</strong>各行の「リサーチする」ボタンをクリックすると、その企業だけリサーチします。</li>
+        <li><strong>一括リサーチ：</strong>「未リサーチを一括リサーチ」ボタンで、pending 状態の企業を順番に自動解析します。</li>
+      </ul>
+
+      <p class="sub-h3"><i data-lucide="info"></i>ステータスの意味</p>
+      <table class="status-table">
+        <thead><tr><th>ステータス</th><th>意味</th></tr></thead>
+        <tbody>
+          <tr><td><span class="badge badge-pending">未リサーチ</span></td><td>まだ解析していない初期状態</td></tr>
+          <tr><td><span class="badge badge-researched">✓ 完了</span></td><td>フォーム解析が完了した状態</td></tr>
+          <tr><td><span class="badge badge-captcha">🔒 CAPTCHA</span></td><td>CAPTCHAが検出され自動送信できない</td></tr>
+          <tr><td><span class="badge badge-no_form">フォームなし</span></td><td>お問い合わせフォームが見つからなかった</td></tr>
+          <tr><td><span class="badge badge-error">✕ エラー</span></td><td>解析中にエラーが発生した</td></tr>
+        </tbody>
+      </table>
+
+      <p class="sub-h3"><i data-lucide="check-circle"></i>自動化 OK / NG の意味</p>
+      <ul>
+        <li><strong>OK：</strong>フォームへの自動入力・送信が可能です。送信管理ページで「フォームに自動送信」が使えます。</li>
+        <li><strong>NG：</strong>フォームが見つからない・CAPTCHA があるなど自動化できません。手動でコピー送信するか、メールアドレスを登録してメール送信を利用してください。</li>
+      </ul>
+    </section>
+
+    <section class="help-section" id="variants">
+      <h2>メッセージ管理ページ</h2>
+
+      <p class="sub-h3"><i data-lucide="file-text"></i>バリアントの作成方法</p>
+      <p>名前・チャネル（メール or フォーム）・件名（メールの場合）・本文を入力して「作成」ボタンをクリックします。</p>
+
+      <p class="sub-h3"><i data-lucide="code"></i>差し込み変数 <span class="code-inline">{{company_name}}</span></p>
+      <p>本文テンプレートに <span class="code-inline">{{company_name}}</span> と書くと、送信時に企業名が自動で入ります。例：「<code>{{company_name}} ご担当者様</code>」→「株式会社○○ ご担当者様」</p>
+
+      <p class="sub-h3"><i data-lucide="tag"></i>タグの使い方</p>
+      <p><span class="code-inline">key: value</span> 形式でタグを任意に追加できます。分析ページでタグの key/value ごとに反応率を比較できるため、A/B テストの軸として活用できます。例：<span class="code-inline">industry: IT</span>、<span class="code-inline">size: 中小</span></p>
+
+      <p class="sub-h3"><i data-lucide="git-branch"></i>チャネルの違い</p>
+      <ul>
+        <li><strong>メール：</strong>Gmail OAuth 経由でメールアドレスに直接 DM 送信します。企業にメールアドレスが登録されている場合に使えます。</li>
+        <li><strong>フォーム：</strong>ヘッドレスブラウザで企業サイトのお問い合わせフォームに自動入力して送信します。自動化 OK の企業のみ利用可能です。</li>
+      </ul>
+    </section>
+
+    <section class="help-section" id="send">
+      <h2>送信管理ページ</h2>
+
+      <p class="sub-h3"><i data-lucide="file-text"></i>下書き生成の手順</p>
+      <ol>
+        <li>「企業」セレクトで送信先企業を選ぶ（★ マークはフォーム自動化 OK の企業）</li>
+        <li>「バリアント」セレクトで使用する文面テンプレートを選ぶ</li>
+        <li>「下書き生成」ボタンをクリックするとプレビューが表示される</li>
+      </ol>
+
+      <p class="sub-h3"><i data-lucide="send"></i>フォーム自動送信とメール送信の違い</p>
+      <ul>
+        <li><strong>フォームに自動送信：</strong>ヘッドレスブラウザを使って企業サイトのフォームに自動入力します。自動化 OK の企業にのみ表示されます。</li>
+        <li><strong>メールで送信：</strong>Gmail OAuth 経由でメールを送信します。企業にメールアドレスが登録されている場合のみ表示されます。</li>
+      </ul>
+
+      <p class="sub-h3"><i data-lucide="alert-triangle"></i>強制送信チェックボックス</p>
+      <p>同一企業への 24 時間以内の重複送信をスキップするチェックを無効にします。同じ企業に再送信したい場合はオンにしてください。</p>
+
+      <p class="sub-h3"><i data-lucide="check-square"></i>反応の記録方法</p>
+      <p>送信履歴テーブルの「反応を記録」ボタンをクリックすると、分類（興味あり / 辞退 / 質問 / その他）と自由メモを入力できます。記録した反応は分析ページに反映されます。</p>
+    </section>
+
+    <section class="help-section" id="analytics">
+      <h2>分析ページ</h2>
+
+      <p class="sub-h3"><i data-lucide="bar-chart-2"></i>バリアント別集計の見方</p>
+      <p>各バリアント（文面テンプレート）ごとに送信数・反応数・興味あり数・反応率を集計します。反応率が高いバリアントが有効な文面です。</p>
+
+      <p class="sub-h3"><i data-lucide="tag"></i>タグ別集計の見方</p>
+      <p>バリアントに設定したタグの key/value ごとに反応率を集計します。例：業種・企業規模などの軸で A/B テストの比較ができます。</p>
+
+      <p class="sub-h3"><i data-lucide="mail-check"></i>返信チェックボタンの使い方</p>
+      <p>「返信チェック」ボタンをクリックすると、Gmail の未読メールを確認して送信履歴と照合し、返信があった場合に自動で反応を記録します。毎朝 9 時にも自動実行されます。</p>
+    </section>
+
+    <section class="help-section" id="faq">
+      <h2>よくある質問</h2>
+
+      <div class="faq-item">
+        <p class="faq-q">フォーム自動送信が「エラー」になる</p>
+        <p class="faq-a">相手サイトのフォーム構造が複雑な場合があります。その場合は「コピー」ボタンで文面をコピーして手動送信するか、メールアドレスを登録してメール送信をお試しください。</p>
+      </div>
+
+      <div class="faq-item">
+        <p class="faq-q">CAPTCHAとは？</p>
+        <p class="faq-a">自動送信を防ぐセキュリティ機能です。CAPTCHA 付きのフォームは自動送信できません。手動送信またはメール送信を使用してください。</p>
+      </div>
+
+      <div class="faq-item">
+        <p class="faq-q">同じ企業に2回送信したい</p>
+        <p class="faq-a">送信管理ページの「強制送信」チェックボックスをオンにすると、24 時間制限・送信済みチェックをスキップして送信できます。</p>
+      </div>
+
+      <div class="faq-item">
+        <p class="faq-q">分析ページに数字が表示されない</p>
+        <p class="faq-a">送信管理ページで送信を記録すると集計が表示されます。「送信済みとして記録」ボタンか自動送信を実行してください。</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+  lucide.createIcons();
+
+  // Sidebar active highlight on scroll
+  const sections = document.querySelectorAll(".help-section");
+  const sideLinks = document.querySelectorAll(".sidebar-inner a");
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        sideLinks.forEach(a => {
+          a.classList.toggle("active", a.getAttribute("href") === "#" + e.target.id);
+        });
+      }
+    });
+  }, { rootMargin: "-20% 0px -70% 0px" });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -166,6 +166,43 @@
   .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
   .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
 
+  /* Welcome Tour */
+  .tour-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+  .tour-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); pointer-events: all; }
+  .tour-popup {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--white); border-radius: var(--radius-lg);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    padding: 24px 28px; max-width: 400px; width: calc(100% - 32px);
+    pointer-events: all; z-index: 1; animation: fadeInUp 0.3s ease-out;
+  }
+  .tour-step-badge {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--green-500); margin-bottom: 8px;
+  }
+  .tour-title { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+  .tour-body  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin-bottom: 20px; }
+  .tour-actions { display: flex; justify-content: space-between; align-items: center; }
+  .tour-btn-skip {
+    font-size: 12px; color: var(--gray-400); background: none; border: none;
+    cursor: pointer; padding: 0; font-family: inherit; transition: color 150ms;
+  }
+  .tour-btn-skip:hover { color: var(--gray-700); }
+  .tour-btn-next {
+    padding: 8px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    color: white; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 150ms;
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+  }
+  .tour-btn-next:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
+  .tour-highlight {
+    outline: 3px solid var(--green-500) !important;
+    outline-offset: 4px !important;
+    border-radius: var(--radius-sm) !important;
+    position: relative; z-index: 999;
+  }
+
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -187,10 +224,11 @@
   </a></h1>
   <nav class="page-nav">
     <a href="/index.html" class="active">ホーム</a>
-    <a href="/companies.html">企業リスト</a>
-    <a href="/variants.html">メッセージ管理</a>
-    <a href="/send.html">送信管理</a>
-    <a href="/analytics.html">分析</a>
+    <a href="/companies.html" id="nav-companies">企業リスト</a>
+    <a href="/variants.html" id="nav-variants">メッセージ管理</a>
+    <a href="/send.html" id="nav-send">送信管理</a>
+    <a href="/analytics.html" id="nav-analytics">分析</a>
+    <a href="/help.html">ヘルプ</a>
   </nav>
 </header>
 
@@ -267,6 +305,25 @@
     </a>
   </div>
 
+  <p style="text-align:center; margin-top:12px; font-size:12px; color:var(--gray-400);">
+    <button onclick="startTour()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0;">ウェルカムツアーを再表示</button>
+    &nbsp;·&nbsp;<a href="/help.html" style="color:var(--gray-400);">ヘルプ</a>
+  </p>
+
+</div>
+
+<!-- Welcome Tour -->
+<div id="tourOverlay" class="tour-overlay" hidden>
+  <div class="tour-backdrop" onclick="skipTour()"></div>
+  <div class="tour-popup">
+    <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
+    <div class="tour-title" id="tourTitle"></div>
+    <div class="tour-body" id="tourBody"></div>
+    <div class="tour-actions">
+      <button class="tour-btn-skip" onclick="skipTour()">スキップ</button>
+      <button class="tour-btn-next" id="tourNextBtn" onclick="tourNext()">次へ</button>
+    </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -328,6 +385,33 @@
       });
     }
   }
+
+  // Welcome Tour
+  const tourSteps = [
+    { title: "LOCLE営業ツールへようこそ！", body: "5ステップで主要機能をご紹介します。企業リサーチからフォーム送信・反応分析まで一気通貫で自動化できます。", highlight: null },
+    { title: "① 企業リストに登録", body: "営業先企業のURL・名前を登録するとフォームを自動解析します。CSVでの一括インポートも可能です。", highlight: "nav-companies" },
+    { title: "② メッセージテンプレートを作成", body: "送信する文面テンプレート（バリアント）を登録します。{{company_name}} で企業名を自動差し込みできます。", highlight: "nav-variants" },
+    { title: "③ フォーム/メールで送信", body: "企業とテンプレートを選んで送信管理ページから送信。フォーム自動入力かメール直送が選べます。", highlight: "nav-send" },
+    { title: "④ 反応率を分析して改善", body: "分析ページでバリアント別・タグ別の反応率を確認して、より効果的な文面に改善できます。", highlight: "nav-analytics" }
+  ];
+  let _tourStep = 0, _prevHL = null;
+  function startTour() { _tourStep = 0; document.getElementById("tourOverlay").hidden = false; _showTourStep(); }
+  function _showTourStep() {
+    const s = tourSteps[_tourStep];
+    document.getElementById("tourStepBadge").textContent = `${_tourStep + 1} / ${tourSteps.length}`;
+    document.getElementById("tourTitle").textContent = s.title;
+    document.getElementById("tourBody").textContent = s.body;
+    document.getElementById("tourNextBtn").textContent = _tourStep === tourSteps.length - 1 ? "完了" : "次へ";
+    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
+    if (s.highlight) { const e = document.getElementById(s.highlight); if (e) e.classList.add("tour-highlight"); _prevHL = s.highlight; } else { _prevHL = null; }
+  }
+  function tourNext() { if (_tourStep < tourSteps.length - 1) { _tourStep++; _showTourStep(); } else { skipTour(); } }
+  function skipTour() {
+    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
+    document.getElementById("tourOverlay").hidden = true;
+    localStorage.setItem("locle_tour_done", "1");
+  }
+  if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
 
   lucide.createIcons();
   loadStats();

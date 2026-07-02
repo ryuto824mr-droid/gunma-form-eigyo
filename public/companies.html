@@ -278,6 +278,18 @@
   .btn-add-selected:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .add-selected-progress { margin-left: 12px; font-size: 13px; color: var(--gray-500); }
 
+  /* Tooltip */
+  .tooltip-wrap { position: relative; display: inline-block; }
+  .tooltip-wrap .tooltip-text {
+    visibility: hidden; opacity: 0;
+    background: var(--gray-900); color: white;
+    font-size: 11px; padding: 4px 8px; border-radius: 4px;
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); white-space: nowrap;
+    transition: opacity 150ms; z-index: 100; pointer-events: none;
+  }
+  .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -314,6 +326,7 @@
     <a href="/variants.html">メッセージ管理</a>
     <a href="/send.html">送信管理</a>
     <a href="/analytics.html">分析</a>
+    <a href="/help.html">ヘルプ</a>
   </nav>
 </header>
 
@@ -361,7 +374,10 @@
   <section class="table-section">
     <div class="bulk-toolbar">
       <h2>登録企業一覧</h2>
-      <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
+      <span class="tooltip-wrap">
+        <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
+        <span class="tooltip-text">未リサーチの企業を順番に自動解析します</span>
+      </span>
       <span class="bulk-progress" id="bulkProgress"></span>
     </div>
     <div class="table-wrap">
@@ -453,7 +469,7 @@
           <td>${automatableBadge(result)}</td>
           <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${updatedAt}</td>
           <td style="white-space:nowrap">
-            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button>
+            <span class="tooltip-wrap"><button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button><span class="tooltip-text">企業サイトのフォームを自動解析します</span></span>
             ${detailBtn}
           </td>
         </tr>`;

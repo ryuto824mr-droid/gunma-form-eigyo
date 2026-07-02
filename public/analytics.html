@@ -131,6 +131,18 @@
   .rate-bar  { display: inline-block; vertical-align: middle; width: 72px; height: 6px; background: var(--gray-200); border-radius: 999px; margin-left: 8px; }
   .rate-fill { height: 100%; background: var(--green-500); border-radius: 999px; transition: width 600ms cubic-bezier(0.4,0,0.2,1); }
 
+  /* Tooltip */
+  .tooltip-wrap { position: relative; display: inline-block; }
+  .tooltip-wrap .tooltip-text {
+    visibility: hidden; opacity: 0;
+    background: var(--gray-900); color: white;
+    font-size: 11px; padding: 4px 8px; border-radius: 4px;
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); white-space: nowrap;
+    transition: opacity 150ms; z-index: 100; pointer-events: none;
+  }
+  .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -154,6 +166,7 @@
     <a href="/variants.html">メッセージ管理</a>
     <a href="/send.html">送信管理</a>
     <a href="/analytics.html" class="active">分析</a>
+    <a href="/help.html">ヘルプ</a>
   </nav>
 </header>
 
@@ -162,9 +175,12 @@
   <div class="analytics-header">
     <span class="updated-at" id="updatedAt">読み込み中...</span>
     <span class="check-msg" id="checkMsg"></span>
-    <button class="btn-check" id="checkBtn" onclick="checkReplies()">
-      <i data-lucide="mail-check"></i>返信チェック
-    </button>
+    <span class="tooltip-wrap">
+      <button class="btn-check" id="checkBtn" onclick="checkReplies()">
+        <i data-lucide="mail-check"></i>返信チェック
+      </button>
+      <span class="tooltip-text">Gmailの未読メールを確認して返信を自動記録</span>
+    </span>
     <button class="btn-refresh" onclick="loadAnalytics()">
       <i data-lucide="refresh-cw"></i>更新
     </button>

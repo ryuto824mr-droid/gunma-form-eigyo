@@ -228,6 +228,18 @@
   }
   .btn-cancel-resp:hover { background: var(--gray-50); }
 
+  /* Tooltip */
+  .tooltip-wrap { position: relative; display: inline-block; }
+  .tooltip-wrap .tooltip-text {
+    visibility: hidden; opacity: 0;
+    background: var(--gray-900); color: white;
+    font-size: 11px; padding: 4px 8px; border-radius: 4px;
+    position: absolute; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); white-space: nowrap;
+    transition: opacity 150ms; z-index: 100; pointer-events: none;
+  }
+  .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -259,6 +271,7 @@
     <a href="/variants.html">メッセージ管理</a>
     <a href="/send.html" class="active">送信管理</a>
     <a href="/analytics.html">分析</a>
+    <a href="/help.html">ヘルプ</a>
   </nav>
 </header>
 
@@ -293,15 +306,24 @@
         <button class="btn-record" id="recordBtn" onclick="recordSent()">
           <i data-lucide="check"></i>送信済みとして記録
         </button>
-        <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>
-          <i data-lucide="send"></i>フォームに自動送信
-        </button>
-        <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>
-          <i data-lucide="mail"></i>メールで送信
-        </button>
+        <span class="tooltip-wrap">
+          <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>
+            <i data-lucide="send"></i>フォームに自動送信
+          </button>
+          <span class="tooltip-text">ヘッドレスブラウザでフォームに自動入力・送信</span>
+        </span>
+        <span class="tooltip-wrap">
+          <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>
+            <i data-lucide="mail"></i>メールで送信
+          </button>
+          <span class="tooltip-text">Gmail OAuth 経由でメールを直接送信</span>
+        </span>
       </div>
       <div class="force-row" id="forceRow" hidden>
-        <label><input type="checkbox" id="forceCheck" /> 強制送信（送信済み・24時間チェックをスキップ）</label>
+        <span class="tooltip-wrap">
+          <label><input type="checkbox" id="forceCheck" /> 強制送信（送信済み・24時間チェックをスキップ）</label>
+          <span class="tooltip-text">同一企業への重複送信制限をスキップします</span>
+        </span>
       </div>
     </div>
     <div class="draft-msg" id="draftMsg"></div>
