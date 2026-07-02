@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>フォーム解析 - LOCLE営業ツール</title>
+<title>ホーム - LOCLE営業ツール</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
@@ -17,21 +17,20 @@
     --white: #ffffff;
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
   body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
 
+  /* Header */
   .page-header {
     background: var(--white); border-bottom: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm); padding: 0 24px;
     display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
-  .page-header h1 {
-    margin: 0; font-size: 15px; font-weight: 700;
-    color: var(--green-700); flex-shrink: 0; letter-spacing: -0.01em;
-  }
+  .page-header h1 { margin: 0; font-size: 15px; font-weight: 700; color: var(--green-700); flex-shrink: 0; }
   .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
   .page-nav a {
     color: var(--gray-500); font-size: 13px; font-weight: 500;
@@ -41,126 +40,224 @@
   .page-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
   .page-nav a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); }
 
-  .main-content { max-width: 680px; margin: 32px auto; padding: 0 16px; }
+  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
 
-  .page-card {
+  /* Hero */
+  .hero {
+    text-align: center; padding: 48px 24px 40px;
     background: var(--white); border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 28px;
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+    margin-bottom: 32px;
   }
-  .page-card h2 {
-    margin: 0 0 6px; font-size: 18px; font-weight: 700;
-    color: var(--gray-900); letter-spacing: -0.02em;
+  .hero-logo {
+    font-size: 48px; font-weight: 700; color: var(--green-500);
+    letter-spacing: -0.04em; line-height: 1; margin-bottom: 8px;
   }
-  .page-card p { margin: 0 0 20px; font-size: 14px; color: var(--gray-500); line-height: 1.6; }
-
-  input[type="url"] {
-    width: 100%; padding: 8px 12px; font-size: 14px; font-family: inherit;
-    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    transition: border-color 150ms; background: var(--white); color: var(--gray-900);
+  .hero-subtitle {
+    font-size: 16px; font-weight: 600; color: var(--gray-700);
+    margin-bottom: 16px; letter-spacing: -0.01em;
   }
-  input[type="url"]:focus {
-    outline: none; border-color: var(--green-500);
-    box-shadow: 0 0 0 3px var(--green-100);
+  .hero-copy {
+    font-size: 14px; color: var(--gray-500); line-height: 1.8;
+    max-width: 480px; margin: 0 auto 28px;
   }
-  button {
-    margin-top: 10px; padding: 8px 16px;
+  .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-hero-primary {
+    display: inline-block; padding: 10px 24px;
     background: var(--green-500); color: var(--white);
     border: none; border-radius: var(--radius-sm); cursor: pointer;
-    font-size: 13px; font-weight: 600; font-family: inherit;
+    font-size: 14px; font-weight: 600; font-family: inherit;
+    text-decoration: none; transition: all 150ms;
+  }
+  .btn-hero-primary:hover { background: var(--green-700); }
+  .btn-hero-sub {
+    display: inline-block; padding: 10px 20px;
+    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    text-decoration: none; border-radius: var(--radius-sm);
     transition: all 150ms;
   }
-  button:hover:not(:disabled) { background: var(--green-700); }
-  button:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-hero-sub:hover { color: var(--gray-900); background: var(--gray-100); }
 
-  .status {
-    margin-top: 14px; font-size: 13px; color: var(--gray-500);
-    min-height: 20px;
+  /* Summary cards */
+  .summary-cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+  .summary-card {
+    flex: 1; min-width: 140px; background: var(--white);
+    border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
+    padding: 20px 24px; box-shadow: var(--shadow-sm); text-align: center;
   }
-  pre {
-    margin-top: 16px; background: var(--gray-50); border: 1px solid var(--gray-200);
-    padding: 14px; border-radius: var(--radius-md); overflow-x: auto;
-    font-size: 12px; white-space: pre-wrap; word-break: break-all;
-    color: var(--gray-700); line-height: 1.6;
+  .summary-card .card-label {
+    font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  }
+  .summary-card .card-value {
+    font-size: 32px; font-weight: 700; color: var(--green-700);
+    line-height: 1; letter-spacing: -0.03em;
+  }
+  .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+
+  /* Section title */
+  .section-title {
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--gray-400);
+    margin: 0 0 14px;
   }
 
-  .badge {
-    display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: 12px; font-weight: 600;
+  /* Feature cards */
+  .feature-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-bottom: 28px;
   }
-  .ok { background: var(--green-50); color: var(--green-700); }
-  .ng { background: #fff5f5; color: #dc2626; }
+  .feature-card {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 24px;
+    box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
+    display: flex; flex-direction: column; gap: 10px;
+    transition: transform 150ms, box-shadow 150ms;
+    color: inherit;
+  }
+  .feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--green-100);
+  }
+  .feature-icon { font-size: 28px; line-height: 1; }
+  .feature-name {
+    font-size: 15px; font-weight: 600; color: var(--gray-900);
+    letter-spacing: -0.01em;
+  }
+  .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
+  .feature-arrow {
+    margin-top: auto; font-size: 12px; color: var(--green-500);
+    font-weight: 600;
+  }
 
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
-    .main-content { padding: 0 8px; margin: 16px auto; }
-    input[type="url"] { font-size: 16px; }
-    button { min-height: 44px; width: 100%; }
+    .container { padding: 20px 8px; }
+    .hero { padding: 32px 16px 28px; }
+    .hero-logo { font-size: 36px; }
+    .summary-cards { flex-direction: column; }
+    .summary-card { min-width: unset; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .btn-hero-primary { width: 100%; text-align: center; }
   }
 </style>
 </head>
 <body>
+
 <header class="page-header">
   <h1>LOCLE 営業ツール</h1>
   <nav class="page-nav">
-    <a href="/index.html" class="active">フォーム解析</a>
+    <a href="/index.html" class="active">ホーム</a>
     <a href="/companies.html">企業リスト</a>
     <a href="/variants.html">メッセージ管理</a>
     <a href="/send.html">送信管理</a>
     <a href="/analytics.html">分析</a>
   </nav>
 </header>
-<div class="main-content">
-  <div class="page-card">
-    <h2>フォーム解析テスト</h2>
-    <p>企業サイトのURLを入力すると、お問い合わせフォームを探してフィールド構成と自動化可否を判定します。</p>
-    <input type="url" id="urlInput" placeholder="https://example.co.jp" />
-    <br />
-    <button id="runBtn">解析する</button>
-    <div class="status" id="status"></div>
-    <pre id="result"></pre>
+
+<div class="container">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-logo">LOCLE</div>
+    <div class="hero-subtitle">営業自動化ツール</div>
+    <p class="hero-copy">企業リサーチからフォーム送信・反応分析まで、営業活動を一気通貫で自動化します</p>
+    <div class="hero-actions">
+      <a href="/companies.html" class="btn-hero-primary">+ 企業を追加</a>
+      <a href="/analyzer.html" class="btn-hero-sub">フォーム解析テスト →</a>
+    </div>
+  </section>
+
+  <!-- Summary cards -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="card-label">登録企業数</div>
+      <div class="card-value" id="statCompanies"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">送信済み</div>
+      <div class="card-value" id="statSent"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">全体反応率</div>
+      <div class="card-value" id="statRate"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+    </div>
   </div>
 
-  <script>
-    const btn = document.getElementById("runBtn");
-    const input = document.getElementById("urlInput");
-    const statusEl = document.getElementById("status");
-    const resultEl = document.getElementById("result");
+  <!-- Feature cards -->
+  <p class="section-title">機能一覧</p>
+  <div class="feature-grid">
+    <a href="/companies.html" class="feature-card">
+      <div class="feature-icon">🏢</div>
+      <div class="feature-name">企業リスト</div>
+      <div class="feature-desc">企業を登録してフォームを自動解析</div>
+      <div class="feature-arrow">開く →</div>
+    </a>
+    <a href="/variants.html" class="feature-card">
+      <div class="feature-icon">✉️</div>
+      <div class="feature-name">メッセージ管理</div>
+      <div class="feature-desc">送信文面のテンプレートを管理</div>
+      <div class="feature-arrow">開く →</div>
+    </a>
+    <a href="/send.html" class="feature-card">
+      <div class="feature-icon">🚀</div>
+      <div class="feature-name">送信管理</div>
+      <div class="feature-desc">フォーム自動送信・メール送信を実行</div>
+      <div class="feature-arrow">開く →</div>
+    </a>
+    <a href="/analytics.html" class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-name">分析</div>
+      <div class="feature-desc">バリアント別・タグ別の反応率を分析</div>
+      <div class="feature-arrow">開く →</div>
+    </a>
+  </div>
 
-    btn.addEventListener("click", async () => {
-      const url = input.value.trim();
-      if (!url) {
-        statusEl.textContent = "URLを入力してください";
-        return;
-      }
-      btn.disabled = true;
-      statusEl.textContent = "解析中... (ヘッドレスブラウザでページを読み込んでいます。数秒~20秒程度かかります)";
-      resultEl.textContent = "";
-
-      try {
-        const res = await fetch("/api/analyze-form", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-          statusEl.innerHTML = `<span class="badge ng">エラー</span> ${data.error || "不明なエラー"}`;
-        } else {
-          const badge = data.automatable
-            ? '<span class="badge ok">自動化OK</span>'
-            : '<span class="badge ng">自動化NG</span>';
-          statusEl.innerHTML = `${badge} フォーム発見: ${data.formFound ? "あり" : "なし"} / CAPTCHA: ${data.captchaDetected ? "検出" : "なし"}`;
-        }
-        resultEl.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        statusEl.innerHTML = `<span class="badge ng">エラー</span> ${err.message}`;
-      } finally {
-        btn.disabled = false;
-      }
-    });
-  </script>
 </div>
+
+<script>
+  async function loadStats() {
+    try {
+      const [companiesRes, logsRes, analyticsRes] = await Promise.all([
+        fetch("/api/companies"),
+        fetch("/api/send-logs"),
+        fetch("/api/analytics"),
+      ]);
+      const companies = await companiesRes.json();
+      const logs      = await logsRes.json();
+      const analytics = await analyticsRes.json();
+
+      const totalCompanies = Array.isArray(companies) ? companies.length : 0;
+      const sentCount = Array.isArray(logs)
+        ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
+        : 0;
+
+      const stats = analytics.variants_stats || [];
+      const totalSends     = stats.reduce((s, r) => s + Number(r.send_count),     0);
+      const totalResponses = stats.reduce((s, r) => s + Number(r.response_count), 0);
+      const responseRate   = totalSends > 0
+        ? (totalResponses / totalSends * 100).toFixed(1) + "%"
+        : "—";
+
+      document.getElementById("statCompanies").innerHTML =
+        `${totalCompanies}<span class="card-unit">社</span>`;
+      document.getElementById("statSent").innerHTML =
+        `${sentCount}<span class="card-unit">件</span>`;
+      document.getElementById("statRate").innerHTML =
+        responseRate === "—"
+          ? `<span style="font-size:24px;color:var(--gray-300)">—</span>`
+          : `${responseRate.replace("%","")}<span class="card-unit">%</span>`;
+    } catch {
+      ["statCompanies","statSent","statRate"].forEach(id => {
+        document.getElementById(id).innerHTML =
+          '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
+      });
+    }
+  }
+
+  loadStats();
+</script>
 </body>
 </html>
