@@ -72,6 +72,13 @@
   }
   .btn-record:hover:not(:disabled) { background: var(--deep-green); }
   .btn-record:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-auto-submit {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px;
+    background: var(--deep-green); color: white; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-auto-submit:hover:not(:disabled) { background: #1a6617; }
+  .btn-auto-submit:disabled { background: #aaa; cursor: not-allowed; }
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--main-green); }
   .draft-msg.error { color: #c0392b; }
@@ -160,6 +167,7 @@
       <div class="preview-actions">
         <button class="btn-copy" onclick="copyDraft()">コピー</button>
         <button class="btn-record" id="recordBtn" onclick="recordSent()">送信済みとして記録</button>
+        <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>フォームに自動送信</button>
       </div>
     </div>
     <div class="draft-msg" id="draftMsg"></div>
@@ -274,6 +282,8 @@
     document.getElementById("draftPreview").hidden = false;
 
     currentDraft = { companyId, variantId, company, variant, body };
+    document.getElementById("autoSubmitBtn").hidden =
+      !(company.research_result?.automatable === true);
     showDraftMsg("", "");
   }
 
@@ -291,6 +301,37 @@
       sel.removeAllRanges();
       sel.addRange(rng);
       showDraftMsg("テキストを選択しました（Ctrl+C でコピー）", "ok");
+    }
+  }
+
+  async function autoSubmit() {
+    if (!currentDraft) return;
+    const { companyId, variantId } = currentDraft;
+    const btn = document.getElementById("autoSubmitBtn");
+    const origText = btn.textContent;
+    btn.textContent = "送信中...";
+    btn.disabled = true;
+
+    try {
+      const res = await fetch("/api/submit-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showDraftMsg(`自動送信失敗: ${data.error}。手動送信に切り替えてください。`, "error");
+        return;
+      }
+      const lRes = await fetch("/api/send-logs");
+      logs = await lRes.json();
+      renderLogs();
+      showDraftMsg("自動送信が完了しました", "ok");
+    } catch (err) {
+      showDraftMsg(`自動送信失敗: ${err.message}。手動送信に切り替えてください。`, "error");
+    } finally {
+      btn.textContent = origText;
+      btn.disabled = false;
     }
   }
 
