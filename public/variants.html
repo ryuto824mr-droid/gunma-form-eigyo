@@ -5,119 +5,153 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>メッセージ管理 - LOCLE営業ツール</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
-  :root { --main-green: #44B13F; --deep-green: #2F8A2A; --bg: #f7f9f7; }
+  :root {
+    --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-50: #f0faf0;  --green-100: #d8f0d8;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
   * { box-sizing: border-box; }
-  body { font-family: "Noto Sans JP", sans-serif; background: var(--bg); margin: 0; color: #222; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
 
   .page-header {
-    background: var(--deep-green); color: white;
-    padding: 14px 24px; display: flex; align-items: center; gap: 16px;
+    background: var(--white); border-bottom: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm); padding: 0 24px;
+    display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
   }
-  .page-header h1 { margin: 0; font-size: 18px; font-weight: 700; flex-shrink: 0; }
-  .page-nav { display: flex; gap: 20px; margin-left: auto; flex-wrap: wrap; }
-  .page-nav a { color: rgba(255,255,255,0.75); font-size: 13px; text-decoration: none; white-space: nowrap; }
-  .page-nav a:hover { color: white; }
-  .page-nav a.active { color: white; font-weight: 700; border-bottom: 2px solid rgba(255,255,255,0.8); padding-bottom: 2px; }
+  .page-header h1 { margin: 0; font-size: 15px; font-weight: 700; color: var(--green-700); flex-shrink: 0; }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
+  .page-nav a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); }
 
   .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
 
   .create-section, .list-section {
-    background: white; border-radius: 8px; padding: 20px 24px;
-    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    margin-bottom: 20px; box-shadow: var(--shadow-sm);
   }
-  .create-section h2, .list-section h2 { margin: 0 0 18px; font-size: 15px; color: var(--deep-green); }
+  .create-section h2, .list-section h2 {
+    margin: 0 0 18px; font-size: 14px; font-weight: 600;
+    color: var(--gray-700); letter-spacing: -0.01em;
+  }
 
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-group.full { grid-column: 1 / -1; }
-  .form-group label { font-size: 12px; font-weight: 700; color: #555; }
+  .form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
   .form-group input[type="text"],
   .form-group select,
   .form-group textarea {
-    padding: 8px 10px; font-size: 14px; border: 1px solid #ccc;
-    border-radius: 6px; font-family: inherit; background: white;
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms;
+  }
+  .form-group input[type="text"]:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none; border-color: var(--green-500);
+    box-shadow: 0 0 0 3px var(--green-100);
   }
   .form-group textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
-  .form-hint { font-size: 11px; color: #888; margin-top: 4px; }
+  .form-hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
 
   .tag-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; min-height: 4px; }
   .tag-row { display: flex; align-items: center; gap: 6px; }
-  .tag-row input { padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 5px; font-family: inherit; flex: 1; }
-  .tag-sep { color: #888; font-size: 13px; flex-shrink: 0; }
+  .tag-row input {
+    padding: 6px 10px; font-size: 13px; border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm); font-family: inherit; flex: 1;
+  }
+  .tag-row input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .tag-sep { color: var(--gray-400); font-size: 13px; flex-shrink: 0; }
   .btn-tag-remove {
-    padding: 4px 8px; font-size: 12px; border-radius: 4px;
-    border: 1px solid #ddd; background: #f8f8f8; cursor: pointer; color: #888; flex-shrink: 0;
+    padding: 4px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white);
+    cursor: pointer; color: var(--gray-400); flex-shrink: 0; transition: all 150ms;
   }
-  .btn-tag-remove:hover { background: #fee; border-color: #f88; color: #c00; }
+  .btn-tag-remove:hover { background: #fff5f5; border-color: #fca5a5; color: #dc2626; }
   .btn-tag-add {
-    padding: 5px 12px; font-size: 12px; border-radius: 5px;
-    border: 1px solid var(--main-green); background: white;
-    color: var(--deep-green); cursor: pointer; font-family: inherit; font-weight: 700;
+    padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); background: var(--white);
+    color: var(--green-700); cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: all 150ms;
   }
-  .btn-tag-add:hover { background: #f0faf0; }
+  .btn-tag-add:hover { background: var(--green-50); }
 
   .create-footer { margin-top: 18px; display: flex; align-items: center; gap: 14px; }
   .btn-create {
-    padding: 9px 24px; background: var(--main-green); color: white;
-    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
-    font-family: inherit; font-weight: 700;
+    padding: 8px 20px; background: var(--green-500); color: var(--white);
+    border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
   }
-  .btn-create:hover:not(:disabled) { background: var(--deep-green); }
-  .btn-create:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-create:hover:not(:disabled) { background: var(--green-700); }
+  .btn-create:disabled { background: var(--gray-300); cursor: not-allowed; }
   .form-msg { font-size: 13px; }
-  .form-msg.ok    { color: var(--main-green); }
-  .form-msg.error { color: #c0392b; }
+  .form-msg.ok    { color: var(--green-700); }
+  .form-msg.error { color: #dc2626; }
 
+  /* Variant cards */
   .variant-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
   .variant-card {
-    border: 1px solid #e4e4e4; border-radius: 8px; padding: 16px;
-    background: white; display: flex; flex-direction: column; gap: 10px;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 16px;
+    background: var(--white); display: flex; flex-direction: column; gap: 10px;
+    box-shadow: var(--shadow-sm); transition: box-shadow 150ms;
   }
+  .variant-card:hover { box-shadow: var(--shadow-md); }
   .card-header { display: flex; align-items: flex-start; gap: 8px; }
-  .card-name { font-weight: 700; font-size: 14px; flex: 1; word-break: break-word; }
+  .channel-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .card-name { font-weight: 600; font-size: 14px; flex: 1; word-break: break-word; color: var(--gray-900); }
   .channel-badge {
-    display: inline-block; padding: 2px 8px; border-radius: 10px;
-    font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
   }
   .channel-badge.email { background: #dbeafe; color: #1e40af; }
-  .channel-badge.form  { background: #dcfce7; color: #166534; }
+  .channel-badge.form  { background: var(--green-50); color: var(--green-700); }
   .btn-delete {
-    padding: 3px 8px; font-size: 12px; border-radius: 4px;
-    border: 1px solid #f0a0a0; background: white; color: #c0392b;
-    cursor: pointer; flex-shrink: 0;
+    padding: 3px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
+    cursor: pointer; flex-shrink: 0; transition: all 150ms;
   }
-  .btn-delete:hover { background: #fee2e2; }
+  .btn-delete:hover { background: #fff5f5; }
   .card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
   .tag-badge {
-    display: inline-block; padding: 2px 7px; border-radius: 9px;
-    font-size: 11px; background: #f3f4f6; color: #555; border: 1px solid #e5e7eb;
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 11px; background: var(--green-50); color: var(--green-700);
+    border: 1px solid var(--green-100); font-weight: 500;
   }
   .card-body-preview {
-    font-size: 12px; color: #666; line-height: 1.6;
+    font-size: 12px; color: var(--gray-500); line-height: 1.7;
     white-space: pre-wrap; word-break: break-word;
-    border-top: 1px solid #f0f0f0; padding-top: 8px; margin: 0;
+    border-top: 1px solid var(--gray-100); padding-top: 10px; margin: 0;
   }
-  .list-empty { font-size: 13px; color: #999; padding: 20px 0; margin: 0; }
-  .list-count { font-size: 12px; color: #888; font-weight: 400; margin-left: 8px; }
+  .list-empty { font-size: 13px; color: var(--gray-400); padding: 20px 0; margin: 0; }
+  .list-count { font-size: 12px; color: var(--gray-400); font-weight: 400; margin-left: 8px; }
 
   @media (max-width: 600px) {
-    .page-header { padding: 10px 12px; }
+    .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
     .container { padding: 16px 8px; }
-
-    /* 作成フォーム: 1カラム縦並び */
     .form-grid { grid-template-columns: 1fr; }
     .form-group.full { grid-column: 1; }
     .form-group input[type="text"],
     .form-group select,
     .form-group textarea { font-size: 16px; }
-
     .tag-row input { font-size: 16px; }
     .btn-create { min-height: 44px; width: 100%; }
-
-    /* カード一覧: padding縮小・本文プレビュー約50字相当に短縮 */
     .variant-card { padding: 12px; }
     .card-body-preview { max-height: 3.2em; overflow: hidden; }
   }
@@ -126,7 +160,7 @@
 <body>
 
 <header class="page-header">
-  <h1>メッセージ管理</h1>
+  <h1>LOCLE 営業ツール</h1>
   <nav class="page-nav">
     <a href="/index.html">フォーム解析</a>
     <a href="/companies.html">企業リスト</a>
@@ -144,15 +178,15 @@
     <div class="form-grid">
 
       <div class="form-group">
-        <label for="inputName">名前 <span style="color:#c00">*</span></label>
+        <label for="inputName">名前 <span style="color:#dc2626">*</span></label>
         <input type="text" id="inputName" placeholder="例: 初回挨拶メール v1" />
       </div>
 
       <div class="form-group">
-        <label for="inputChannel">チャネル <span style="color:#c00">*</span></label>
+        <label for="inputChannel">チャネル <span style="color:#dc2626">*</span></label>
         <select id="inputChannel">
-          <option value="email">メール</option>
-          <option value="form">フォーム</option>
+          <option value="email">📧 メール</option>
+          <option value="form">📝 フォーム</option>
         </select>
       </div>
 
@@ -162,7 +196,7 @@
       </div>
 
       <div class="form-group full">
-        <label for="inputBody">本文テンプレート <span style="color:#c00">*</span></label>
+        <label for="inputBody">本文テンプレート <span style="color:#dc2626">*</span></label>
         <textarea id="inputBody" placeholder="例: {{company_name}} ご担当者様&#10;&#10;はじめてご連絡させていただきます..."></textarea>
         <p class="form-hint">{{company_name}} のように書くと、送信時に企業名が自動で差し込まれます</p>
       </div>
@@ -216,6 +250,7 @@
   }
 
   function renderCard(v) {
+    const channelIcon  = v.channel === "email" ? "📧" : "📝";
     const channelLabel = v.channel === "email" ? "メール" : "フォーム";
     const tags    = (v.tags && typeof v.tags === "object") ? v.tags : {};
     const tagKeys = Object.keys(tags);
@@ -229,6 +264,7 @@
     return `
       <div class="variant-card" id="card-${v.id}">
         <div class="card-header">
+          <span class="channel-icon">${channelIcon}</span>
           <span class="card-name">${esc(v.name)}</span>
           <span class="channel-badge ${esc(v.channel)}">${channelLabel}</span>
           <button class="btn-delete" onclick="deleteVariant(${v.id})">削除</button>
@@ -327,10 +363,8 @@
 
   function esc(s) {
     return String(s || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
   loadVariants();
