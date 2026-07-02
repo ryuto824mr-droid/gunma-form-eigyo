@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>メッセージ管理 - ぐんまフォーム営業ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --main-green: #44B13F; --deep-green: #2F8A2A; --bg: #f7f9f7; }
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans JP", sans-serif; background: var(--bg); margin: 0; color: #222; }
+
+  .page-header {
+    background: var(--deep-green); color: white;
+    padding: 14px 24px; display: flex; align-items: center; gap: 16px;
+  }
+  .page-header h1 { margin: 0; font-size: 18px; font-weight: 700; flex-shrink: 0; }
+  .page-nav { display: flex; gap: 20px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a { color: rgba(255,255,255,0.75); font-size: 13px; text-decoration: none; white-space: nowrap; }
+  .page-nav a:hover { color: white; }
+  .page-nav a.active { color: white; font-weight: 700; border-bottom: 2px solid rgba(255,255,255,0.8); padding-bottom: 2px; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+  .create-section, .list-section {
+    background: white; border-radius: 8px; padding: 20px 24px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .create-section h2, .list-section h2 { margin: 0 0 18px; font-size: 15px; color: var(--deep-green); }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; font-weight: 700; color: #555; }
+  .form-group input[type="text"],
+  .form-group select,
+  .form-group textarea {
+    padding: 8px 10px; font-size: 14px; border: 1px solid #ccc;
+    border-radius: 6px; font-family: inherit; background: white;
+  }
+  .form-group textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+  .form-hint { font-size: 11px; color: #888; margin-top: 4px; }
+
+  .tag-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; min-height: 4px; }
+  .tag-row { display: flex; align-items: center; gap: 6px; }
+  .tag-row input { padding: 6px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 5px; font-family: inherit; flex: 1; }
+  .tag-sep { color: #888; font-size: 13px; flex-shrink: 0; }
+  .btn-tag-remove {
+    padding: 4px 8px; font-size: 12px; border-radius: 4px;
+    border: 1px solid #ddd; background: #f8f8f8; cursor: pointer; color: #888; flex-shrink: 0;
+  }
+  .btn-tag-remove:hover { background: #fee; border-color: #f88; color: #c00; }
+  .btn-tag-add {
+    padding: 5px 12px; font-size: 12px; border-radius: 5px;
+    border: 1px solid var(--main-green); background: white;
+    color: var(--deep-green); cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-tag-add:hover { background: #f0faf0; }
+
+  .create-footer { margin-top: 18px; display: flex; align-items: center; gap: 14px; }
+  .btn-create {
+    padding: 9px 24px; background: var(--main-green); color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    font-family: inherit; font-weight: 700;
+  }
+  .btn-create:hover:not(:disabled) { background: var(--deep-green); }
+  .btn-create:disabled { background: #aaa; cursor: not-allowed; }
+  .form-msg { font-size: 13px; }
+  .form-msg.ok    { color: var(--main-green); }
+  .form-msg.error { color: #c0392b; }
+
+  .variant-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .variant-card {
+    border: 1px solid #e4e4e4; border-radius: 8px; padding: 16px;
+    background: white; display: flex; flex-direction: column; gap: 10px;
+  }
+  .card-header { display: flex; align-items: flex-start; gap: 8px; }
+  .card-name { font-weight: 700; font-size: 14px; flex: 1; word-break: break-word; }
+  .channel-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+  }
+  .channel-badge.email { background: #dbeafe; color: #1e40af; }
+  .channel-badge.form  { background: #dcfce7; color: #166534; }
+  .btn-delete {
+    padding: 3px 8px; font-size: 12px; border-radius: 4px;
+    border: 1px solid #f0a0a0; background: white; color: #c0392b;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .btn-delete:hover { background: #fee2e2; }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 9px;
+    font-size: 11px; background: #f3f4f6; color: #555; border: 1px solid #e5e7eb;
+  }
+  .card-body-preview {
+    font-size: 12px; color: #666; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+    border-top: 1px solid #f0f0f0; padding-top: 8px; margin: 0;
+  }
+  .list-empty { font-size: 13px; color: #999; padding: 20px 0; margin: 0; }
+  .list-count { font-size: 12px; color: #888; font-weight: 400; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>メッセージ管理</h1>
+  <nav class="page-nav">
+    <a href="/index.html">フォーム解析テスト</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html" class="active">メッセージ管理</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- 作成フォーム -->
+  <section class="create-section">
+    <h2>バリアントを作成</h2>
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label for="inputName">名前 <span style="color:#c00">*</span></label>
+        <input type="text" id="inputName" placeholder="例: 初回挨拶メール v1" />
+      </div>
+
+      <div class="form-group">
+        <label for="inputChannel">チャネル <span style="color:#c00">*</span></label>
+        <select id="inputChannel">
+          <option value="email">メール</option>
+          <option value="form">フォーム</option>
+        </select>
+      </div>
+
+      <div class="form-group full">
+        <label for="inputSubject">件名テンプレート（メールの場合・任意）</label>
+        <input type="text" id="inputSubject" placeholder="例: {{company_name}} 様へのご提案" />
+      </div>
+
+      <div class="form-group full">
+        <label for="inputBody">本文テンプレート <span style="color:#c00">*</span></label>
+        <textarea id="inputBody" placeholder="例: {{company_name}} ご担当者様&#10;&#10;はじめてご連絡させていただきます..."></textarea>
+        <p class="form-hint">{{company_name}} のように書くと、送信時に企業名が自動で差し込まれます</p>
+      </div>
+
+      <div class="form-group full">
+        <label>タグ（key: value 形式で任意追加）</label>
+        <div class="tag-rows" id="tagRows"></div>
+        <button type="button" class="btn-tag-add" onclick="addTagRow()">＋ タグを追加</button>
+      </div>
+
+    </div>
+    <div class="create-footer">
+      <button class="btn-create" id="createBtn" onclick="createVariant()">作成</button>
+      <span class="form-msg" id="formMsg"></span>
+    </div>
+  </section>
+
+  <!-- 一覧 -->
+  <section class="list-section">
+    <h2>バリアント一覧<span class="list-count" id="listCount"></span></h2>
+    <div id="variantList"><p class="list-empty">読み込み中...</p></div>
+  </section>
+
+</div>
+
+<script>
+  let variants = [];
+
+  async function loadVariants() {
+    try {
+      const res = await fetch("/api/variants");
+      if (!res.ok) throw new Error("取得失敗");
+      variants = await res.json();
+      renderVariants();
+    } catch (err) {
+      document.getElementById("variantList").innerHTML =
+        `<p class="list-empty">読み込みエラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderVariants() {
+    const el      = document.getElementById("variantList");
+    const countEl = document.getElementById("listCount");
+    countEl.textContent = `（${variants.length}件）`;
+
+    if (variants.length === 0) {
+      el.innerHTML = '<p class="list-empty">バリアントがまだ登録されていません</p>';
+      return;
+    }
+    el.innerHTML = `<div class="variant-cards">${variants.map(v => renderCard(v)).join("")}</div>`;
+  }
+
+  function renderCard(v) {
+    const channelLabel = v.channel === "email" ? "メール" : "フォーム";
+    const tags    = (v.tags && typeof v.tags === "object") ? v.tags : {};
+    const tagKeys = Object.keys(tags);
+    const tagsHtml = tagKeys.length > 0
+      ? `<div class="card-tags">${tagKeys.map(k =>
+          `<span class="tag-badge">${esc(k)}: ${esc(tags[k])}</span>`).join("")}</div>`
+      : "";
+    const bodyText = v.body_template || "";
+    const preview  = bodyText.slice(0, 100) + (bodyText.length > 100 ? "…" : "");
+
+    return `
+      <div class="variant-card" id="card-${v.id}">
+        <div class="card-header">
+          <span class="card-name">${esc(v.name)}</span>
+          <span class="channel-badge ${esc(v.channel)}">${channelLabel}</span>
+          <button class="btn-delete" onclick="deleteVariant(${v.id})">削除</button>
+        </div>
+        ${tagsHtml}
+        <p class="card-body-preview">${esc(preview)}</p>
+      </div>`;
+  }
+
+  async function createVariant() {
+    const name             = document.getElementById("inputName").value.trim();
+    const channel          = document.getElementById("inputChannel").value;
+    const subject_template = document.getElementById("inputSubject").value.trim();
+    const body_template    = document.getElementById("inputBody").value.trim();
+    const btn              = document.getElementById("createBtn");
+
+    if (!name)          { showMsg("名前を入力してください", "error"); return; }
+    if (!body_template) { showMsg("本文テンプレートを入力してください", "error"); return; }
+
+    const tags = getTags();
+    btn.disabled = true;
+    showMsg("作成中...", "");
+
+    try {
+      const res = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          channel,
+          subject_template: subject_template || null,
+          body_template,
+          tags,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showMsg(data.error || "作成エラー", "error"); return; }
+
+      variants.unshift(data);
+      renderVariants();
+      document.getElementById("inputName").value    = "";
+      document.getElementById("inputChannel").value = "email";
+      document.getElementById("inputSubject").value = "";
+      document.getElementById("inputBody").value    = "";
+      document.getElementById("tagRows").innerHTML  = "";
+      showMsg("作成しました", "ok");
+    } catch (err) {
+      showMsg(err.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function deleteVariant(id) {
+    if (!confirm("このバリアントを削除しますか？")) return;
+    try {
+      const res  = await fetch(`/api/variants/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "削除エラー"); return; }
+      variants = variants.filter(v => v.id !== id);
+      renderVariants();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function addTagRow() {
+    const container = document.getElementById("tagRows");
+    const row = document.createElement("div");
+    row.className = "tag-row";
+    row.innerHTML = `
+      <input type="text" class="tag-key" placeholder="キー（例: industry）" />
+      <span class="tag-sep">:</span>
+      <input type="text" class="tag-val" placeholder="値（例: IT）" />
+      <button type="button" class="btn-tag-remove" onclick="this.parentElement.remove()">✕</button>`;
+    container.appendChild(row);
+    row.querySelector(".tag-key").focus();
+  }
+
+  function getTags() {
+    const rows = document.querySelectorAll("#tagRows .tag-row");
+    const tags = {};
+    rows.forEach(row => {
+      const key = row.querySelector(".tag-key").value.trim();
+      const val = row.querySelector(".tag-val").value.trim();
+      if (key) tags[key] = val;
+    });
+    return tags;
+  }
+
+  function showMsg(text, type) {
+    const el = document.getElementById("formMsg");
+    el.textContent = text;
+    el.className = "form-msg" + (type ? " " + type : "");
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  loadVariants();
+</script>
+</body>
+</html>
