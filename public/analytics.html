@@ -28,6 +28,14 @@
     background: white; cursor: pointer; font-family: inherit; font-weight: 700;
   }
   .btn-refresh:hover { background: #f0faf0; }
+  .btn-check {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px;
+    border: 1px solid #6366f1; color: #4338ca;
+    background: white; cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-check:hover:not(:disabled) { background: #eef2ff; }
+  .btn-check:disabled { border-color: #ccc; color: #aaa; cursor: not-allowed; }
+  .check-msg { font-size: 12px; color: #555; }
 
   /* Summary cards */
   .summary-cards { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
@@ -100,6 +108,8 @@
 
   <div class="analytics-header">
     <span class="updated-at" id="updatedAt">読み込み中...</span>
+    <span class="check-msg" id="checkMsg"></span>
+    <button class="btn-check" id="checkBtn" onclick="checkReplies()">返信チェック</button>
     <button class="btn-refresh" onclick="loadAnalytics()">更新</button>
   </div>
 
@@ -245,6 +255,25 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  async function checkReplies() {
+    const btn   = document.getElementById("checkBtn");
+    const msgEl = document.getElementById("checkMsg");
+    btn.disabled = true;
+    msgEl.textContent = "チェック中...";
+    try {
+      const res  = await fetch("/api/analytics?action=check-replies");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "失敗");
+      msgEl.textContent =
+        `${data.checked}件チェック、${data.matched}件一致、${data.recorded}件記録しました`;
+      if (data.recorded > 0) loadAnalytics();
+    } catch (err) {
+      msgEl.textContent = `エラー: ${esc(err.message)}`;
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   loadAnalytics();

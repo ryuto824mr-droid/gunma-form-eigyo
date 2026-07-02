@@ -54,6 +54,9 @@ module.exports = async function handler(req, res) {
     }
     // emailカラム追加（IF NOT EXISTSなので冪等）
     await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS email TEXT");
+    // responses.message_id追加（返信自動検出用）
+    await sql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS message_id TEXT");
+    await sql.query("CREATE UNIQUE INDEX IF NOT EXISTS responses_message_id_uidx ON responses (message_id) WHERE message_id IS NOT NULL");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
