@@ -20,23 +20,43 @@
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
-  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+  body { font-family: "Inter","Noto Sans JP",sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .container { animation: fadeInUp 0.4s ease-out; }
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid var(--gray-200); border-top-color: var(--green-500);
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-right: 4px;
+  }
 
   .page-header {
-    background: var(--white); border-bottom: 1px solid var(--gray-200);
-    box-shadow: var(--shadow-sm); padding: 0 24px;
-    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
-  .page-header h1 { margin: 0; font-size: 15px; font-weight: 700; color: var(--green-700); flex-shrink: 0; }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-header h1 svg { width: 18px; height: 18px; }
   .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
   .page-nav a {
-    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
     text-decoration: none; white-space: nowrap;
     padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
   }
-  .page-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
-  .page-nav a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
 
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
@@ -46,51 +66,61 @@
     background: var(--white); border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
     font-size: 13px; color: var(--gray-500); flex-wrap: wrap;
+    position: relative; overflow: hidden;
   }
-  .summary-bar strong { color: var(--green-700); font-size: 18px; font-weight: 700; display: block; }
+  .summary-bar::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #44B13F, #5BC952);
+  }
   .summary-item { display: flex; flex-direction: column; gap: 2px; }
+  .summary-item strong { color: var(--green-700); font-size: 18px; font-weight: 700; display: block; }
   .summary-item span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--gray-400); }
 
-  /* Common section */
+  /* Sections */
   .add-section, .import-section, .discover-section {
     background: var(--white); border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg); padding: 20px 24px;
     margin-bottom: 20px; box-shadow: var(--shadow-sm);
   }
   .add-section h2, .import-section h2, .discover-section h2 {
-    margin: 0 0 14px; font-size: 14px; font-weight: 600;
-    color: var(--gray-700); letter-spacing: -0.01em;
+    margin: 0 0 14px; font-size: 14px; font-weight: 600; color: var(--gray-700);
   }
 
-  /* Input + button common */
-  input[type="text"], input[type="url"], input[type="email"], select {
+  /* Inputs */
+  input[type="text"], input[type="url"], input[type="email"] {
     padding: 8px 12px; font-size: 14px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
     background: var(--white); color: var(--gray-900); transition: border-color 150ms;
   }
-  input[type="text"]:focus, input[type="url"]:focus, input[type="email"]:focus, select:focus {
-    outline: none; border-color: var(--green-500);
-    box-shadow: 0 0 0 3px var(--green-100);
+  input[type="text"]:focus, input[type="url"]:focus, input[type="email"]:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
 
-  /* Add form */
   .add-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .add-row input[name="name"]  { flex: 0 0 200px; }
   .add-row input[name="url"]   { flex: 1 1 220px; }
   .add-row input[name="email"] { flex: 1 1 180px; }
+
   .btn-primary {
-    padding: 8px 16px; background: var(--green-500); color: var(--white);
-    border: none; border-radius: var(--radius-sm); cursor: pointer;
-    font-size: 13px; font-weight: 600; font-family: inherit;
-    transition: all 150ms; white-space: nowrap;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    transition: all 150ms ease; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .btn-primary:hover:not(:disabled) { background: var(--green-700); }
-  .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3da038, #277025);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+  }
+  .btn-primary:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-primary svg { width: 13px; height: 13px; }
+
   .add-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
   .add-msg.error { color: #dc2626; }
   .add-msg.ok    { color: var(--green-700); }
 
-  /* Import section */
   .import-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .import-format { font-size: 11px; color: var(--gray-400); margin: 8px 0 0; }
   .import-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
@@ -106,17 +136,20 @@
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
     padding: 14px 20px; border-bottom: 1px solid var(--gray-200);
   }
-  .bulk-toolbar h2 {
-    margin: 0; font-size: 14px; font-weight: 600; color: var(--gray-700); flex: 1;
-  }
+  .bulk-toolbar h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--gray-700); flex: 1; }
   .btn-bulk {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
-    border: none; background: var(--green-700); color: var(--white);
-    cursor: pointer; font-family: inherit; font-weight: 600; white-space: nowrap;
-    transition: all 150ms;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; white-space: nowrap;
+    transition: all 150ms ease;
   }
-  .btn-bulk:hover:not(:disabled) { background: #1a6617; }
-  .btn-bulk:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-bulk:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3da038, #277025);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+  }
+  .btn-bulk:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .bulk-progress { font-size: 12px; color: var(--gray-500); }
 
   .table-wrap { overflow-x: auto; }
@@ -129,17 +162,14 @@
   }
   tbody tr { border-bottom: 1px solid var(--gray-100); }
   tbody tr:last-child { border-bottom: none; }
-  tbody tr:hover td { background: var(--gray-50); }
+  tbody tr:hover td { background: var(--green-50); transition: background 100ms ease; }
   td { padding: 10px 14px; vertical-align: middle; color: var(--gray-700); }
   td.url a { color: #2563eb; word-break: break-all; font-size: 12px; }
   td.name { font-weight: 500; color: var(--gray-900); }
   .empty-row td { text-align: center; color: var(--gray-400); padding: 32px; }
 
   /* Badges */
-  .badge {
-    display: inline-block; padding: 2px 8px; border-radius: 4px;
-    font-size: 11px; font-weight: 600; white-space: nowrap;
-  }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
   .badge-pending    { background: var(--gray-100); color: var(--gray-500); }
   .badge-researching{ background: #ede9fe; color: #6d28d9; }
   .badge-researched { background: var(--green-50); color: var(--green-700); }
@@ -151,18 +181,24 @@
 
   /* Action buttons */
   .btn-research {
-    padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm);
     border: 1px solid var(--green-500); color: var(--green-700);
-    background: var(--white); cursor: pointer; font-family: inherit; transition: all 0.15s;
+    background: var(--white); cursor: pointer; font-family: inherit;
+    transition: all 150ms ease;
+    display: inline-flex; align-items: center; gap: 4px;
   }
-  .btn-research:hover:not(:disabled) { background: var(--green-500); color: var(--white); }
-  .btn-research:disabled { border-color: var(--gray-200); color: var(--gray-400); cursor: not-allowed; }
+  .btn-research:hover:not(:disabled) { background: var(--green-500); color: var(--white); transform: translateY(-1px); }
+  .btn-research:disabled { border-color: var(--gray-200); color: var(--gray-400); cursor: not-allowed; transform: none; }
+  .btn-research svg { width: 12px; height: 12px; }
+
   .btn-detail {
-    margin-left: 6px; padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    margin-left: 6px; padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm);
     border: 1px solid var(--gray-200); color: var(--gray-500); background: var(--white);
-    cursor: pointer; font-family: inherit; transition: all 0.15s;
+    cursor: pointer; font-family: inherit; transition: all 150ms ease;
+    display: inline-flex; align-items: center; gap: 4px;
   }
-  .btn-detail:hover { background: var(--gray-50); color: var(--gray-900); }
+  .btn-detail:hover { background: var(--gray-50); color: var(--gray-900); transform: translateY(-1px); }
+  .btn-detail svg { width: 12px; height: 12px; }
 
   /* Modal */
   .modal-overlay {
@@ -215,32 +251,17 @@
   .source-ai        { background: #6366f1; }
   .source-heuristic { background: var(--gray-500); }
 
-  /* Discover section */
   .discover-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .discover-row input { flex: 1 1 160px; }
-  .badge-places {
-    flex-shrink: 0; display: inline-block; padding: 1px 6px;
-    background: #4285f4; color: white; font-size: 10px;
-    border-radius: 3px; white-space: nowrap;
-  }
-  .discover-unconfigured {
-    margin-top: 14px; padding: 12px 16px; background: var(--gray-50);
-    border-left: 3px solid var(--gray-300); border-radius: var(--radius-sm);
-    font-size: 13px; color: var(--gray-500);
-  }
+  .badge-places { flex-shrink: 0; display: inline-block; padding: 1px 6px; background: #4285f4; color: white; font-size: 10px; border-radius: 3px; white-space: nowrap; }
+  .discover-unconfigured { margin-top: 14px; padding: 12px 16px; background: var(--gray-50); border-left: 3px solid var(--gray-300); border-radius: var(--radius-sm); font-size: 13px; color: var(--gray-500); }
   .discover-status { margin-top: 12px; font-size: 13px; color: var(--gray-400); }
   .discover-error  { margin-top: 12px; font-size: 13px; color: #dc2626; }
   .discover-count  { margin: 12px 0 8px; font-size: 13px; color: var(--gray-700); font-weight: 500; }
-  .discover-list {
-    list-style: none; margin: 0 0 14px; padding: 0;
-    border: 1px solid var(--gray-200); border-radius: var(--radius-md); overflow: hidden;
-  }
+  .discover-list { list-style: none; margin: 0 0 14px; padding: 0; border: 1px solid var(--gray-200); border-radius: var(--radius-md); overflow: hidden; }
   .discover-list li { border-bottom: 1px solid var(--gray-100); }
   .discover-list li:last-child { border-bottom: none; }
-  .discover-list label {
-    display: flex; align-items: center; gap: 10px; padding: 9px 14px;
-    cursor: pointer; font-size: 13px; transition: background 150ms;
-  }
+  .discover-list label { display: flex; align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer; font-size: 13px; transition: background 150ms; }
   .discover-list label:hover { background: var(--gray-50); }
   .discover-list input[type="checkbox"] { flex-shrink: 0; width: 15px; height: 15px; cursor: pointer; }
   .discover-name { font-weight: 500; flex-shrink: 0; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--gray-900); }
@@ -248,46 +269,43 @@
   .discover-url:hover { text-decoration: underline; }
   .btn-add-selected {
     padding: 8px 16px; font-size: 13px; border-radius: var(--radius-sm);
-    background: var(--green-500); color: var(--white); border: none;
-    cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms ease;
   }
-  .btn-add-selected:hover:not(:disabled) { background: var(--green-700); }
-  .btn-add-selected:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-add-selected:hover:not(:disabled) { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
+  .btn-add-selected:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .add-selected-progress { margin-left: 12px; font-size: 13px; color: var(--gray-500); }
 
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
     .container { padding: 16px 8px; }
-
     .add-row { flex-direction: column; }
     .add-row input[name="name"],
     .add-row input[name="url"],
     .add-row input[name="email"] { flex: none; width: 100%; font-size: 16px; }
-    .add-row .btn-primary { min-height: 44px; width: 100%; }
-
+    .add-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
     .discover-row { flex-direction: column; }
     .discover-row input { width: 100%; font-size: 16px; }
-    .discover-row .btn-primary { min-height: 44px; width: 100%; }
-
+    .discover-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
     .import-row { flex-direction: column; }
-    .import-row .btn-primary { min-height: 44px; width: 100%; }
-
+    .import-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
     table th:nth-child(2), table td:nth-child(2),
     table th:nth-child(3), table td:nth-child(3),
     table th:nth-child(5), table td:nth-child(5),
     table th:nth-child(6), table td:nth-child(6) { display: none; }
-
     .btn-bulk { min-height: 44px; width: 100%; }
-    .btn-research { display: block; width: 100%; margin-bottom: 4px; min-height: 44px; }
-    .btn-detail   { display: block; width: 100%; margin-left: 0;     min-height: 44px; }
+    .btn-research { display: flex; width: 100%; margin-bottom: 4px; min-height: 44px; justify-content: center; }
+    .btn-detail   { display: flex; width: 100%; margin-left: 0; min-height: 44px; justify-content: center; }
   }
 </style>
 </head>
 <body>
 
 <header class="page-header">
-  <h1>LOCLE 営業ツール</h1>
+  <h1><i data-lucide="building-2"></i>LOCLE 営業ツール</h1>
   <nav class="page-nav">
     <a href="/index.html">ホーム</a>
     <a href="/companies.html" class="active">企業リスト</a>
@@ -299,44 +317,45 @@
 
 <div class="container">
 
-  <!-- サマリーバー -->
   <div class="summary-bar" id="summaryBar" hidden></div>
 
-  <!-- 企業を自動検索 -->
   <section class="discover-section">
     <h2>企業を自動検索</h2>
     <div class="discover-row">
       <input type="text" id="discoverRegion"  placeholder="例: 群馬県" />
       <input type="text" id="discoverKeyword" placeholder="例: IT企業、Web制作" />
-      <button class="btn-primary" id="discoverBtn" onclick="discoverCompanies()">検索</button>
+      <button class="btn-primary" id="discoverBtn" onclick="discoverCompanies()">
+        <i data-lucide="search"></i>検索
+      </button>
     </div>
     <div id="discoverResult"></div>
   </section>
 
-  <!-- 追加フォーム -->
   <section class="add-section">
     <h2>企業を追加</h2>
     <div class="add-row">
       <input type="text" name="name" id="inputName" placeholder="企業名" />
       <input type="url"   name="url"   id="inputUrl"   placeholder="https://example.co.jp" />
       <input type="email" name="email" id="inputEmail" placeholder="メールアドレス（任意）" />
-      <button class="btn-primary" id="addBtn" onclick="addCompany()">追加</button>
+      <button class="btn-primary" id="addBtn" onclick="addCompany()">
+        <i data-lucide="plus"></i>追加
+      </button>
     </div>
     <div class="add-msg" id="addMsg"></div>
   </section>
 
-  <!-- CSVインポート -->
   <section class="import-section">
     <h2>CSVで一括インポート</h2>
     <div class="import-row">
       <input type="file" id="csvFile" accept=".csv" />
-      <button class="btn-primary" id="importBtn" onclick="importCSV()">インポート</button>
+      <button class="btn-primary" id="importBtn" onclick="importCSV()">
+        <i data-lucide="upload"></i>インポート
+      </button>
     </div>
     <p class="import-format">形式: 1行目ヘッダー（name,url,email）、email列は任意。既存URLと重複する行はスキップ。</p>
     <div class="import-msg" id="importMsg"></div>
   </section>
 
-  <!-- 一覧テーブル -->
   <section class="table-section">
     <div class="bulk-toolbar">
       <h2>登録企業一覧</h2>
@@ -347,13 +366,8 @@
       <table>
         <thead>
           <tr>
-            <th>企業名</th>
-            <th>URL</th>
-            <th>メール</th>
-            <th>ステータス</th>
-            <th>自動化</th>
-            <th>更新日時</th>
-            <th>操作</th>
+            <th>企業名</th><th>URL</th><th>メール</th>
+            <th>ステータス</th><th>自動化</th><th>更新日時</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="tableBody">
@@ -376,6 +390,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
   let isBulkResearching = false;
@@ -421,6 +436,12 @@
         : "—";
       const isResearching = c.status === "researching";
       const btnDisabled = isBulkResearching || isResearching;
+      const researchLabel = isResearching
+        ? '<span class="spinner"></span>リサーチ中...'
+        : '<i data-lucide="search"></i>リサーチする';
+      const detailBtn = result && !result.error && !isResearching
+        ? `<button class="btn-detail" onclick="showDetail(${c.id})"><i data-lucide="eye"></i> 詳細</button>`
+        : "";
       return `
         <tr id="row-${c.id}">
           <td class="name">${esc(c.name)}</td>
@@ -430,12 +451,13 @@
           <td>${automatableBadge(result)}</td>
           <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${updatedAt}</td>
           <td style="white-space:nowrap">
-            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${isResearching ? "リサーチ中..." : "リサーチする"}</button>
-            ${result && !result.error && !isResearching ? `<button class="btn-detail" onclick="showDetail(${c.id})">詳細</button>` : ""}
+            <button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button>
+            ${detailBtn}
           </td>
         </tr>`;
     }).join("");
     updateSummaryBar();
+    lucide.createIcons();
   }
 
   async function callResearchAPI(id) {
@@ -460,6 +482,7 @@
     if (!url)  { showMsg("URLを入力してください", "error"); return; }
 
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>登録中...';
     showMsg("登録中...", "");
 
     let newCompany;
@@ -470,7 +493,7 @@
         body: JSON.stringify({ name, url, email: email || null }),
       });
       const data = await res.json();
-      if (!res.ok) { showMsg(data.error || "登録エラー", "error"); btn.disabled = false; return; }
+      if (!res.ok) { showMsg(data.error || "登録エラー", "error"); btn.disabled = false; btn.innerHTML = '<i data-lucide="plus"></i>追加'; lucide.createIcons(); return; }
       newCompany = data;
       document.getElementById("inputName").value  = "";
       document.getElementById("inputUrl").value   = "";
@@ -478,6 +501,8 @@
     } catch (err) {
       showMsg(err.message, "error");
       btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="plus"></i>追加';
+      lucide.createIcons();
       return;
     }
 
@@ -492,13 +517,15 @@
         ok ? "登録・リサーチ完了" : `リサーチエラー: ${updated.research_result?.error || updated.error || "不明"}`,
         ok ? "ok" : "error"
       );
-      btn.disabled = false;
     } catch (err) {
       const idx = companies.findIndex(c => c.id === newCompany.id);
       if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
       renderTable();
       showMsg("リサーチ中にエラーが発生しました", "error");
+    } finally {
       btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="plus"></i>追加';
+      lucide.createIcons();
     }
   }
 
@@ -514,6 +541,7 @@
     }
 
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>インポート中...';
     msgEl.textContent = "インポート中...";
     msgEl.className = "import-msg";
 
@@ -533,7 +561,6 @@
       msgEl.textContent = `インポート完了: ${data.imported}件追加、${data.skipped}件スキップ`;
       msgEl.className = "import-msg ok";
       fileInput.value = "";
-
       const listRes = await fetch("/api/companies");
       companies = await listRes.json();
       renderTable();
@@ -542,6 +569,8 @@
       msgEl.className = "import-msg error";
     } finally {
       btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="upload"></i>インポート';
+      lucide.createIcons();
     }
   }
 
@@ -553,56 +582,43 @@
 
   async function bulkResearch() {
     if (isBulkResearching) return;
-
     const pending = companies.filter(c => c.status === "pending");
     if (pending.length === 0) {
       document.getElementById("bulkProgress").textContent = "未リサーチの企業はありません";
       return;
     }
-
     isBulkResearching = true;
     document.getElementById("bulkBtn").disabled = true;
     renderTable();
-
     let success = 0, failure = 0;
     const total = pending.length;
-
     for (let i = 0; i < pending.length; i++) {
       const company = pending[i];
-      document.getElementById("bulkProgress").textContent =
-        `${i + 1}/${total}件 処理中...(${company.name})`;
-
+      document.getElementById("bulkProgress").textContent = `${i+1}/${total}件 処理中...(${company.name})`;
       const idx = companies.findIndex(c => c.id === company.id);
       if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
       renderTable();
-
       try {
         const { ok, data: updated } = await callResearchAPI(company.id);
         updateCompany(updated);
-        if (ok && updated.status !== "error") success++;
-        else failure++;
+        if (ok && updated.status !== "error") success++; else failure++;
       } catch (err) {
         const idx2 = companies.findIndex(c => c.id === company.id);
         if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error", research_result: { error: err.message } };
-        renderTable();
-        failure++;
+        renderTable(); failure++;
       }
     }
-
     isBulkResearching = false;
     document.getElementById("bulkBtn").disabled = false;
-    document.getElementById("bulkProgress").textContent =
-      `完了しました（成功: ${success}件 / 失敗: ${failure}件）`;
+    document.getElementById("bulkProgress").textContent = `完了（成功: ${success}件 / 失敗: ${failure}件）`;
     renderTable();
   }
 
   async function research(id) {
     if (isBulkResearching) return;
-
     const idx = companies.findIndex(c => c.id === id);
     if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
     renderTable();
-
     try {
       const { ok, data: updated } = await callResearchAPI(id);
       if (!ok) alert("エラー: " + (updated.error || "不明なエラー"));
@@ -616,16 +632,14 @@
   }
 
   async function discoverCompanies() {
-    const region  = document.getElementById("discoverRegion").value.trim();
-    const keyword = document.getElementById("discoverKeyword").value.trim();
-    const btn     = document.getElementById("discoverBtn");
+    const region   = document.getElementById("discoverRegion").value.trim();
+    const keyword  = document.getElementById("discoverKeyword").value.trim();
+    const btn      = document.getElementById("discoverBtn");
     const resultEl = document.getElementById("discoverResult");
-
     if (!region && !keyword) return;
-
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>検索中...';
     resultEl.innerHTML = '<p class="discover-status">検索中...</p>';
-
     try {
       const res = await fetch("/api/discover", {
         method: "POST",
@@ -633,34 +647,19 @@
         body: JSON.stringify({ region, keyword }),
       });
       const data = await res.json();
-
-      if (!res.ok) {
-        resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`;
-        return;
-      }
-
-      if (!data.configured) {
-        resultEl.innerHTML = `<p class="discover-unconfigured">この機能はまだ使えません。Brave Search APIキーの設定が必要です。</p>`;
-        return;
-      }
-
-      if (!data.results || data.results.length === 0) {
-        resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。</p>`;
-        return;
-      }
-
+      if (!res.ok) { resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`; return; }
+      if (!data.configured) { resultEl.innerHTML = `<p class="discover-unconfigured">Brave Search APIキーの設定が必要です。</p>`; return; }
+      if (!data.results || data.results.length === 0) { resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。</p>`; return; }
       resultEl.innerHTML = `
-        <p class="discover-count">${data.results.length}件見つかりました（追加したい企業にチェックを入れてください）</p>
+        <p class="discover-count">${data.results.length}件見つかりました</p>
         <ul class="discover-list">
           ${data.results.map((r, i) => `
-            <li>
-              <label>
-                <input type="checkbox" class="discover-check" data-index="${i}" data-name="${esc(r.name)}" data-url="${esc(r.url)}" checked />
-                <span class="discover-name">${esc(r.name)}</span>
-                ${r.source === "places" ? '<span class="badge-places">Googleマップ</span>' : ""}
-                <a href="${esc(r.url)}" target="_blank" rel="noopener" class="discover-url">${esc(r.url)}</a>
-              </label>
-            </li>`).join("")}
+            <li><label>
+              <input type="checkbox" class="discover-check" data-name="${esc(r.name)}" data-url="${esc(r.url)}" checked />
+              <span class="discover-name">${esc(r.name)}</span>
+              ${r.source === "places" ? '<span class="badge-places">Googleマップ</span>' : ""}
+              <a href="${esc(r.url)}" target="_blank" rel="noopener" class="discover-url">${esc(r.url)}</a>
+            </label></li>`).join("")}
         </ul>
         <button class="btn-add-selected" id="addSelectedBtn" onclick="addSelectedCompanies()">選んだ企業を追加</button>
         <span class="add-selected-progress" id="addSelectedProgress"></span>`;
@@ -668,32 +667,28 @@
       resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(err.message)}</p>`;
     } finally {
       btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="search"></i>検索';
+      lucide.createIcons();
     }
   }
 
   async function addSelectedCompanies() {
     const checks = Array.from(document.querySelectorAll(".discover-check:checked"));
     if (checks.length === 0) return;
-
-    const btn      = document.getElementById("addSelectedBtn");
+    const btn = document.getElementById("addSelectedBtn");
     const progress = document.getElementById("addSelectedProgress");
-    btn.disabled   = true;
-
+    btn.disabled = true;
     const total = checks.length;
     let added = 0;
-
     for (let i = 0; i < checks.length; i++) {
       const check = checks[i];
-      const name  = check.dataset.name;
-      const url   = check.dataset.url;
-
-      progress.textContent = `${i + 1}/${total}件 登録中...(${name})`;
-
+      const name = check.dataset.name;
+      const url  = check.dataset.url;
+      progress.textContent = `${i+1}/${total}件 登録中...(${name})`;
       let newCompany;
       try {
         const res = await fetch("/api/companies", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, url }),
         });
         const data = await res.json();
@@ -701,11 +696,8 @@
         newCompany = data;
         companies.unshift({ ...newCompany, status: "researching" });
         renderTable();
-      } catch {
-        continue;
-      }
-
-      progress.textContent = `${i + 1}/${total}件 リサーチ中...(${name})`;
+      } catch { continue; }
+      progress.textContent = `${i+1}/${total}件 リサーチ中...(${name})`;
       try {
         const { data: updated } = await callResearchAPI(newCompany.id);
         updateCompany(updated);
@@ -714,10 +706,8 @@
         if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
         renderTable();
       }
-
       added++;
     }
-
     progress.textContent = `完了しました（${added}件追加）`;
     btn.disabled = false;
   }
@@ -725,66 +715,34 @@
   function showDetail(id) {
     const company = companies.find(c => c.id === id);
     if (!company || !company.research_result) return;
-
     const r = company.research_result;
     document.getElementById("modalTitle").textContent = company.name + " のリサーチ結果";
-
     const sourceLabel = r.mappingSource === "ai"
       ? '<span class="source-label source-ai">AI推定</span>'
       : '<span class="source-label source-heuristic">キーワード推定</span>';
-
     let html = `
       <dl class="info-grid">
         <dt>フォーム</dt><dd>${r.formFound ? "あり" : "なし"}</dd>
-        <dt>CAPTCHA</dt><dd>${r.captchaDetected ? "<span style='color:#dc2626'>検出</span>" : "なし"}</dd>
-        <dt>自動化可否</dt><dd>${r.automatable
-          ? '<span class="badge badge-ok">OK</span>'
-          : '<span class="badge badge-ng">NG</span>'}</dd>
-        <dt>フォームページ</dt><dd>${r.formPageUrl
-          ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>`
-          : "—"}</dd>
+        <dt>CAPTCHA</dt><dd>${r.captchaDetected ? "<span style='color:#dc2626'>🔒 検出</span>" : "なし"}</dd>
+        <dt>自動化可否</dt><dd>${r.automatable ? '<span class="badge badge-ok">✓ OK</span>' : '<span class="badge badge-ng">✕ NG</span>'}</dd>
+        <dt>フォームページ</dt><dd>${r.formPageUrl ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>` : "—"}</dd>
         ${r.aiError ? `<dt>AI推定エラー</dt><dd style="color:#dc2626">${esc(r.aiError)}</dd>` : ""}
       </dl>`;
-
     if (r.fieldMapping && r.fieldMapping.length > 0) {
       const fieldMap = {};
-      (r.fieldMapping || []).forEach(m => {
-        const key = `${m.formIndex}:${m.name || ""}:${m.id || ""}`;
-        fieldMap[key] = m;
-      });
-
-      const rows = (r.forms || []).flatMap(form =>
-        form.fields.map(f => {
-          const key = `${form.formIndex}:${f.name || ""}:${f.id || ""}`;
-          const m = fieldMap[key];
-          return {
-            label: f.label || f.placeholder || "—",
-            nameId: [f.name, f.id].filter(Boolean).join(" / ") || "—",
-            type: f.type,
-            role: m ? m.role : "—",
-            confidence: m ? m.confidence : "—",
-          };
-        })
-      );
-
+      (r.fieldMapping || []).forEach(m => { fieldMap[`${m.formIndex}:${m.name||""}:${m.id||""}`] = m; });
+      const rows = (r.forms || []).flatMap(form => form.fields.map(f => {
+        const m = fieldMap[`${form.formIndex}:${f.name||""}:${f.id||""}`];
+        return { label: f.label||f.placeholder||"—", nameId: [f.name,f.id].filter(Boolean).join(" / ")||"—", type: f.type, role: m?m.role:"—", confidence: m?m.confidence:"—" };
+      }));
       html += `<p class="fields-title">フィールド一覧 ${sourceLabel}</p>
       <table class="fields-table">
         <thead><tr><th>ラベル</th><th>name / id</th><th>type</th><th>推定役割</th><th>信頼度</th></tr></thead>
-        <tbody>
-          ${rows.map(f => `
-            <tr>
-              <td>${esc(f.label)}</td>
-              <td style="font-family:monospace;font-size:11px">${esc(f.nameId)}</td>
-              <td>${esc(f.type)}</td>
-              <td>${esc(f.role)}</td>
-              <td class="conf-${f.confidence}">${f.confidence}</td>
-            </tr>`).join("")}
-        </tbody>
+        <tbody>${rows.map(f => `<tr><td>${esc(f.label)}</td><td style="font-family:monospace;font-size:11px">${esc(f.nameId)}</td><td>${esc(f.type)}</td><td>${esc(f.role)}</td><td class="conf-${f.confidence}">${f.confidence}</td></tr>`).join("")}</tbody>
       </table>`;
     } else {
       html += `<p style="color:var(--gray-400);font-size:13px">フィールドマッピングデータがありません。</p>`;
     }
-
     document.getElementById("modalBody").innerHTML = html;
     document.getElementById("modal").classList.add("open");
   }
@@ -794,19 +752,19 @@
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 
   function esc(s) {
-    return String(s || "")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return String(s||"")
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
   function statusBadge(status) {
     const map = {
-      pending:        { label: "未リサーチ",   cls: "badge-pending" },
-      researching:    { label: "リサーチ中...", cls: "badge-researching" },
-      researched:     { label: "完了",         cls: "badge-researched" },
-      no_form:        { label: "フォームなし", cls: "badge-no_form" },
-      captcha_blocked:{ label: "CAPTCHA",      cls: "badge-captcha" },
-      error:          { label: "エラー",       cls: "badge-error" },
+      pending:        { label: "未リサーチ",          cls: "badge-pending" },
+      researching:    { label: "<span class='spinner'></span>リサーチ中...", cls: "badge-researching" },
+      researched:     { label: "✓ 完了",              cls: "badge-researched" },
+      no_form:        { label: "フォームなし",         cls: "badge-no_form" },
+      captcha_blocked:{ label: "🔒 CAPTCHA",          cls: "badge-captcha" },
+      error:          { label: "✕ エラー",            cls: "badge-error" },
     };
     const s = map[status] || { label: status, cls: "badge-pending" };
     return `<span class="badge ${s.cls}">${s.label}</span>`;
@@ -815,9 +773,11 @@
   function automatableBadge(result) {
     if (!result || result.error) return '<span style="color:var(--gray-300)">—</span>';
     return result.automatable
-      ? '<span class="badge badge-ok">OK</span>'
-      : '<span class="badge badge-ng">NG</span>';
+      ? '<span class="badge badge-ok">✓ OK</span>'
+      : '<span class="badge badge-ng">✕ NG</span>';
   }
+
+  lucide.createIcons();
 </script>
 </body>
 </html>

@@ -22,21 +22,41 @@
   * { box-sizing: border-box; }
   body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
 
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .container { animation: fadeInUp 0.4s ease-out; }
+  .spinner {
+    display: inline-block; width: 13px; height: 13px;
+    border: 2px solid rgba(255,255,255,0.4); border-top-color: white;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-right: 4px;
+  }
+
   .page-header {
-    background: var(--white); border-bottom: 1px solid var(--gray-200);
-    box-shadow: var(--shadow-sm); padding: 0 24px;
-    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
-  .page-header h1 { margin: 0; font-size: 15px; font-weight: 700; color: var(--green-700); flex-shrink: 0; }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-header h1 svg { width: 18px; height: 18px; }
   .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
   .page-nav a {
-    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
     text-decoration: none; white-space: nowrap;
     padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
   }
-  .page-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
-  .page-nav a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
 
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
@@ -60,16 +80,22 @@
     background: var(--white); color: var(--gray-900); transition: border-color 150ms;
   }
   .select-group select:focus {
-    outline: none; border-color: var(--green-500);
-    box-shadow: 0 0 0 3px var(--green-100);
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
   .btn-generate {
-    padding: 8px 16px; background: var(--green-500); color: var(--white);
-    border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px;
-    font-family: inherit; font-weight: 600; white-space: nowrap; align-self: flex-end;
-    transition: all 150ms;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; font-family: inherit; font-weight: 600;
+    white-space: nowrap; align-self: flex-end; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 6px;
   }
-  .btn-generate:hover { background: var(--green-700); }
+  .btn-generate:hover {
+    background: linear-gradient(135deg, #3da038, #277025);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+  }
+  .btn-generate svg { width: 13px; height: 13px; }
 
   /* Preview */
   .preview-box {
@@ -100,31 +126,45 @@
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
     border: 1px solid var(--gray-200); color: var(--gray-700);
     background: var(--white); cursor: pointer; font-family: inherit; font-weight: 500;
-    transition: all 150ms;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-copy:hover { background: var(--gray-50); }
+  .btn-copy:hover { background: var(--gray-50); transform: translateY(-1px); }
+  .btn-copy svg { width: 13px; height: 13px; }
   .btn-record {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
     border: 1px solid var(--gray-200); color: var(--gray-700);
     background: var(--white); cursor: pointer; font-family: inherit; font-weight: 500;
-    transition: all 150ms;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-record:hover:not(:disabled) { background: var(--gray-50); }
+  .btn-record:hover:not(:disabled) { background: var(--gray-50); transform: translateY(-1px); }
   .btn-record:disabled { background: var(--gray-100); color: var(--gray-400); cursor: not-allowed; }
+  .btn-record svg { width: 13px; height: 13px; }
   .btn-auto-submit {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
-    background: var(--green-500); color: var(--white); border: none;
-    cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 5px;
   }
-  .btn-auto-submit:hover:not(:disabled) { background: var(--green-700); }
-  .btn-auto-submit:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-auto-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3da038, #277025);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+  }
+  .btn-auto-submit:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-auto-submit svg { width: 13px; height: 13px; }
   .btn-send-email {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
     background: #2563eb; color: var(--white); border: none;
     cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 5px;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.3);
   }
-  .btn-send-email:hover:not(:disabled) { background: #1d4ed8; }
-  .btn-send-email:disabled { background: var(--gray-300); cursor: not-allowed; }
+  .btn-send-email:hover:not(:disabled) {
+    background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(37,99,235,0.4);
+  }
+  .btn-send-email:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-send-email svg { width: 13px; height: 13px; }
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--green-700); }
   .draft-msg.warn  { color: #b45309; }
@@ -145,7 +185,7 @@
     border-bottom: 2px solid var(--gray-200); white-space: nowrap;
   }
   td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; color: var(--gray-700); }
-  tr:hover td { background: var(--gray-50); }
+  tr:hover td { background: var(--green-50); transition: background 100ms ease; }
 
   /* Classification badges */
   .classif { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
@@ -195,12 +235,11 @@
     .select-row { flex-direction: column; }
     .select-group { flex: none; width: 100%; }
     .select-group select { font-size: 16px; }
-    .btn-generate { width: 100%; min-height: 44px; }
+    .btn-generate { width: 100%; min-height: 44px; justify-content: center; }
     .preview-box { width: 100%; }
     .preview-actions { flex-direction: column; }
-    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email { min-height: 44px; width: 100%; }
-    .resp-form select,
-    .resp-form input[type="text"] { font-size: 16px; }
+    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email { min-height: 44px; width: 100%; justify-content: center; }
+    .resp-form select, .resp-form input[type="text"] { font-size: 16px; }
     .btn-save-resp, .btn-cancel-resp { min-height: 44px; }
     table th:nth-child(2), table td:nth-child(2),
     table th:nth-child(4), table td:nth-child(4),
@@ -211,7 +250,7 @@
 <body>
 
 <header class="page-header">
-  <h1>LOCLE 営業ツール</h1>
+  <h1><i data-lucide="send"></i>LOCLE 営業ツール</h1>
   <nav class="page-nav">
     <a href="/index.html">ホーム</a>
     <a href="/companies.html">企業リスト</a>
@@ -223,7 +262,6 @@
 
 <div class="container">
 
-  <!-- 下書き作成 -->
   <section class="draft-section">
     <h2>下書きを作成</h2>
     <div class="select-row">
@@ -235,7 +273,9 @@
         <label for="variantSelect">バリアント</label>
         <select id="variantSelect"><option value="">読み込み中...</option></select>
       </div>
-      <button class="btn-generate" onclick="generateDraft()">下書き生成</button>
+      <button class="btn-generate" onclick="generateDraft()">
+        <i data-lucide="file-text"></i>下書き生成
+      </button>
     </div>
 
     <div class="preview-box" id="draftPreview" hidden>
@@ -245,10 +285,18 @@
       </div>
       <pre id="draftBodyText"></pre>
       <div class="preview-actions">
-        <button class="btn-copy" onclick="copyDraft()">コピー</button>
-        <button class="btn-record" id="recordBtn" onclick="recordSent()">送信済みとして記録</button>
-        <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>フォームに自動送信</button>
-        <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>メールで送信</button>
+        <button class="btn-copy" onclick="copyDraft()">
+          <i data-lucide="copy"></i>コピー
+        </button>
+        <button class="btn-record" id="recordBtn" onclick="recordSent()">
+          <i data-lucide="check"></i>送信済みとして記録
+        </button>
+        <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>
+          <i data-lucide="send"></i>フォームに自動送信
+        </button>
+        <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>
+          <i data-lucide="mail"></i>メールで送信
+        </button>
       </div>
       <div class="force-row" id="forceRow" hidden>
         <label><input type="checkbox" id="forceCheck" /> 強制送信（送信済み・24時間チェックをスキップ）</label>
@@ -257,7 +305,6 @@
     <div class="draft-msg" id="draftMsg"></div>
   </section>
 
-  <!-- 送信履歴 -->
   <section class="history-section">
     <h2>送信履歴</h2>
     <div class="table-wrap">
@@ -281,6 +328,7 @@
 
 </div>
 
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
   let variants  = [];
@@ -370,6 +418,7 @@
     document.getElementById("autoSubmitBtn").hidden = !canAutoSubmit;
     document.getElementById("emailSendBtn").hidden = !canEmail;
     document.getElementById("forceRow").hidden = !(canAutoSubmit || canEmail);
+    lucide.createIcons();
     showDraftMsg("", "");
   }
 
@@ -379,7 +428,7 @@
       await navigator.clipboard.writeText(currentDraft.body);
       showDraftMsg("コピーしました", "ok");
     } catch {
-      const el = document.getElementById("draftBodyText");
+      const el  = document.getElementById("draftBodyText");
       const sel = window.getSelection();
       const rng = document.createRange();
       rng.selectNodeContents(el);
@@ -397,8 +446,7 @@
       return;
     }
     const btn = document.getElementById("emailSendBtn");
-    const origText = btn.textContent;
-    btn.textContent = "送信中...";
+    btn.innerHTML = '<span class="spinner"></span>送信中...';
     btn.disabled = true;
 
     try {
@@ -408,10 +456,7 @@
         body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        showDraftMsg(`メール送信失敗: ${data.error}`, "error");
-        return;
-      }
+      if (!res.ok) { showDraftMsg(`メール送信失敗: ${data.error}`, "error"); return; }
       const lRes = await fetch("/api/send-logs");
       logs = await lRes.json();
       renderLogs();
@@ -419,8 +464,9 @@
     } catch (err) {
       showDraftMsg(`メール送信失敗: ${err.message}`, "error");
     } finally {
-      btn.textContent = origText;
+      btn.innerHTML = '<i data-lucide="mail"></i>メールで送信';
       btn.disabled = false;
+      lucide.createIcons();
     }
   }
 
@@ -428,8 +474,7 @@
     if (!currentDraft) return;
     const { companyId, variantId } = currentDraft;
     const btn = document.getElementById("autoSubmitBtn");
-    const origText = btn.textContent;
-    btn.textContent = "送信中...";
+    btn.innerHTML = '<span class="spinner"></span>送信中...';
     btn.disabled = true;
 
     try {
@@ -454,8 +499,9 @@
     } catch (err) {
       showDraftMsg(`自動送信失敗: ${err.message}。手動送信に切り替えてください。`, "error");
     } finally {
-      btn.textContent = origText;
+      btn.innerHTML = '<i data-lucide="send"></i>フォームに自動送信';
       btn.disabled = false;
+      lucide.createIcons();
     }
   }
 
@@ -479,7 +525,6 @@
       });
       const data = await res.json();
       if (!res.ok) { showDraftMsg(data.error || "記録エラー", "error"); return; }
-
       const lRes = await fetch("/api/send-logs");
       logs = await lRes.json();
       renderLogs();
@@ -582,6 +627,7 @@
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  lucide.createIcons();
   init();
 </script>
 </body>

@@ -23,35 +23,52 @@
   * { box-sizing: border-box; }
   body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
 
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; }
+
   /* Header */
   .page-header {
-    background: var(--white); border-bottom: 1px solid var(--gray-200);
-    box-shadow: var(--shadow-sm); padding: 0 24px;
-    display: flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
-  .page-header h1 { margin: 0; font-size: 15px; font-weight: 700; color: var(--green-700); flex-shrink: 0; }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-header h1 svg { width: 18px; height: 18px; }
   .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
   .page-nav a {
-    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
     text-decoration: none; white-space: nowrap;
     padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
   }
-  .page-nav a:hover { color: var(--gray-900); background: var(--gray-100); }
-  .page-nav a.active { color: var(--green-700); font-weight: 600; background: var(--green-50); }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
 
   .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
 
   /* Hero */
   .hero {
-    text-align: center; padding: 48px 24px 40px;
-    background: var(--white); border: 1px solid var(--gray-200);
+    text-align: center; padding: 52px 24px 40px;
+    background: linear-gradient(135deg, #f0faf0 0%, #ffffff 50%, #e8f5e8 100%);
+    border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
     margin-bottom: 32px;
   }
   .hero-logo {
-    font-size: 48px; font-weight: 700; color: var(--green-500);
-    letter-spacing: -0.04em; line-height: 1; margin-bottom: 8px;
+    font-size: 52px; font-weight: 700; color: var(--green-500);
+    letter-spacing: -0.05em; line-height: 1; margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--green-700), var(--green-500), #5BC952);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
   .hero-subtitle {
     font-size: 16px; font-weight: 600; color: var(--gray-700);
@@ -63,20 +80,28 @@
   }
   .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn-hero-primary {
-    display: inline-block; padding: 10px 24px;
-    background: var(--green-500); color: var(--white);
-    border: none; border-radius: var(--radius-sm); cursor: pointer;
-    font-size: 14px; font-weight: 600; font-family: inherit;
-    text-decoration: none; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+    text-decoration: none; transition: all 150ms ease;
   }
-  .btn-hero-primary:hover { background: var(--green-700); }
+  .btn-hero-primary:hover {
+    background: linear-gradient(135deg, #3da038, #277025);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+  }
+  .btn-hero-primary svg { width: 16px; height: 16px; }
   .btn-hero-sub {
-    display: inline-block; padding: 10px 20px;
-    color: var(--gray-500); font-size: 13px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; color: var(--gray-500); font-size: 13px; font-weight: 500;
     text-decoration: none; border-radius: var(--radius-sm);
-    transition: all 150ms;
+    border: 1px solid var(--gray-200); background: var(--white);
+    transition: all 150ms ease;
   }
-  .btn-hero-sub:hover { color: var(--gray-900); background: var(--gray-100); }
+  .btn-hero-sub:hover { color: var(--gray-900); background: var(--gray-50); transform: translateY(-1px); }
+  .btn-hero-sub svg { width: 14px; height: 14px; }
 
   /* Summary cards */
   .summary-cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
@@ -84,7 +109,14 @@
     flex: 1; min-width: 140px; background: var(--white);
     border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
     padding: 20px 24px; box-shadow: var(--shadow-sm); text-align: center;
+    position: relative; overflow: hidden;
+    transition: transform 200ms ease, box-shadow 200ms ease;
   }
+  .summary-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #44B13F, #5BC952);
+  }
+  .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .summary-card .card-label {
     font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
     text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
@@ -98,56 +130,45 @@
   /* Section title */
   .section-title {
     font-size: 12px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--gray-400);
-    margin: 0 0 14px;
+    letter-spacing: 0.06em; color: var(--gray-400); margin: 0 0 14px;
   }
 
   /* Feature cards */
-  .feature-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
-    margin-bottom: 28px;
-  }
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
   .feature-card {
     background: var(--white); border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg); padding: 24px;
     box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
     display: flex; flex-direction: column; gap: 10px;
-    transition: transform 150ms, box-shadow 150ms;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
     color: inherit;
   }
   .feature-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-    border-color: var(--green-100);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg); border-color: var(--green-100);
   }
   .feature-icon { font-size: 28px; line-height: 1; }
-  .feature-name {
-    font-size: 15px; font-weight: 600; color: var(--gray-900);
-    letter-spacing: -0.01em;
-  }
+  .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
   .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
-  .feature-arrow {
-    margin-top: auto; font-size: 12px; color: var(--green-500);
-    font-weight: 600;
-  }
+  .feature-arrow { margin-top: auto; font-size: 12px; color: var(--green-500); font-weight: 600; }
 
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
     .container { padding: 20px 8px; }
     .hero { padding: 32px 16px 28px; }
-    .hero-logo { font-size: 36px; }
+    .hero-logo { font-size: 40px; }
     .summary-cards { flex-direction: column; }
     .summary-card { min-width: unset; }
     .feature-grid { grid-template-columns: 1fr; }
-    .btn-hero-primary { width: 100%; text-align: center; }
+    .btn-hero-primary { width: 100%; justify-content: center; }
   }
 </style>
 </head>
 <body>
 
 <header class="page-header">
-  <h1>LOCLE 営業ツール</h1>
+  <h1><i data-lucide="zap"></i>LOCLE 営業ツール</h1>
   <nav class="page-nav">
     <a href="/index.html" class="active">ホーム</a>
     <a href="/companies.html">企業リスト</a>
@@ -159,34 +180,41 @@
 
 <div class="container">
 
-  <!-- Hero -->
   <section class="hero">
     <div class="hero-logo">LOCLE</div>
     <div class="hero-subtitle">営業自動化ツール</div>
     <p class="hero-copy">企業リサーチからフォーム送信・反応分析まで、営業活動を一気通貫で自動化します</p>
     <div class="hero-actions">
-      <a href="/companies.html" class="btn-hero-primary">+ 企業を追加</a>
-      <a href="/analyzer.html" class="btn-hero-sub">フォーム解析テスト →</a>
+      <a href="/companies.html" class="btn-hero-primary">
+        <i data-lucide="plus-circle"></i>企業を追加
+      </a>
+      <a href="/analyzer.html" class="btn-hero-sub">
+        <i data-lucide="search"></i>フォーム解析テスト
+      </a>
     </div>
   </section>
 
-  <!-- Summary cards -->
   <div class="summary-cards">
     <div class="summary-card">
       <div class="card-label">登録企業数</div>
-      <div class="card-value" id="statCompanies"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+      <div class="card-value" id="statCompanies">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
     </div>
     <div class="summary-card">
       <div class="card-label">送信済み</div>
-      <div class="card-value" id="statSent"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+      <div class="card-value" id="statSent">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
     </div>
     <div class="summary-card">
       <div class="card-label">全体反応率</div>
-      <div class="card-value" id="statRate"><span style="font-size:20px;color:var(--gray-300)">…</span></div>
+      <div class="card-value" id="statRate">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
     </div>
   </div>
 
-  <!-- Feature cards -->
   <p class="section-title">機能一覧</p>
   <div class="feature-grid">
     <a href="/companies.html" class="feature-card">
@@ -217,38 +245,58 @@
 
 </div>
 
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
+  function animateCount(el, target, isFloat = false) {
+    const duration = 600;
+    const start = performance.now();
+    function step(now) {
+      const t      = Math.min((now - start) / duration, 1);
+      const eased  = 1 - Math.pow(1 - t, 3);
+      const cur    = target * eased;
+      el.textContent = isFloat ? cur.toFixed(1) : Math.round(cur);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   async function loadStats() {
     try {
-      const [companiesRes, logsRes, analyticsRes] = await Promise.all([
+      const [cRes, lRes, aRes] = await Promise.all([
         fetch("/api/companies"),
         fetch("/api/send-logs"),
         fetch("/api/analytics"),
       ]);
-      const companies = await companiesRes.json();
-      const logs      = await logsRes.json();
-      const analytics = await analyticsRes.json();
+      const companies = await cRes.json();
+      const logs      = await lRes.json();
+      const analytics = await aRes.json();
 
       const totalCompanies = Array.isArray(companies) ? companies.length : 0;
       const sentCount = Array.isArray(logs)
         ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
         : 0;
 
-      const stats = analytics.variants_stats || [];
-      const totalSends     = stats.reduce((s, r) => s + Number(r.send_count),     0);
-      const totalResponses = stats.reduce((s, r) => s + Number(r.response_count), 0);
-      const responseRate   = totalSends > 0
-        ? (totalResponses / totalSends * 100).toFixed(1) + "%"
-        : "—";
+      const stats      = analytics.variants_stats || [];
+      const totalSends = stats.reduce((s, r) => s + Number(r.send_count), 0);
+      const totalResp  = stats.reduce((s, r) => s + Number(r.response_count), 0);
+      const rateValue  = totalSends > 0 ? totalResp / totalSends * 100 : null;
 
-      document.getElementById("statCompanies").innerHTML =
-        `${totalCompanies}<span class="card-unit">社</span>`;
-      document.getElementById("statSent").innerHTML =
-        `${sentCount}<span class="card-unit">件</span>`;
-      document.getElementById("statRate").innerHTML =
-        responseRate === "—"
-          ? `<span style="font-size:24px;color:var(--gray-300)">—</span>`
-          : `${responseRate.replace("%","")}<span class="card-unit">%</span>`;
+      const cEl = document.getElementById("statCompanies");
+      const sEl = document.getElementById("statSent");
+      const rEl = document.getElementById("statRate");
+
+      cEl.innerHTML = `<span id="cNum">0</span><span class="card-unit">社</span>`;
+      sEl.innerHTML = `<span id="sNum">0</span><span class="card-unit">件</span>`;
+
+      animateCount(document.getElementById("cNum"), totalCompanies);
+      animateCount(document.getElementById("sNum"), sentCount);
+
+      if (rateValue !== null) {
+        rEl.innerHTML = `<span id="rNum">0</span><span class="card-unit">%</span>`;
+        animateCount(document.getElementById("rNum"), rateValue, true);
+      } else {
+        rEl.innerHTML = `<span style="font-size:24px;color:var(--gray-300)">—</span>`;
+      }
     } catch {
       ["statCompanies","statSent","statRate"].forEach(id => {
         document.getElementById(id).innerHTML =
@@ -257,6 +305,7 @@
     }
   }
 
+  lucide.createIcons();
   loadStats();
 </script>
 </body>
