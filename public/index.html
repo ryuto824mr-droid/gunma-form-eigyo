@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-300: #86efac; --green-500: #44B13F; --green-700: #2F8A2A;
     --green-50: #f0faf0;  --green-100: #d8f0d8;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
@@ -57,50 +57,51 @@
 
   /* Hero */
   .hero {
-    text-align: center; padding: 52px 24px 40px;
-    background: linear-gradient(135deg, #f0faf0 0%, #ffffff 50%, #e8f5e8 100%);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+    text-align: center; padding: 56px 24px 44px;
+    background: linear-gradient(135deg, #1a5c17 0%, #2F8A2A 40%, #44B13F 70%, #5BC952 100%);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 24px rgba(26,92,23,0.35);
     margin-bottom: 32px;
   }
   .hero-logo {
-    font-size: 52px; font-weight: 700; color: var(--green-500);
-    letter-spacing: -0.05em; line-height: 1; margin-bottom: 8px;
-    background: linear-gradient(135deg, var(--green-700), var(--green-500), #5BC952);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 64px; font-weight: 700; color: var(--white);
+    letter-spacing: -1px; line-height: 1; margin-bottom: 10px;
   }
   .hero-subtitle {
-    font-size: 16px; font-weight: 600; color: var(--gray-700);
-    margin-bottom: 16px; letter-spacing: -0.01em;
+    font-size: 16px; font-weight: 600; color: var(--white);
+    opacity: 0.85; margin-bottom: 14px; letter-spacing: -0.01em;
   }
   .hero-copy {
-    font-size: 14px; color: var(--gray-500); line-height: 1.8;
+    font-size: 14px; color: rgba(255,255,255,0.72); line-height: 1.8;
     max-width: 480px; margin: 0 auto 28px;
   }
   .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn-hero-primary {
     display: inline-flex; align-items: center; gap: 8px;
     padding: 10px 24px;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
-    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
-    color: var(--white); border: none; border-radius: var(--radius-sm);
-    cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+    background: var(--white);
+    color: var(--green-700); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit;
     text-decoration: none; transition: all 150ms ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   }
   .btn-hero-primary:hover {
-    background: linear-gradient(135deg, #3da038, #277025);
-    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+    background: var(--green-50);
+    transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.2);
   }
   .btn-hero-primary svg { width: 16px; height: 16px; }
   .btn-hero-sub {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px; color: var(--gray-500); font-size: 13px; font-weight: 500;
+    padding: 10px 18px; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500;
     text-decoration: none; border-radius: var(--radius-sm);
-    border: 1px solid var(--gray-200); background: var(--white);
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12);
     transition: all 150ms ease;
   }
-  .btn-hero-sub:hover { color: var(--gray-900); background: var(--gray-50); transform: translateY(-1px); }
+  .btn-hero-sub:hover {
+    color: white; background: rgba(255,255,255,0.22);
+    border-color: rgba(255,255,255,0.55); transform: translateY(-1px);
+  }
   .btn-hero-sub svg { width: 14px; height: 14px; }
 
   /* Summary cards */
@@ -113,24 +114,25 @@
     transition: transform 200ms ease, box-shadow 200ms ease;
   }
   .summary-card::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, #44B13F, #5BC952);
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--green-500);
   }
   .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .summary-card .card-label {
     font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
-    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
   }
   .summary-card .card-value {
-    font-size: 32px; font-weight: 700; color: var(--green-700);
+    font-size: 36px; font-weight: 700; color: var(--green-700);
     line-height: 1; letter-spacing: -0.03em;
   }
   .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
 
   /* Section title */
   .section-title {
-    font-size: 12px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.06em; color: var(--gray-400); margin: 0 0 14px;
+    font-size: 18px; font-weight: 700; color: var(--gray-900);
+    border-left: 3px solid var(--green-500); padding-left: 12px;
+    margin: 0 0 16px;
   }
 
   /* Feature cards */
@@ -139,25 +141,37 @@
     background: var(--white); border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg); padding: 24px;
     box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
-    display: flex; flex-direction: column; gap: 10px;
+    display: flex; flex-direction: column; gap: 12px;
     transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
     color: inherit;
   }
   .feature-card:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-lg); border-color: var(--green-100);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md); border-color: var(--green-300);
   }
-  .feature-icon { font-size: 28px; line-height: 1; }
+  .feature-card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .feature-icon {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--green-50); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .feature-icon svg { width: 22px; height: 22px; color: var(--green-700); }
+  .feature-arrow-icon {
+    width: 16px; height: 16px; color: var(--gray-300);
+    transition: color 200ms ease; flex-shrink: 0; margin-top: 4px;
+  }
+  .feature-card:hover .feature-arrow-icon { color: var(--green-500); }
   .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
   .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
-  .feature-arrow { margin-top: auto; font-size: 12px; color: var(--green-500); font-weight: 600; }
 
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
     .container { padding: 20px 8px; }
-    .hero { padding: 32px 16px 28px; }
-    .hero-logo { font-size: 40px; }
+    .hero { padding: 36px 16px 32px; }
+    .hero-logo { font-size: 48px; }
     .summary-cards { flex-direction: column; }
     .summary-card { min-width: unset; }
     .feature-grid { grid-template-columns: 1fr; }
@@ -218,28 +232,36 @@
   <p class="section-title">機能一覧</p>
   <div class="feature-grid">
     <a href="/companies.html" class="feature-card">
-      <div class="feature-icon">🏢</div>
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="building-2"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
       <div class="feature-name">企業リスト</div>
       <div class="feature-desc">企業を登録してフォームを自動解析</div>
-      <div class="feature-arrow">開く →</div>
     </a>
     <a href="/variants.html" class="feature-card">
-      <div class="feature-icon">✉️</div>
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="mail"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
       <div class="feature-name">メッセージ管理</div>
       <div class="feature-desc">送信文面のテンプレートを管理</div>
-      <div class="feature-arrow">開く →</div>
     </a>
     <a href="/send.html" class="feature-card">
-      <div class="feature-icon">🚀</div>
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="send"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
       <div class="feature-name">送信管理</div>
       <div class="feature-desc">フォーム自動送信・メール送信を実行</div>
-      <div class="feature-arrow">開く →</div>
     </a>
     <a href="/analytics.html" class="feature-card">
-      <div class="feature-icon">📊</div>
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="bar-chart-2"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
       <div class="feature-name">分析</div>
       <div class="feature-desc">バリアント別・タグ別の反応率を分析</div>
-      <div class="feature-arrow">開く →</div>
     </a>
   </div>
 
@@ -251,9 +273,9 @@
     const duration = 600;
     const start = performance.now();
     function step(now) {
-      const t      = Math.min((now - start) / duration, 1);
-      const eased  = 1 - Math.pow(1 - t, 3);
-      const cur    = target * eased;
+      const t     = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const cur   = target * eased;
       el.textContent = isFloat ? cur.toFixed(1) : Math.round(cur);
       if (t < 1) requestAnimationFrame(step);
     }
