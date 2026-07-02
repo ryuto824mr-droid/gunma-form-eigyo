@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>送信管理 - ぐんまフォーム営業ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --main-green: #44B13F; --deep-green: #2F8A2A; --bg: #f7f9f7; }
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans JP", sans-serif; background: var(--bg); margin: 0; color: #222; }
+
+  .page-header { background: var(--deep-green); color: white; padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+  .page-header h1 { margin: 0; font-size: 18px; font-weight: 700; flex-shrink: 0; }
+  .page-nav { display: flex; gap: 20px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a { color: rgba(255,255,255,0.75); font-size: 13px; text-decoration: none; white-space: nowrap; }
+  .page-nav a:hover { color: white; }
+  .page-nav a.active { color: white; font-weight: 700; border-bottom: 2px solid rgba(255,255,255,0.8); padding-bottom: 2px; }
+
+  .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Sections */
+  .draft-section, .history-section {
+    background: white; border-radius: 8px; padding: 20px 24px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .draft-section h2, .history-section h2 { margin: 0 0 16px; font-size: 15px; color: var(--deep-green); }
+
+  /* Draft form */
+  .select-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .select-group { display: flex; flex-direction: column; gap: 5px; flex: 1 1 200px; }
+  .select-group label { font-size: 12px; font-weight: 700; color: #555; }
+  .select-group select {
+    padding: 8px 10px; font-size: 14px; border: 1px solid #ccc;
+    border-radius: 6px; font-family: inherit; background: white;
+  }
+  .btn-generate {
+    padding: 9px 20px; background: var(--main-green); color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    font-family: inherit; font-weight: 700; white-space: nowrap; align-self: flex-end;
+  }
+  .btn-generate:hover { background: var(--deep-green); }
+
+  /* Preview */
+  .preview-box {
+    margin-top: 18px; border: 1px solid #d4e8d4; border-radius: 8px;
+    background: #fafff9; overflow: hidden;
+  }
+  .preview-meta {
+    padding: 10px 16px; background: #f0f8f0;
+    border-bottom: 1px solid #d4e8d4; font-size: 12px; color: #555;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .preview-meta span { font-weight: 700; color: #222; }
+  #draftBodyText {
+    display: block; padding: 16px; white-space: pre-wrap; word-break: break-word;
+    font-size: 13px; line-height: 1.8; min-height: 80px;
+    margin: 0; font-family: inherit;
+  }
+  .preview-actions { padding: 12px 16px; display: flex; gap: 10px; border-top: 1px solid #d4e8d4; flex-wrap: wrap; }
+  .btn-copy {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px;
+    border: 1px solid var(--main-green); color: var(--deep-green);
+    background: white; cursor: pointer; font-family: inherit;
+  }
+  .btn-copy:hover { background: #f0faf0; }
+  .btn-record {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px;
+    background: var(--main-green); color: white; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-record:hover:not(:disabled) { background: var(--deep-green); }
+  .btn-record:disabled { background: #aaa; cursor: not-allowed; }
+  .draft-msg { margin-top: 10px; font-size: 13px; }
+  .draft-msg.ok    { color: var(--main-green); }
+  .draft-msg.error { color: #c0392b; }
+
+  /* History table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
+  th { background: #f8faf8; font-weight: 700; color: #555; font-size: 12px; white-space: nowrap; }
+  tr:hover td { background: #fafff9; }
+
+  /* Classification badges */
+  .classif { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .classif.interested { background: #dcfce7; color: #166534; }
+  .classif.declined   { background: #fee2e2; color: #991b1b; }
+  .classif.question   { background: #dbeafe; color: #1e40af; }
+  .classif.other      { background: #f3f4f6; color: #555; }
+
+  /* Response inline form */
+  .btn-resp {
+    padding: 4px 10px; font-size: 12px; border-radius: 4px;
+    border: 1px solid #ccc; background: white; cursor: pointer; color: #555; font-family: inherit;
+  }
+  .btn-resp:hover { background: #f0faf0; border-color: var(--main-green); color: var(--deep-green); }
+
+  .resp-form-row td { padding: 12px 16px; background: #f8faf8; border-bottom: 2px solid #e0e8e0; }
+  .resp-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .resp-form select {
+    padding: 7px 10px; font-size: 13px; border: 1px solid #ccc;
+    border-radius: 5px; font-family: inherit; background: white;
+  }
+  .resp-form input[type="text"] {
+    padding: 7px 10px; font-size: 13px; border: 1px solid #ccc;
+    border-radius: 5px; font-family: inherit; flex: 1 1 200px;
+  }
+  .btn-save-resp {
+    padding: 6px 14px; font-size: 13px; border-radius: 5px;
+    background: var(--main-green); color: white; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-save-resp:hover { background: var(--deep-green); }
+  .btn-cancel-resp {
+    padding: 6px 14px; font-size: 13px; border-radius: 5px;
+    border: 1px solid #ccc; background: white; color: #555;
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-cancel-resp:hover { background: #f5f5f5; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1>送信管理</h1>
+  <nav class="page-nav">
+    <a href="/index.html">フォーム解析</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html" class="active">送信管理</a>
+    <a href="/analytics.html">分析</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- 下書き作成 -->
+  <section class="draft-section">
+    <h2>下書きを作成</h2>
+    <div class="select-row">
+      <div class="select-group">
+        <label for="companySelect">企業（★ = フォームあり）</label>
+        <select id="companySelect"><option value="">読み込み中...</option></select>
+      </div>
+      <div class="select-group">
+        <label for="variantSelect">バリアント</label>
+        <select id="variantSelect"><option value="">読み込み中...</option></select>
+      </div>
+      <button class="btn-generate" onclick="generateDraft()">下書き生成</button>
+    </div>
+
+    <div class="preview-box" id="draftPreview" hidden>
+      <div class="preview-meta">
+        <div>チャネル: <span id="draftChannelVal"></span></div>
+        <div id="draftSubjectRow" hidden>件名: <span id="draftSubjectVal"></span></div>
+      </div>
+      <pre id="draftBodyText"></pre>
+      <div class="preview-actions">
+        <button class="btn-copy" onclick="copyDraft()">コピー</button>
+        <button class="btn-record" id="recordBtn" onclick="recordSent()">送信済みとして記録</button>
+      </div>
+    </div>
+    <div class="draft-msg" id="draftMsg"></div>
+  </section>
+
+  <!-- 送信履歴 -->
+  <section class="history-section">
+    <h2>送信履歴</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>企業名</th>
+            <th>バリアント</th>
+            <th>送信日時</th>
+            <th>ステータス</th>
+            <th>反応</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody">
+          <tr><td colspan="6" style="text-align:center;color:#999;padding:20px">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  let companies = [];
+  let variants  = [];
+  let logs      = [];
+  let currentDraft = null;
+
+  const CLASSIF_LABELS = {
+    interested: "興味あり",
+    declined:   "辞退",
+    question:   "質問",
+    other:      "その他",
+  };
+
+  async function init() {
+    try {
+      const [cRes, vRes, lRes] = await Promise.all([
+        fetch("/api/companies"),
+        fetch("/api/variants"),
+        fetch("/api/send-logs"),
+      ]);
+      companies = await cRes.json();
+      variants  = await vRes.json();
+      logs      = await lRes.json();
+
+      // researched(フォームあり)を先頭に
+      companies.sort((a, b) => {
+        const aS = a.status === "researched" ? 0 : 1;
+        const bS = b.status === "researched" ? 0 : 1;
+        return aS - bS;
+      });
+
+      populateSelects();
+      renderLogs();
+    } catch (err) {
+      document.getElementById("logsBody").innerHTML =
+        `<tr><td colspan="6" style="color:#c0392b;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function populateSelects() {
+    const cEl = document.getElementById("companySelect");
+    cEl.innerHTML = '<option value="">企業を選択...</option>' +
+      companies.map(c => {
+        const star = c.status === "researched" ? "★ " : "";
+        return `<option value="${c.id}">${esc(star + c.name)}</option>`;
+      }).join("");
+
+    const vEl = document.getElementById("variantSelect");
+    vEl.innerHTML = '<option value="">バリアントを選択...</option>' +
+      variants.map(v =>
+        `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`
+      ).join("");
+  }
+
+  function generateDraft() {
+    const companyId = parseInt(document.getElementById("companySelect").value);
+    const variantId = parseInt(document.getElementById("variantSelect").value);
+    if (!companyId || !variantId) {
+      showDraftMsg("企業とバリアントを選択してください", "error");
+      return;
+    }
+
+    const company = companies.find(c => c.id === companyId);
+    const variant = variants.find(v => v.id === variantId);
+    if (!company || !variant) return;
+
+    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+    const body    = replace(variant.body_template);
+    const subject = replace(variant.subject_template || "");
+
+    document.getElementById("draftChannelVal").textContent =
+      variant.channel === "email" ? "メール" : "フォーム";
+
+    const subjectRow = document.getElementById("draftSubjectRow");
+    if (subject) {
+      document.getElementById("draftSubjectVal").textContent = subject;
+      subjectRow.hidden = false;
+    } else {
+      subjectRow.hidden = true;
+    }
+
+    document.getElementById("draftBodyText").textContent = body;
+    document.getElementById("draftPreview").hidden = false;
+
+    currentDraft = { companyId, variantId, company, variant, body };
+    showDraftMsg("", "");
+  }
+
+  async function copyDraft() {
+    if (!currentDraft) return;
+    try {
+      await navigator.clipboard.writeText(currentDraft.body);
+      showDraftMsg("コピーしました", "ok");
+    } catch {
+      // フォールバック: テキストを選択状態にする
+      const el = document.getElementById("draftBodyText");
+      const sel = window.getSelection();
+      const rng = document.createRange();
+      rng.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(rng);
+      showDraftMsg("テキストを選択しました（Ctrl+C でコピー）", "ok");
+    }
+  }
+
+  async function recordSent() {
+    if (!currentDraft) return;
+    const { companyId, variantId, variant } = currentDraft;
+    const btn = document.getElementById("recordBtn");
+    btn.disabled = true;
+    showDraftMsg("記録中...", "");
+
+    try {
+      const res = await fetch("/api/send-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id:   companyId,
+          variant_id:   variantId,
+          channel:      variant.channel,
+          trigger_mode: "manual",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showDraftMsg(data.error || "記録エラー", "error"); return; }
+
+      const lRes = await fetch("/api/send-logs");
+      logs = await lRes.json();
+      renderLogs();
+      showDraftMsg("送信を記録しました", "ok");
+    } catch (err) {
+      showDraftMsg(err.message, "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderLogs() {
+    const tbody = document.getElementById("logsBody");
+    if (logs.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:#999;padding:20px">送信履歴がありません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = logs.map(log => renderLogRows(log)).join("");
+  }
+
+  function renderLogRows(log) {
+    const sentAt   = log.sent_at ? new Date(log.sent_at).toLocaleString("ja-JP") : "-";
+    const respHtml = log.latest_response
+      ? `<span class="classif ${esc(log.latest_response)}">${CLASSIF_LABELS[log.latest_response] || log.latest_response}</span>`
+      : '<span style="color:#ccc">-</span>';
+
+    const dataRow = `
+      <tr id="lr-${log.id}">
+        <td>${esc(log.company_name)}</td>
+        <td>${esc(log.variant_name)}</td>
+        <td style="white-space:nowrap;font-size:12px;color:#666">${sentAt}</td>
+        <td style="font-size:12px;color:#888">${esc(log.status || "-")}</td>
+        <td id="rb-${log.id}">${respHtml}</td>
+        <td><button class="btn-resp" onclick="toggleRespForm(${log.id})">反応を記録</button></td>
+      </tr>`;
+
+    const formRow = `
+      <tr class="resp-form-row" id="rf-${log.id}" hidden>
+        <td colspan="6">
+          <div class="resp-form">
+            <select id="cls-${log.id}">
+              <option value="interested">興味あり</option>
+              <option value="declined">辞退</option>
+              <option value="question">質問</option>
+              <option value="other">その他</option>
+            </select>
+            <input type="text" id="exc-${log.id}" placeholder="メモ（任意）" />
+            <button class="btn-save-resp"   onclick="saveResponse(${log.id})">保存</button>
+            <button class="btn-cancel-resp" onclick="toggleRespForm(${log.id})">キャンセル</button>
+          </div>
+        </td>
+      </tr>`;
+
+    return dataRow + formRow;
+  }
+
+  function toggleRespForm(logId) {
+    const row = document.getElementById(`rf-${logId}`);
+    if (row) row.hidden = !row.hidden;
+  }
+
+  async function saveResponse(logId) {
+    const classification = document.getElementById(`cls-${logId}`).value;
+    const raw_excerpt    = document.getElementById(`exc-${logId}`).value.trim();
+
+    try {
+      const res = await fetch(`/api/send-logs/${logId}/response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ classification, raw_excerpt }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "保存エラー"); return; }
+
+      // バッジをその場で更新
+      const badge = document.getElementById(`rb-${logId}`);
+      if (badge) {
+        badge.innerHTML =
+          `<span class="classif ${esc(classification)}">${CLASSIF_LABELS[classification]}</span>`;
+      }
+
+      const idx = logs.findIndex(l => l.id === logId);
+      if (idx !== -1) logs[idx].latest_response = classification;
+
+      toggleRespForm(logId);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function showDraftMsg(text, type) {
+    const el = document.getElementById("draftMsg");
+    el.textContent = text;
+    el.className = "draft-msg" + (type ? " " + type : "");
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  init();
+</script>
+</body>
+</html>
