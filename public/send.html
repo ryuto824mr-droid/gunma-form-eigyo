@@ -89,6 +89,8 @@
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--main-green); }
   .draft-msg.error { color: #c0392b; }
+  .force-row { padding: 8px 16px; font-size: 12px; color: #777; border-top: 1px solid #e8f0e8; }
+  .force-row label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
 
   /* History table */
   .table-wrap { overflow-x: auto; }
@@ -176,6 +178,9 @@
         <button class="btn-record" id="recordBtn" onclick="recordSent()">送信済みとして記録</button>
         <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>フォームに自動送信</button>
         <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>メールで送信</button>
+      </div>
+      <div class="force-row" id="forceRow" hidden>
+        <label><input type="checkbox" id="forceCheck" /> 強制送信（送信済み・24時間チェックをスキップ）</label>
       </div>
     </div>
     <div class="draft-msg" id="draftMsg"></div>
@@ -290,9 +295,11 @@
     document.getElementById("draftPreview").hidden = false;
 
     currentDraft = { companyId, variantId, company, variant, body };
-    document.getElementById("autoSubmitBtn").hidden =
-      !(company.research_result?.automatable === true);
-    document.getElementById("emailSendBtn").hidden = !company.email;
+    const canAutoSubmit = company.research_result?.automatable === true;
+    const canEmail = !!company.email;
+    document.getElementById("autoSubmitBtn").hidden = !canAutoSubmit;
+    document.getElementById("emailSendBtn").hidden = !canEmail;
+    document.getElementById("forceRow").hidden = !(canAutoSubmit || canEmail);
     showDraftMsg("", "");
   }
 
@@ -329,7 +336,7 @@
       const res = await fetch("/api/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId }),
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -360,7 +367,7 @@
       const res = await fetch("/api/submit-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId }),
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked }),
       });
       const data = await res.json();
       if (!res.ok) {

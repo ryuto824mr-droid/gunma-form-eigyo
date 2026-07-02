@@ -6,9 +6,40 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id } = req.body || {};
+  const { company_id, variant_id, force } = req.body || {};
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
+  }
+
+  // 再送信ガード
+  if (!force) {
+    const [sentLog] = await sql`
+      SELECT id FROM send_logs
+      WHERE company_id = ${company_id} AND status = 'sent'
+      LIMIT 1
+    `;
+    if (sentLog) {
+      return res.status(400).json({
+        error: `この企業にはすでに送信済みです(send_log_id: ${sentLog.id})。再送信する場合はsend.htmlで強制送信フラグを使ってください`,
+      });
+    }
+  }
+
+  // 送信間隔制限(24時間)
+  if (!force) {
+    const [lastLog] = await sql`
+      SELECT id, sent_at FROM send_logs
+      WHERE company_id = ${company_id}
+      ORDER BY sent_at DESC LIMIT 1
+    `;
+    if (lastLog) {
+      const hoursSince = (Date.now() - new Date(lastLog.sent_at).getTime()) / 3600000;
+      if (hoursSince < 24) {
+        return res.status(429).json({
+          error: `最後の送信から24時間経過していません(最終送信: ${Math.floor(hoursSince)}時間前)`,
+        });
+      }
+    }
   }
 
   const senderEmail = process.env.SENDER_EMAIL;

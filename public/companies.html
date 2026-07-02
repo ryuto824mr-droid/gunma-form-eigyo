@@ -53,6 +53,25 @@
   .add-row button:disabled { background: #aaa; cursor: not-allowed; }
   .add-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
   .add-msg.error { color: #c0392b; }
+
+  /* Import section */
+  .import-section {
+    background: white; border-radius: 8px; padding: 20px 24px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  .import-section h2 { margin: 0 0 14px; font-size: 15px; color: var(--deep-green); }
+  .import-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .import-row button {
+    padding: 9px 20px; background: var(--main-green); color: white;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+    font-family: inherit; white-space: nowrap;
+  }
+  .import-row button:hover:not(:disabled) { background: var(--deep-green); }
+  .import-row button:disabled { background: #aaa; cursor: not-allowed; }
+  .import-format { font-size: 11px; color: #888; margin: 8px 0 0; }
+  .import-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
+  .import-msg.ok    { color: var(--deep-green); }
+  .import-msg.error { color: #c0392b; }
   .add-msg.ok    { color: var(--deep-green); }
 
   /* Table */
@@ -265,6 +284,17 @@
     <div class="add-msg" id="addMsg"></div>
   </section>
 
+  <!-- CSVインポート -->
+  <section class="import-section">
+    <h2>CSVで一括インポート</h2>
+    <div class="import-row">
+      <input type="file" id="csvFile" accept=".csv" />
+      <button id="importBtn" onclick="importCSV()">インポート</button>
+    </div>
+    <p class="import-format">形式: 1行目ヘッダー（name,url,email）、email列は任意。既存URLと重複する行はスキップ。</p>
+    <div class="import-msg" id="importMsg"></div>
+  </section>
+
   <!-- 一覧テーブル -->
   <section class="table-section">
     <div class="bulk-toolbar">
@@ -417,6 +447,49 @@
       if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
       renderTable();
       showMsg("リサーチ中にエラーが発生しました", "error");
+      btn.disabled = false;
+    }
+  }
+
+  async function importCSV() {
+    const fileInput = document.getElementById("csvFile");
+    const btn       = document.getElementById("importBtn");
+    const msgEl     = document.getElementById("importMsg");
+
+    if (!fileInput.files || !fileInput.files[0]) {
+      msgEl.textContent = "CSVファイルを選択してください";
+      msgEl.className = "import-msg error";
+      return;
+    }
+
+    btn.disabled = true;
+    msgEl.textContent = "インポート中...";
+    msgEl.className = "import-msg";
+
+    try {
+      const csvText = await fileInput.files[0].text();
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv: csvText }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        msgEl.textContent = data.error || "インポートエラー";
+        msgEl.className = "import-msg error";
+        return;
+      }
+      msgEl.textContent = `インポート完了: ${data.imported}件追加、${data.skipped}件スキップ`;
+      msgEl.className = "import-msg ok";
+      fileInput.value = "";
+
+      const listRes = await fetch("/api/companies");
+      companies = await listRes.json();
+      renderTable();
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = "import-msg error";
+    } finally {
       btn.disabled = false;
     }
   }
