@@ -66,6 +66,21 @@
   /* Progress bar */
   .rate-bar  { display: inline-block; vertical-align: middle; width: 80px; height: 8px; background: #e8f0e8; border-radius: 4px; margin-left: 8px; }
   .rate-fill { height: 100%; background: var(--main-green); border-radius: 4px; transition: width 0.3s; }
+
+  @media (max-width: 600px) {
+    .page-header { padding: 10px 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .container { padding: 16px 8px; }
+
+    /* サマリーカード: 1カラム縦並び */
+    .summary-cards { flex-direction: column; }
+    .summary-card { min-width: unset; }
+
+    .btn-refresh { min-height: 44px; }
+
+    /* テーブル: 横スクロール(既にtable-wrapにoverflow-x:autoあり) */
+    .rate-bar { width: 48px; }
+  }
 </style>
 </head>
 <body>

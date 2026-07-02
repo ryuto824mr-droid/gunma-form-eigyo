@@ -244,6 +244,36 @@
   .btn-add-selected:hover:not(:disabled) { background: var(--deep-green); }
   .btn-add-selected:disabled { background: #aaa; cursor: not-allowed; }
   .add-selected-progress { margin-left: 12px; font-size: 13px; color: #555; }
+
+  @media (max-width: 600px) {
+    .page-header { padding: 10px 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .container { padding: 16px 8px; }
+
+    /* 企業追加フォーム: 縦並び */
+    .add-row { flex-direction: column; }
+    .add-row input[name="name"],
+    .add-row input[name="url"],
+    .add-row input[name="email"] { flex: none; width: 100%; font-size: 16px; }
+    .add-row button { min-height: 44px; width: 100%; }
+
+    /* 自動検索: 縦並び */
+    .discover-row { flex-direction: column; }
+    .discover-row input { width: 100%; font-size: 16px; }
+    .discover-row button { min-height: 44px; width: 100%; }
+
+    /* CSVインポート: 縦並び */
+    .import-row { flex-direction: column; }
+    .import-row button { min-height: 44px; width: 100%; }
+
+    /* テーブル: URL・メール・更新日時を非表示 */
+    table th:nth-child(2), table td:nth-child(2),
+    table th:nth-child(3), table td:nth-child(3),
+    table th:nth-child(6), table td:nth-child(6) { display: none; }
+
+    .btn-bulk { min-height: 44px; }
+    .btn-research, .btn-detail { min-height: 40px; }
+  }
 </style>
 </head>
 <body>

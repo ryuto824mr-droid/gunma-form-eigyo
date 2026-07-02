@@ -136,6 +136,28 @@
     cursor: pointer; font-family: inherit;
   }
   .btn-cancel-resp:hover { background: #f5f5f5; }
+
+  @media (max-width: 600px) {
+    .page-header { padding: 10px 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .container { padding: 16px 8px; }
+
+    /* 企業・バリアント選択: 縦並び */
+    .select-row { flex-direction: column; }
+    .select-group { flex: none; width: 100%; }
+    .select-group select { font-size: 16px; }
+    .btn-generate { width: 100%; min-height: 44px; }
+
+    /* プレビュー */
+    .preview-box { width: 100%; }
+    .preview-actions { flex-direction: column; }
+    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email { min-height: 44px; width: 100%; }
+
+    /* 反応フォーム */
+    .resp-form select,
+    .resp-form input[type="text"] { font-size: 16px; }
+    .btn-save-resp, .btn-cancel-resp { min-height: 44px; }
+  }
 </style>
 </head>
 <body>
