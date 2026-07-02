@@ -45,9 +45,9 @@ module.exports = async function handler(req, res) {
   const fieldMapping = researchResult.fieldMapping || [];
 
   const VALUE_MAP = {
-    company_name:             company.name,
-    contact_person_name:      "営業担当",
-    contact_person_name_kana: "エイギョウタントウ",
+    company_name:             process.env.SENDER_COMPANY_NAME      || "株式会社LOCLE",
+    contact_person_name:      process.env.SENDER_PERSON_NAME       || "営業担当",
+    contact_person_name_kana: process.env.SENDER_PERSON_NAME_KANA  || "エイギョウタントウ",
     email:                    senderEmail,
     phone:                    process.env.SENDER_PHONE || "",
     subject:                  replace(variant.subject_template),
