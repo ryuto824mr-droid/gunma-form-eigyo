@@ -79,6 +79,13 @@
   }
   .btn-auto-submit:hover:not(:disabled) { background: #1a6617; }
   .btn-auto-submit:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-send-email {
+    padding: 7px 16px; font-size: 13px; border-radius: 6px;
+    background: #2563eb; color: white; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 700;
+  }
+  .btn-send-email:hover:not(:disabled) { background: #1d4ed8; }
+  .btn-send-email:disabled { background: #aaa; cursor: not-allowed; }
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--main-green); }
   .draft-msg.error { color: #c0392b; }
@@ -168,6 +175,7 @@
         <button class="btn-copy" onclick="copyDraft()">コピー</button>
         <button class="btn-record" id="recordBtn" onclick="recordSent()">送信済みとして記録</button>
         <button class="btn-auto-submit" id="autoSubmitBtn" onclick="autoSubmit()" hidden>フォームに自動送信</button>
+        <button class="btn-send-email" id="emailSendBtn" onclick="sendEmailDirectly()" hidden>メールで送信</button>
       </div>
     </div>
     <div class="draft-msg" id="draftMsg"></div>
@@ -284,6 +292,7 @@
     currentDraft = { companyId, variantId, company, variant, body };
     document.getElementById("autoSubmitBtn").hidden =
       !(company.research_result?.automatable === true);
+    document.getElementById("emailSendBtn").hidden = !company.email;
     showDraftMsg("", "");
   }
 
@@ -301,6 +310,41 @@
       sel.removeAllRanges();
       sel.addRange(rng);
       showDraftMsg("テキストを選択しました（Ctrl+C でコピー）", "ok");
+    }
+  }
+
+  async function sendEmailDirectly() {
+    if (!currentDraft) return;
+    const { companyId, variantId, company } = currentDraft;
+    if (!company.email) {
+      showDraftMsg("この企業にメールアドレスが登録されていません", "error");
+      return;
+    }
+    const btn = document.getElementById("emailSendBtn");
+    const origText = btn.textContent;
+    btn.textContent = "送信中...";
+    btn.disabled = true;
+
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showDraftMsg(`メール送信失敗: ${data.error}`, "error");
+        return;
+      }
+      const lRes = await fetch("/api/send-logs");
+      logs = await lRes.json();
+      renderLogs();
+      showDraftMsg(`メールを送信しました（${esc(company.email)}）`, "ok");
+    } catch (err) {
+      showDraftMsg(`メール送信失敗: ${err.message}`, "error");
+    } finally {
+      btn.textContent = origText;
+      btn.disabled = false;
     }
   }
 

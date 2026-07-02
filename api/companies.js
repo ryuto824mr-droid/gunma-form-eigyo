@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "POST") {
-    const { name, url } = req.body || {};
+    const { name, url, email } = req.body || {};
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "name（文字列）が必要です" });
     }
@@ -26,8 +26,8 @@ module.exports = async function handler(req, res) {
 
     try {
       const [company] = await sql`
-        INSERT INTO companies (name, url, status)
-        VALUES (${name.trim()}, ${url.trim()}, 'pending')
+        INSERT INTO companies (name, url, email, status)
+        VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending')
         RETURNING *
       `;
       return res.status(201).json(company);

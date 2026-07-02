@@ -42,7 +42,8 @@
     border-radius: 6px; font-family: inherit;
   }
   .add-row input[name="name"] { flex: 0 0 200px; }
-  .add-row input[name="url"]  { flex: 1 1 280px; }
+  .add-row input[name="url"]   { flex: 1 1 220px; }
+  .add-row input[name="email"] { flex: 1 1 180px; }
   .add-row button {
     padding: 9px 20px; background: var(--main-green); color: white;
     border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
@@ -257,7 +258,8 @@
     <h2>企業を追加</h2>
     <div class="add-row">
       <input type="text" name="name" id="inputName" placeholder="企業名" />
-      <input type="url"  name="url"  id="inputUrl"  placeholder="https://example.co.jp" />
+      <input type="url"   name="url"   id="inputUrl"   placeholder="https://example.co.jp" />
+      <input type="email" name="email" id="inputEmail" placeholder="メールアドレス（任意）" />
       <button id="addBtn" onclick="addCompany()">追加</button>
     </div>
     <div class="add-msg" id="addMsg"></div>
@@ -276,6 +278,7 @@
           <tr>
             <th>企業名</th>
             <th>URL</th>
+            <th>メール</th>
             <th>ステータス</th>
             <th>自動化</th>
             <th>更新日時</th>
@@ -283,7 +286,7 @@
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr class="empty-row"><td colspan="6">読み込み中...</td></tr>
+          <tr class="empty-row"><td colspan="7">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -316,7 +319,7 @@
       renderTable();
     } catch (err) {
       document.getElementById("tableBody").innerHTML =
-        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+        `<tr class="empty-row"><td colspan="7">読み込みエラー: ${esc(err.message)}</td></tr>`;
     }
   }
 
@@ -324,7 +327,7 @@
   function renderTable() {
     const tbody = document.getElementById("tableBody");
     if (!companies.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="6">企業が登録されていません</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">企業が登録されていません</td></tr>';
       return;
     }
     tbody.innerHTML = companies.map(c => {
@@ -338,6 +341,7 @@
         <tr id="row-${c.id}">
           <td class="name">${esc(c.name)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
+          <td style="font-size:12px;color:#555">${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : "—"}</td>
           <td>${statusBadge(c.status)}</td>
           <td>${automatableBadge(result)}</td>
           <td style="white-space:nowrap">${updatedAt}</td>
@@ -364,9 +368,10 @@
 
   // ---- 企業追加 + 自動リサーチ ----
   async function addCompany() {
-    const name = document.getElementById("inputName").value.trim();
-    const url  = document.getElementById("inputUrl").value.trim();
-    const btn  = document.getElementById("addBtn");
+    const name  = document.getElementById("inputName").value.trim();
+    const url   = document.getElementById("inputUrl").value.trim();
+    const email = document.getElementById("inputEmail").value.trim();
+    const btn   = document.getElementById("addBtn");
 
     if (!name) { showMsg("企業名を入力してください", "error"); return; }
     if (!url)  { showMsg("URLを入力してください", "error"); return; }
@@ -379,13 +384,14 @@
       const res = await fetch("/api/companies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, url }),
+        body: JSON.stringify({ name, url, email: email || null }),
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || "登録エラー", "error"); btn.disabled = false; return; }
       newCompany = data;
-      document.getElementById("inputName").value = "";
-      document.getElementById("inputUrl").value  = "";
+      document.getElementById("inputName").value  = "";
+      document.getElementById("inputUrl").value   = "";
+      document.getElementById("inputEmail").value = "";
     } catch (err) {
       showMsg(err.message, "error");
       btn.disabled = false;
