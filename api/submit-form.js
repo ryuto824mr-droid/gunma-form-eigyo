@@ -102,8 +102,9 @@ module.exports = async function handler(req, res) {
 
   try {
     const result = await submitForm(contactFormUrl, fieldValues);
-    logStatus = "sent";
-    logExtra  = { resultUrl: result.resultUrl, resultTitle: result.resultTitle };
+    // "success" → "sent" / "uncertain" → "uncertain" / throw → "failed"
+    logStatus = result.status === "success" ? "sent" : "uncertain";
+    logExtra  = { resultUrl: result.resultUrl, resultTitle: result.resultTitle, submitStatus: result.status };
   } catch (err) {
     logExtra = { error: err.message };
   }
@@ -122,5 +123,5 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  return res.status(200).json({ success: true, log: logEntry, result: logExtra });
+  return res.status(200).json({ success: true, log: logEntry, result: logExtra, submitStatus: logStatus });
 };

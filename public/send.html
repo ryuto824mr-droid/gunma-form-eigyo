@@ -88,6 +88,7 @@
   .btn-send-email:disabled { background: #aaa; cursor: not-allowed; }
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--main-green); }
+  .draft-msg.warn  { color: #b45309; }
   .draft-msg.error { color: #c0392b; }
   .force-row { padding: 8px 16px; font-size: 12px; color: #777; border-top: 1px solid #e8f0e8; }
   .force-row label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
@@ -377,7 +378,11 @@
       const lRes = await fetch("/api/send-logs");
       logs = await lRes.json();
       renderLogs();
-      showDraftMsg("自動送信が完了しました", "ok");
+      if (data.submitStatus === "uncertain") {
+        showDraftMsg("送信しましたが、完了ページへの遷移を確認できませんでした。フォームの送信履歴を確認してください", "warn");
+      } else {
+        showDraftMsg("自動送信が完了しました", "ok");
+      }
     } catch (err) {
       showDraftMsg(`自動送信失敗: ${err.message}。手動送信に切り替えてください。`, "error");
     } finally {

@@ -29,6 +29,23 @@
   }
   .btn-refresh:hover { background: #f0faf0; }
 
+  /* Summary cards */
+  .summary-cards { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .summary-card {
+    flex: 1; min-width: 140px; background: white; border-radius: 8px;
+    padding: 18px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); text-align: center;
+  }
+  .summary-card .card-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .summary-card .card-value { font-size: 28px; font-weight: 700; color: var(--deep-green); line-height: 1; }
+  .summary-card .card-unit  { font-size: 14px; font-weight: 400; color: #888; margin-left: 2px; }
+
+  /* Empty state */
+  .empty-state {
+    background: white; border-radius: 8px; padding: 48px 24px;
+    text-align: center; color: #999; font-size: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07); margin-bottom: 24px;
+  }
+
   .stat-section {
     background: white; border-radius: 8px; padding: 20px 24px;
     margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.07);
@@ -43,7 +60,12 @@
   tr:hover td { background: #fafff9; }
   .rate-hi { color: var(--deep-green); font-weight: 700; }
   .rate-lo { color: #bbb; }
-  .empty { font-size: 13px; color: #999; padding: 16px 0; margin: 0; }
+  .dash    { color: #ccc; }
+  .empty   { font-size: 13px; color: #999; padding: 16px 0; margin: 0; }
+
+  /* Progress bar */
+  .rate-bar  { display: inline-block; vertical-align: middle; width: 80px; height: 8px; background: #e8f0e8; border-radius: 4px; margin-left: 8px; }
+  .rate-fill { height: 100%; background: var(--main-green); border-radius: 4px; transition: width 0.3s; }
 </style>
 </head>
 <body>
@@ -66,15 +88,9 @@
     <button class="btn-refresh" onclick="loadAnalytics()">更新</button>
   </div>
 
-  <section class="stat-section">
-    <h2>バリアント別集計</h2>
-    <div class="table-wrap" id="variantsTable"><p class="empty">読み込み中...</p></div>
-  </section>
+  <div class="summary-cards" id="summaryCards"></div>
 
-  <section class="stat-section">
-    <h2>タグ別集計</h2>
-    <div class="table-wrap" id="tagsTable"><p class="empty">読み込み中...</p></div>
-  </section>
+  <div id="mainContent"></div>
 
 </div>
 
@@ -86,15 +102,50 @@
       if (!res.ok) throw new Error("取得失敗");
       const data = await res.json();
 
-      document.getElementById("variantsTable").innerHTML = renderVariantsTable(data.variants_stats);
-      document.getElementById("tagsTable").innerHTML     = renderTagsTable(data.tags_stats);
-      document.getElementById("updatedAt").textContent   =
+      const totalSends     = (data.variants_stats || []).reduce((s, r) => s + Number(r.send_count),     0);
+      const totalResponses = (data.variants_stats || []).reduce((s, r) => s + Number(r.response_count), 0);
+      const overallRate    = totalSends > 0 ? (totalResponses / totalSends * 100).toFixed(1) : 0;
+
+      document.getElementById("summaryCards").innerHTML = renderSummaryCards(totalSends, totalResponses, overallRate);
+
+      if (totalSends === 0) {
+        document.getElementById("mainContent").innerHTML =
+          '<div class="empty-state">まだ送信データがありません</div>';
+      } else {
+        document.getElementById("mainContent").innerHTML =
+          `<section class="stat-section">
+            <h2>バリアント別集計</h2>
+            <div class="table-wrap">${renderVariantsTable(data.variants_stats)}</div>
+          </section>
+          <section class="stat-section">
+            <h2>タグ別集計</h2>
+            <div class="table-wrap">${renderTagsTable(data.tags_stats)}</div>
+          </section>`;
+      }
+
+      document.getElementById("updatedAt").textContent =
         `最終更新: ${new Date().toLocaleString("ja-JP")}`;
     } catch (err) {
-      document.getElementById("variantsTable").innerHTML =
-        `<p class="empty">エラー: ${esc(err.message)}</p>`;
+      document.getElementById("mainContent").innerHTML =
+        `<div class="empty-state">エラー: ${esc(err.message)}</div>`;
       document.getElementById("updatedAt").textContent = "取得失敗";
     }
+  }
+
+  function renderSummaryCards(totalSends, totalResponses, overallRate) {
+    return `
+      <div class="summary-card">
+        <div class="card-label">総送信数</div>
+        <div class="card-value">${totalSends}<span class="card-unit">件</span></div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">総反応数</div>
+        <div class="card-value">${totalResponses}<span class="card-unit">件</span></div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">全体反応率</div>
+        <div class="card-value">${overallRate}<span class="card-unit">%</span></div>
+      </div>`;
   }
 
   function renderVariantsTable(stats) {
@@ -102,14 +153,22 @@
       return '<p class="empty">データがありません（送信を記録すると集計が表示されます）</p>';
     }
     const rows = stats.map(r => {
-      const rc = Number(r.response_rate) >= 20 ? "rate-hi" : (Number(r.response_rate) === 0 ? "rate-lo" : "");
+      const sends = Number(r.send_count);
+      const rate  = Number(r.response_rate);
+      const rc    = rate >= 20 ? "rate-hi" : (rate === 0 ? "rate-lo" : "");
+      const dash  = sends === 0;
       return `
         <tr>
           <td>${esc(r.variant_name)}</td>
-          <td class="r">${r.send_count}</td>
-          <td class="r">${r.response_count}</td>
-          <td class="r">${r.interested_count}</td>
-          <td class="r ${rc}">${r.response_rate}%</td>
+          <td class="r">${sends}</td>
+          <td class="r">${dash ? '<span class="dash">—</span>' : r.response_count}</td>
+          <td class="r">${dash ? '<span class="dash">—</span>' : r.interested_count}</td>
+          <td class="r">
+            ${dash
+              ? '<span class="dash">—</span>'
+              : `<span class="${rc}">${rate}%</span><span class="rate-bar"><span class="rate-fill" style="width:${Math.min(rate,100)}%"></span></span>`
+            }
+          </td>
         </tr>`;
     }).join("");
     return `
@@ -132,14 +191,22 @@
       return '<p class="empty">タグがまだ設定されていません</p>';
     }
     const rows = stats.map(r => {
-      const rc = Number(r.response_rate) >= 20 ? "rate-hi" : (Number(r.response_rate) === 0 ? "rate-lo" : "");
+      const sends = Number(r.send_count);
+      const rate  = Number(r.response_rate);
+      const rc    = rate >= 20 ? "rate-hi" : (rate === 0 ? "rate-lo" : "");
+      const dash  = sends === 0;
       return `
         <tr>
           <td>${esc(r.tag_key)}</td>
           <td>${esc(r.tag_value)}</td>
-          <td class="r">${r.send_count}</td>
-          <td class="r">${r.response_count}</td>
-          <td class="r ${rc}">${r.response_rate}%</td>
+          <td class="r">${sends}</td>
+          <td class="r">${dash ? '<span class="dash">—</span>' : r.response_count}</td>
+          <td class="r">
+            ${dash
+              ? '<span class="dash">—</span>'
+              : `<span class="${rc}">${rate}%</span><span class="rate-bar"><span class="rate-fill" style="width:${Math.min(rate,100)}%"></span></span>`
+            }
+          </td>
         </tr>`;
     }).join("");
     return `
