@@ -266,13 +266,18 @@
     .import-row { flex-direction: column; }
     .import-row button { min-height: 44px; width: 100%; }
 
-    /* テーブル: URL・メール・更新日時を非表示 */
+    /* テーブル: URL(2)・メール(3)・自動化(5)・更新日時(6)を非表示 → 企業名・ステータス・操作のみ */
     table th:nth-child(2), table td:nth-child(2),
     table th:nth-child(3), table td:nth-child(3),
+    table th:nth-child(5), table td:nth-child(5),
     table th:nth-child(6), table td:nth-child(6) { display: none; }
 
-    .btn-bulk { min-height: 44px; }
-    .btn-research, .btn-detail { min-height: 40px; }
+    /* 一括リサーチ: 幅100% */
+    .btn-bulk { min-height: 44px; width: 100%; }
+
+    /* 操作ボタン: 縦並び */
+    .btn-research { display: block; width: 100%; margin-bottom: 4px; min-height: 44px; }
+    .btn-detail   { display: block; width: 100%; margin-left: 0;     min-height: 44px; }
   }
 </style>
 </head>

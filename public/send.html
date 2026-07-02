@@ -157,6 +157,11 @@
     .resp-form select,
     .resp-form input[type="text"] { font-size: 16px; }
     .btn-save-resp, .btn-cancel-resp { min-height: 44px; }
+
+    /* 送信履歴テーブル: バリアント(2)・ステータス(4)・操作(6)を非表示 → 企業名・送信日時・反応のみ */
+    table th:nth-child(2), table td:nth-child(2),
+    table th:nth-child(4), table td:nth-child(4),
+    table th:nth-child(6), table td:nth-child(6) { display: none; }
   }
 </style>
 </head>
