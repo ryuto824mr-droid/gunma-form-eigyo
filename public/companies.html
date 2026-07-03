@@ -152,6 +152,54 @@
   .btn-bulk:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .bulk-progress { font-size: 12px; color: var(--gray-500); }
 
+  /* Filter bar */
+  .filter-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 12px 20px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50);
+  }
+  .filter-bar input[type="text"] { flex: 1 1 220px; }
+  .filter-bar select {
+    padding: 8px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .filter-bar select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .btn-filter-clear {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-filter-clear:hover { background: var(--gray-100); color: var(--gray-900); }
+  .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
+
+  /* Priority column */
+  th.th-priority { cursor: pointer; user-select: none; }
+  th.th-priority:hover { color: var(--gray-700); }
+  .priority-stars { color: var(--green-500); font-size: 13px; letter-spacing: 1px; }
+  .priority-stars.none { color: var(--gray-300); font-size: 12px; letter-spacing: normal; }
+  .btn-priority {
+    padding: 2px 6px; font-size: 11px; border-radius: 4px;
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; font-family: inherit; line-height: 1; transition: all 150ms;
+  }
+  .btn-priority:hover:not(:disabled) { background: var(--green-50); border-color: var(--green-500); color: var(--green-700); }
+  .btn-priority:disabled { color: var(--gray-200); cursor: not-allowed; }
+
+  /* Pagination */
+  .pagination {
+    display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap;
+    padding: 16px 20px; border-top: 1px solid var(--gray-200);
+  }
+  .btn-page {
+    min-width: 30px; padding: 6px 10px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-page:hover:not(:disabled):not(.active) { background: var(--gray-50); }
+  .btn-page.active { background: var(--green-500); border-color: var(--green-500); color: var(--white); font-weight: 600; }
+  .btn-page:disabled { color: var(--gray-300); cursor: not-allowed; }
+  .page-ellipsis { color: var(--gray-400); font-size: 13px; padding: 0 4px; }
+
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
@@ -376,10 +424,14 @@
     table th:nth-child(2), table td:nth-child(2),
     table th:nth-child(3), table td:nth-child(3),
     table th:nth-child(5), table td:nth-child(5),
-    table th:nth-child(6), table td:nth-child(6) { display: none; }
+    table th:nth-child(6), table td:nth-child(6),
+    table th:nth-child(7), table td:nth-child(7) { display: none; }
     .btn-bulk { min-height: 44px; width: 100%; }
     .btn-research { display: flex; width: 100%; margin-bottom: 4px; min-height: 44px; justify-content: center; }
     .btn-detail   { display: flex; width: 100%; margin-left: 0; min-height: 44px; justify-content: center; }
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-bar input[type="text"], .filter-bar select { width: 100%; font-size: 16px; }
+    .filter-count { margin-left: 0; }
   }
 </style>
 </head>
@@ -449,19 +501,40 @@
       </span>
       <span class="bulk-progress" id="bulkProgress"></span>
     </div>
+    <div class="filter-bar">
+      <input type="text" id="filterSearch" placeholder="企業名・URLで検索" oninput="onFilterChange()" />
+      <select id="filterStatus" onchange="onFilterChange()">
+        <option value="all">ステータス: すべて</option>
+        <option value="pending">未リサーチ</option>
+        <option value="researched">完了</option>
+        <option value="captcha_blocked">CAPTCHA</option>
+        <option value="no_form">フォームなし</option>
+        <option value="error">エラー</option>
+      </select>
+      <select id="filterAutomation" onchange="onFilterChange()">
+        <option value="all">自動化: すべて</option>
+        <option value="ok">自動化OK</option>
+        <option value="ng">自動化NG</option>
+      </select>
+      <button class="btn-filter-clear" onclick="clearFilters()">クリア</button>
+      <span class="filter-count" id="filterCount"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>企業名</th><th>URL</th><th>メール</th>
-            <th>ステータス</th><th>自動化</th><th>更新日時</th><th>操作</th>
+            <th>ステータス</th><th>自動化</th>
+            <th class="th-priority" id="thPriority" onclick="toggleSortPriority()">優先度<span id="prioritySortArrow"></span></th>
+            <th>更新日時</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="tableBody">
-          <tr class="empty-row"><td colspan="7">読み込み中...</td></tr>
+          <tr class="empty-row"><td colspan="8">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
+    <div class="pagination" id="pagination"></div>
   </section>
 
 </div>
@@ -482,6 +555,10 @@
 <script>
   let companies = [];
   let isBulkResearching = false;
+  let filters = { search: "", status: "all", automation: "all" };
+  let sortState = { field: null, dir: "desc" };
+  let currentPage = 1;
+  const PAGE_SIZE = 20;
 
   loadCompanies();
 
@@ -493,7 +570,7 @@
       updateSummaryBar();
     } catch (err) {
       document.getElementById("tableBody").innerHTML =
-        `<tr class="empty-row"><td colspan="7">読み込みエラー: ${esc(err.message)}</td></tr>`;
+        `<tr class="empty-row"><td colspan="8">読み込みエラー: ${esc(err.message)}</td></tr>`;
     }
   }
 
@@ -510,14 +587,154 @@
       <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span></div>`;
   }
 
+  function getFilteredCompanies() {
+    return companies.filter(c => {
+      if (filters.search) {
+        const q = filters.search.toLowerCase();
+        const matchesName = (c.name || "").toLowerCase().includes(q);
+        const matchesUrl  = (c.url  || "").toLowerCase().includes(q);
+        if (!matchesName && !matchesUrl) return false;
+      }
+      if (filters.status !== "all" && c.status !== filters.status) return false;
+      if (filters.automation === "ok" && c.research_result?.automatable !== true) return false;
+      if (filters.automation === "ng" && c.research_result?.automatable !== false) return false;
+      return true;
+    });
+  }
+
+  function getSortedCompanies(list) {
+    if (sortState.field !== "priority") return list;
+    return [...list].sort((a, b) => {
+      const pa = a.priority || 0, pb = b.priority || 0;
+      return sortState.dir === "desc" ? pb - pa : pa - pb;
+    });
+  }
+
+  function onFilterChange() {
+    filters.search      = document.getElementById("filterSearch").value.trim();
+    filters.status      = document.getElementById("filterStatus").value;
+    filters.automation  = document.getElementById("filterAutomation").value;
+    currentPage = 1;
+    renderTable();
+  }
+
+  function clearFilters() {
+    document.getElementById("filterSearch").value = "";
+    document.getElementById("filterStatus").value = "all";
+    document.getElementById("filterAutomation").value = "all";
+    filters = { search: "", status: "all", automation: "all" };
+    currentPage = 1;
+    renderTable();
+  }
+
+  function updateFilterCount(filteredCount) {
+    const el = document.getElementById("filterCount");
+    if (!el) return;
+    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all";
+    el.textContent = isFiltering ? `${companies.length}社中${filteredCount}社を表示中` : "";
+  }
+
+  function toggleSortPriority() {
+    if (sortState.field !== "priority") {
+      sortState = { field: "priority", dir: "desc" };
+    } else {
+      sortState.dir = sortState.dir === "desc" ? "asc" : "desc";
+    }
+    currentPage = 1;
+    renderTable();
+  }
+
+  function priorityLabel(p) {
+    const n = Math.max(0, Math.min(3, p || 0));
+    return n === 0
+      ? '<span class="priority-stars none">なし</span>'
+      : `<span class="priority-stars">${"★".repeat(n)}</span>`;
+  }
+
+  async function changePriority(id, delta) {
+    const company = companies.find(c => c.id === id);
+    if (!company) return;
+    const current = company.priority || 0;
+    const newPriority = Math.max(0, Math.min(3, current + delta));
+    if (newPriority === current) return;
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, priority: newPriority }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "優先度の更新に失敗しました"); return; }
+      company.priority = data.priority;
+      renderTable();
+    } catch (err) {
+      alert("優先度の更新に失敗しました: " + err.message);
+    }
+  }
+
+  function renderPagination(totalItems, totalPages) {
+    const el = document.getElementById("pagination");
+    if (!el) return;
+    if (totalItems <= PAGE_SIZE) { el.innerHTML = ""; return; }
+
+    const pages = [];
+    for (let p = 1; p <= totalPages; p++) {
+      if (p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1) {
+        pages.push(p);
+      } else if (pages[pages.length - 1] !== "...") {
+        pages.push("...");
+      }
+    }
+
+    let html = `<button class="btn-page" onclick="goToPage(${currentPage - 1})" ${currentPage <= 1 ? "disabled" : ""}>← 前へ</button>`;
+    html += pages.map(p => p === "..."
+      ? `<span class="page-ellipsis">...</span>`
+      : `<button class="btn-page ${p === currentPage ? "active" : ""}" onclick="goToPage(${p})">${p}</button>`
+    ).join("");
+    html += `<button class="btn-page" onclick="goToPage(${currentPage + 1})" ${currentPage >= totalPages ? "disabled" : ""}>次へ →</button>`;
+    el.innerHTML = html;
+  }
+
+  function goToPage(p) {
+    if (p < 1) return;
+    currentPage = p;
+    renderTable();
+    document.querySelector(".table-section").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function renderTable() {
     const tbody = document.getElementById("tableBody");
+    const arrowEl = document.getElementById("prioritySortArrow");
+    if (arrowEl) {
+      arrowEl.textContent = sortState.field === "priority" ? (sortState.dir === "desc" ? " ▼" : " ▲") : "";
+    }
+
     if (!companies.length) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="7">企業が登録されていません</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">企業が登録されていません</td></tr>';
       updateSummaryBar();
+      updateFilterCount(0);
+      renderPagination(0, 1);
       return;
     }
-    tbody.innerHTML = companies.map(c => {
+
+    const filtered = getFilteredCompanies();
+    const sorted    = getSortedCompanies(filtered);
+    updateFilterCount(filtered.length);
+
+    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+
+    if (!sorted.length) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">条件に一致する企業がありません</td></tr>';
+      updateSummaryBar();
+      renderPagination(sorted.length, totalPages);
+      return;
+    }
+
+    const pageItems = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+    tbody.innerHTML = pageItems.map(c => {
       const result = c.research_result;
       const updatedAt = c.updated_at
         ? new Date(c.updated_at).toLocaleString("ja-JP", { month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" })
@@ -530,6 +747,7 @@
       const detailBtn = result && !result.error && !isResearching
         ? `<button class="btn-detail" onclick="showDetail(${c.id})"><i data-lucide="eye"></i> 詳細</button>`
         : "";
+      const priority = c.priority || 0;
       return `
         <tr id="row-${c.id}">
           <td class="name">${esc(c.name)}</td>
@@ -537,6 +755,11 @@
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}</td>
           <td>${automatableBadge(result)}</td>
+          <td style="white-space:nowrap">
+            ${priorityLabel(priority)}
+            <button class="btn-priority" onclick="changePriority(${c.id}, 1)" ${priority >= 3 ? "disabled" : ""} title="優先度を上げる">▲</button>
+            <button class="btn-priority" onclick="changePriority(${c.id}, -1)" ${priority <= 0 ? "disabled" : ""} title="優先度を下げる">▼</button>
+          </td>
           <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${updatedAt}</td>
           <td style="white-space:nowrap">
             <span class="tooltip-wrap"><button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button><span class="tooltip-text">企業サイトのフォームを自動解析します</span></span>
@@ -545,6 +768,7 @@
         </tr>`;
     }).join("");
     updateSummaryBar();
+    renderPagination(sorted.length, totalPages);
     lucide.createIcons();
   }
 

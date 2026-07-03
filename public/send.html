@@ -175,6 +175,33 @@
   }
   .force-row label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
 
+  /* History filter bar */
+  .filter-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 0 0 14px;
+  }
+  .filter-bar input[type="text"] {
+    flex: 1 1 200px; padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms;
+  }
+  .filter-bar input[type="text"]:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
+  }
+  .filter-bar select {
+    padding: 8px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .filter-bar select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .btn-filter-clear {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-filter-clear:hover { background: var(--gray-100); color: var(--gray-900); }
+  .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
+
   /* History table */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -325,6 +352,9 @@
     table th:nth-child(2), table td:nth-child(2),
     table th:nth-child(4), table td:nth-child(4),
     table th:nth-child(6), table td:nth-child(6) { display: none; }
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-bar input[type="text"], .filter-bar select { width: 100%; font-size: 16px; }
+    .filter-count { margin-left: 0; }
   }
 </style>
 </head>
@@ -400,6 +430,23 @@
 
   <section class="history-section">
     <h2>送信履歴</h2>
+    <div class="filter-bar">
+      <input type="text" id="filterCompany" placeholder="企業名で検索" oninput="onLogFilterChange()" />
+      <select id="filterLogStatus" onchange="onLogFilterChange()">
+        <option value="all">ステータス: すべて</option>
+        <option value="sent">sent</option>
+        <option value="failed">failed</option>
+        <option value="uncertain">uncertain</option>
+      </select>
+      <select id="filterLogDate" onchange="onLogFilterChange()">
+        <option value="all">期間: すべて</option>
+        <option value="today">今日</option>
+        <option value="week">今週</option>
+        <option value="month">今月</option>
+      </select>
+      <button class="btn-filter-clear" onclick="clearLogFilters()">クリア</button>
+      <span class="filter-count" id="logFilterCount"></span>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -428,6 +475,7 @@
   let variants  = [];
   let logs      = [];
   let currentDraft = null;
+  let logFilters = { company: "", status: "all", date: "all" };
 
   const CLASSIF_LABELS = {
     interested: "興味あり",
@@ -630,14 +678,72 @@
     }
   }
 
+  function getFilteredLogs() {
+    return logs.filter(log => {
+      if (logFilters.company) {
+        const q = logFilters.company.toLowerCase();
+        if (!(log.company_name || "").toLowerCase().includes(q)) return false;
+      }
+      if (logFilters.status !== "all" && log.status !== logFilters.status) return false;
+      if (logFilters.date !== "all") {
+        if (!log.sent_at) return false;
+        const sentAt = new Date(log.sent_at);
+        const now = new Date();
+        if (logFilters.date === "today") {
+          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          if (sentAt < start) return false;
+        } else if (logFilters.date === "week") {
+          const start = new Date(now);
+          start.setDate(now.getDate() - now.getDay());
+          start.setHours(0, 0, 0, 0);
+          if (sentAt < start) return false;
+        } else if (logFilters.date === "month") {
+          const start = new Date(now.getFullYear(), now.getMonth(), 1);
+          if (sentAt < start) return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  function onLogFilterChange() {
+    logFilters.company = document.getElementById("filterCompany").value.trim();
+    logFilters.status  = document.getElementById("filterLogStatus").value;
+    logFilters.date    = document.getElementById("filterLogDate").value;
+    renderLogs();
+  }
+
+  function clearLogFilters() {
+    document.getElementById("filterCompany").value = "";
+    document.getElementById("filterLogStatus").value = "all";
+    document.getElementById("filterLogDate").value = "all";
+    logFilters = { company: "", status: "all", date: "all" };
+    renderLogs();
+  }
+
+  function updateLogFilterCount(filteredCount) {
+    const el = document.getElementById("logFilterCount");
+    if (!el) return;
+    const isFiltering = logFilters.company || logFilters.status !== "all" || logFilters.date !== "all";
+    el.textContent = isFiltering ? `${logs.length}件中${filteredCount}件を表示中` : "";
+  }
+
   function renderLogs() {
     const tbody = document.getElementById("logsBody");
     if (logs.length === 0) {
       tbody.innerHTML =
         '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">送信履歴がありません</td></tr>';
+      updateLogFilterCount(0);
       return;
     }
-    tbody.innerHTML = logs.map(log => renderLogRows(log)).join("");
+    const filtered = getFilteredLogs();
+    updateLogFilterCount(filtered.length);
+    if (filtered.length === 0) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">条件に一致する送信履歴がありません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = filtered.map(log => renderLogRows(log)).join("");
   }
 
   function renderLogRows(log) {

@@ -42,7 +42,31 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  return res.status(405).json({ error: "GET / POST のみ対応しています" });
+  if (req.method === "PATCH") {
+    const { id, priority } = req.body || {};
+    const companyId = parseInt(id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    const p = parseInt(priority, 10);
+    if (isNaN(p) || p < 0 || p > 3) {
+      return res.status(400).json({ error: "priorityは0〜3の整数で指定してください" });
+    }
+    try {
+      const [updated] = await sql`
+        UPDATE companies
+        SET priority = ${p}
+        WHERE id = ${companyId}
+        RETURNING *
+      `;
+      if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });
 };
 
 async function handleImport(csvText, res) {
