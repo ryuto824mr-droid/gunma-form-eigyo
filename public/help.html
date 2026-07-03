@@ -54,6 +54,7 @@
     padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
   }
   .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
   .page-nav a.active {
     color: white; font-weight: 600;
     background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
@@ -219,6 +220,13 @@
     table thead { background: #1e293b; }
     .modal-box, .tour-bubble { background: #1e293b; color: #f1f5f9; }
     .preview-subject, .preview-body-text { background: #0f172a; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+    .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
+    button[class*="btn-research"], #addBtn, #bulkBtn {
+      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
+      color: white !important;
+      opacity: 1 !important;
+    }
   }
   html.dark {
     --gray-50:  #0f172a;
@@ -245,13 +253,16 @@
   html.dark table thead { background: #1e293b; }
   html.dark .modal-box, html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
   html.dark .preview-subject, html.dark .preview-body-text { background: #0f172a; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .btn-primary,
+  html.dark button[class*="btn-"] { opacity: 1; }
 </style>
 </head>
 <body>
 
 <header class="page-header">
   <h1><a href="/index.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
-    <img src="/logo.jpg" alt="LOCLE" style="height:28px; width:auto; object-fit:contain; background:white; padding:3px 8px; border-radius:6px;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
   </a></h1>
   <nav class="page-nav">
     <a href="/index.html">ホーム</a>
