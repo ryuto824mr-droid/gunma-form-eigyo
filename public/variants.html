@@ -163,6 +163,51 @@
   .list-empty { font-size: 13px; color: var(--gray-400); padding: 20px 0; margin: 0; }
   .list-count { font-size: 12px; color: var(--gray-400); font-weight: 400; margin-left: 8px; }
 
+  @keyframes tourFadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  #pageTourOverlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55); z-index: 2000;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #pageTourOverlay.open { display: flex; }
+  #pageTourCard {
+    background: var(--white); border-radius: var(--radius-lg); max-width: 400px; width: 100%;
+    padding: 28px 24px 20px; box-shadow: 0 20px 48px rgba(0,0,0,0.25);
+    animation: tourFadeInUp 0.35s ease-out;
+  }
+  .tour-step-num { font-size: 11px; font-weight: 700; color: var(--green-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .tour-title { font-size: 17px; font-weight: 700; color: var(--gray-900); margin: 0 0 8px; }
+  .tour-body  { font-size: 14px; color: var(--gray-500); line-height: 1.65; margin: 0 0 20px; }
+  .tour-dots  { display: flex; gap: 6px; margin-bottom: 16px; }
+  .tour-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-200); transition: background 200ms; }
+  .tour-dot.active { background: var(--green-500); }
+  .tour-actions { display: flex; justify-content: space-between; align-items: center; }
+  .btn-tour-next {
+    padding: 8px 20px; border: none; border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); font-size: 13px; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: all 150ms;
+  }
+  .btn-tour-next:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4); }
+  .btn-tour-skip {
+    background: none; border: none; font-size: 12px; color: var(--gray-400);
+    cursor: pointer; font-family: inherit; transition: color 150ms;
+  }
+  .btn-tour-skip:hover { color: var(--gray-700); }
+  .btn-help-float {
+    position: fixed; bottom: 24px; right: 24px; z-index: 1500;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 16px rgba(68,177,63,0.4);
+    color: var(--white); border: none; border-radius: 24px;
+    padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: inherit;
+    cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 150ms;
+  }
+  .btn-help-float:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(68,177,63,0.5); }
+
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -392,8 +437,45 @@
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  const PAGE_TOUR_KEY   = "locle_tour_variants";
+  const PAGE_TOUR_STEPS = [
+    { title: "ようこそ メッセージ管理へ", body: "ここでは送信するメッセージの「バリアント（テンプレート）」を管理します。複数のバリアントを使い分けてA/Bテストができます。" },
+    { title: "バリアントを作成する",      body: "名前・チャネル（メール or フォーム）・本文テンプレートを入力して「作成」ボタンを押してください。{{company_name}} は送信時に自動で企業名に置き換わります。" },
+    { title: "タグで分類する",           body: "タグ（キー: 値）を追加すると分析画面でタグ別の反応率を比較できます。例: industry: IT、size: 中小企業。" },
+  ];
+  let pageTourStep = 0;
+  function initPageTour()    { if (!localStorage.getItem(PAGE_TOUR_KEY)) startPageTour(); }
+  function restartPageTour() { startPageTour(); }
+  function startPageTour()   { pageTourStep = 0; renderPageTour(); document.getElementById("pageTourOverlay").classList.add("open"); }
+  function nextPageTourStep(){ pageTourStep++; renderPageTour(); }
+  function endPageTour()     { localStorage.setItem(PAGE_TOUR_KEY, "1"); document.getElementById("pageTourOverlay").classList.remove("open"); }
+  function renderPageTour() {
+    const step   = PAGE_TOUR_STEPS[pageTourStep];
+    const total  = PAGE_TOUR_STEPS.length;
+    const isLast = pageTourStep === total - 1;
+    const dots   = PAGE_TOUR_STEPS.map((_, i) =>
+      '<span class="tour-dot' + (i === pageTourStep ? " active" : "") + '"></span>'
+    ).join("");
+    const nextFn = isLast ? "endPageTour()" : "nextPageTourStep()";
+    const nextLb = isLast ? "はじめる" : "次へ →";
+    document.getElementById("pageTourCard").innerHTML =
+      '<div class="tour-step-num">ステップ ' + (pageTourStep + 1) + ' / ' + total + '</div>' +
+      '<h3 class="tour-title">' + step.title + '</h3>' +
+      '<p class="tour-body">' + step.body + '</p>' +
+      '<div class="tour-dots">' + dots + '</div>' +
+      '<div class="tour-actions">' +
+        '<button class="btn-tour-skip" onclick="endPageTour()">スキップ</button>' +
+        '<button class="btn-tour-next" onclick="' + nextFn + '">' + nextLb + '</button>' +
+      '</div>';
+  }
+
   lucide.createIcons();
   loadVariants();
+  initPageTour();
 </script>
+<div id="pageTourOverlay">
+  <div id="pageTourCard"></div>
+</div>
+<button class="btn-help-float" onclick="restartPageTour()">？ 使い方</button>
 </body>
 </html>
