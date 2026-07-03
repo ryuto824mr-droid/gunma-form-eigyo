@@ -163,6 +163,28 @@
   .btn-bulk:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .bulk-progress { font-size: 12px; color: var(--gray-500); }
 
+  /* Bulk research progress panel */
+  .bulk-progress-panel {
+    padding: 14px 20px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50);
+  }
+  .bulk-progress-bar-track {
+    width: 100%; height: 6px; background: var(--gray-200); border-radius: 999px;
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .bulk-progress-bar-fill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, #44B13F, #5BC952);
+    border-radius: 999px; transition: width 300ms ease;
+  }
+  .bulk-result-list {
+    list-style: none; margin: 0; padding: 0; max-height: 180px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .bulk-result-item { font-size: 12px; padding: 4px 8px; border-radius: var(--radius-sm); }
+  .bulk-result-item.success { color: var(--green-700); background: var(--green-50); }
+  .bulk-result-item.error   { color: #dc2626; background: #fff5f5; }
+  .bulk-result-item.captcha { color: #b45309; background: #fffbeb; }
+  .bulk-summary { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--gray-700); }
+
   /* Filter bar */
   .filter-bar {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -195,6 +217,56 @@
   }
   .btn-priority:hover:not(:disabled) { background: var(--green-50); border-color: var(--green-500); color: var(--green-700); }
   .btn-priority:disabled { color: var(--gray-200); cursor: not-allowed; }
+
+  /* Memo */
+  .btn-memo {
+    padding: 5px 8px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; transition: all 150ms ease; margin-left: 6px; line-height: 1;
+  }
+  .btn-memo:hover { background: var(--gray-50); }
+  .btn-memo.has-memo { border-color: var(--green-500); background: var(--green-50); }
+  .memo-form-row td { padding: 12px 16px; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
+  .memo-form { display: flex; flex-direction: column; gap: 8px; }
+  .memo-form textarea {
+    width: 100%; min-height: 70px; padding: 8px 12px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm); resize: vertical;
+    background: var(--white); color: var(--gray-900);
+  }
+  .memo-form textarea:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .memo-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn-save-memo {
+    padding: 6px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    background: var(--green-500); color: white; border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-save-memo:hover { background: var(--green-700); }
+  .btn-cancel-memo {
+    padding: 6px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-cancel-memo:hover { background: var(--gray-100); }
+
+  /* Status change (modal) */
+  .status-change-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
+  .btn-status-change {
+    padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-status-change:hover { background: var(--gray-50); color: var(--gray-900); }
+  .status-edit-form { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .status-edit-form select {
+    padding: 7px 10px; font-size: 13px; border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm); font-family: inherit; background: var(--white); color: var(--gray-900);
+  }
+  .btn-status-update {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    background: var(--green-500); color: white; border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-status-update:hover { background: var(--green-700); }
 
   /* Pagination */
   .pagination {
@@ -617,6 +689,11 @@
       </span>
       <span class="bulk-progress" id="bulkProgress"></span>
     </div>
+    <div class="bulk-progress-panel" id="bulkProgressPanel" hidden>
+      <div class="bulk-progress-bar-track"><div class="bulk-progress-bar-fill" id="bulkProgressBarFill"></div></div>
+      <ul class="bulk-result-list" id="bulkResultList"></ul>
+      <p class="bulk-summary" id="bulkSummary" hidden></p>
+    </div>
     <div class="filter-bar">
       <input type="text" id="filterSearch" placeholder="企業名・URLで検索" oninput="onFilterChange()" />
       <select id="filterStatus" onchange="onFilterChange()">
@@ -788,6 +865,32 @@
     }
   }
 
+  function toggleMemoForm(id) {
+    const row = document.getElementById(`memo-row-${id}`);
+    if (row) row.hidden = !row.hidden;
+  }
+
+  async function saveMemo(id) {
+    const textarea = document.getElementById(`memo-text-${id}`);
+    if (!textarea) return;
+    const memo = textarea.value.trim();
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, memo }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "メモの保存に失敗しました"), "error"); return; }
+      const company = companies.find(c => c.id === id);
+      if (company) company.memo = data.memo;
+      showToast("✓ 保存しました", "success");
+      renderTable();
+    } catch (err) {
+      showToast("メモの保存に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
   function renderPagination(totalItems, totalPages) {
     const el = document.getElementById("pagination");
     if (!el) return;
@@ -860,10 +963,11 @@
       const researchLabel = isResearching
         ? '<span class="spinner"></span>リサーチ中...'
         : '<i data-lucide="search"></i>リサーチする';
-      const detailBtn = result && !result.error && !isResearching
+      const detailBtn = !isResearching
         ? `<button class="btn-detail" onclick="showDetail(${c.id})"><i data-lucide="eye"></i> 詳細</button>`
         : "";
       const priority = c.priority || 0;
+      const hasMemo = !!(c.memo && c.memo.trim());
       return `
         <tr id="row-${c.id}">
           <td class="name">${esc(c.name)}</td>
@@ -880,6 +984,18 @@
           <td style="white-space:nowrap">
             <span class="tooltip-wrap"><button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button><span class="tooltip-text">企業サイトのフォームを自動解析します</span></span>
             ${detailBtn}
+            <button class="btn-memo${hasMemo ? " has-memo" : ""}" onclick="toggleMemoForm(${c.id})" title="メモ">📝</button>
+          </td>
+        </tr>
+        <tr class="memo-form-row" id="memo-row-${c.id}" hidden>
+          <td colspan="8">
+            <div class="memo-form">
+              <textarea id="memo-text-${c.id}" placeholder="メモを入力...">${esc(c.memo || "")}</textarea>
+              <div class="memo-form-actions">
+                <button class="btn-cancel-memo" onclick="toggleMemoForm(${c.id})">キャンセル</button>
+                <button class="btn-save-memo" onclick="saveMemo(${c.id})">保存</button>
+              </div>
+            </div>
           </td>
         </tr>`;
     }).join("");
@@ -908,6 +1024,23 @@
 
     if (!name) { showMsg("企業名を入力してください", "error"); return; }
     if (!url)  { showMsg("URLを入力してください", "error"); return; }
+
+    try {
+      const newHostname = new URL(url).hostname.replace(/^www\./, "");
+      const isDuplicate = companies.some(c => {
+        try {
+          return new URL(c.url).hostname.replace(/^www\./, "") === newHostname;
+        } catch {
+          return false;
+        }
+      });
+      if (isDuplicate) {
+        showToast("このURLは既に登録されています", "warning");
+        return;
+      }
+    } catch {
+      // URLの形式チェックは後続のAPI呼び出し側に任せる
+    }
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>登録中...';
@@ -1023,6 +1156,16 @@
     isBulkResearching = true;
     document.getElementById("bulkBtn").disabled = true;
     renderTable();
+
+    const panel      = document.getElementById("bulkProgressPanel");
+    const barFill     = document.getElementById("bulkProgressBarFill");
+    const resultList  = document.getElementById("bulkResultList");
+    const summaryEl   = document.getElementById("bulkSummary");
+    panel.hidden = false;
+    barFill.style.width = "0%";
+    resultList.innerHTML = "";
+    summaryEl.hidden = true;
+
     let success = 0, failure = 0;
     const total = pending.length;
     for (let i = 0; i < pending.length; i++) {
@@ -1031,19 +1174,41 @@
       const idx = companies.findIndex(c => c.id === company.id);
       if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
       renderTable();
+
+      let resultClass, resultIcon, resultText;
       try {
         const { ok, data: updated } = await callResearchAPI(company.id);
         updateCompany(updated);
-        if (ok && updated.status !== "error") success++; else failure++;
+        const succeeded = ok && updated.status !== "error";
+        if (succeeded) success++; else failure++;
+
+        if (updated.status === "captcha_blocked") {
+          resultClass = "captcha"; resultIcon = "🔒"; resultText = "CAPTCHA検出";
+        } else if (succeeded) {
+          resultClass = "success"; resultIcon = "✓";
+          resultText = updated.research_result?.automatable ? "完了（自動化OK）" : "完了";
+        } else {
+          resultClass = "error"; resultIcon = "✕"; resultText = "エラー";
+        }
       } catch (err) {
         const idx2 = companies.findIndex(c => c.id === company.id);
         if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error", research_result: { error: err.message } };
-        renderTable(); failure++;
+        renderTable();
+        failure++;
+        resultClass = "error"; resultIcon = "✕"; resultText = "エラー";
       }
+
+      resultList.insertAdjacentHTML("beforeend",
+        `<li class="bulk-result-item ${resultClass}">${resultIcon} ${esc(company.name)} → ${resultText}</li>`);
+      resultList.scrollTop = resultList.scrollHeight;
+      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     }
+
     isBulkResearching = false;
     document.getElementById("bulkBtn").disabled = false;
     document.getElementById("bulkProgress").textContent = `完了（成功: ${success}件 / 失敗: ${failure}件）`;
+    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社`;
+    summaryEl.hidden = false;
     showToast(`一括リサーチが完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
     renderTable();
   }
@@ -1152,37 +1317,85 @@
 
   function showDetail(id) {
     const company = companies.find(c => c.id === id);
-    if (!company || !company.research_result) return;
-    const r = company.research_result;
-    document.getElementById("modalTitle").textContent = company.name + " のリサーチ結果";
-    const sourceLabel = r.mappingSource === "ai"
-      ? '<span class="source-label source-ai">AI推定</span>'
-      : '<span class="source-label source-heuristic">キーワード推定</span>';
+    if (!company) return;
+    document.getElementById("modalTitle").textContent = company.name + " の詳細";
+
     let html = `
-      <dl class="info-grid">
-        <dt>フォーム</dt><dd>${r.formFound ? "あり" : "なし"}</dd>
-        <dt>CAPTCHA</dt><dd>${r.captchaDetected ? "<span style='color:#dc2626'>🔒 検出</span>" : "なし"}</dd>
-        <dt>自動化可否</dt><dd>${r.automatable ? '<span class="badge badge-ok">✓ OK</span>' : '<span class="badge badge-ng">✕ NG</span>'}</dd>
-        <dt>フォームページ</dt><dd>${r.formPageUrl ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>` : "—"}</dd>
-        ${r.aiError ? `<dt>AI推定エラー</dt><dd style="color:#dc2626">${esc(r.aiError)}</dd>` : ""}
-      </dl>`;
-    if (r.fieldMapping && r.fieldMapping.length > 0) {
-      const fieldMap = {};
-      (r.fieldMapping || []).forEach(m => { fieldMap[`${m.formIndex}:${m.name||""}:${m.id||""}`] = m; });
-      const rows = (r.forms || []).flatMap(form => form.fields.map(f => {
-        const m = fieldMap[`${form.formIndex}:${f.name||""}:${f.id||""}`];
-        return { label: f.label||f.placeholder||"—", nameId: [f.name,f.id].filter(Boolean).join(" / ")||"—", type: f.type, role: m?m.role:"—", confidence: m?m.confidence:"—" };
-      }));
-      html += `<p class="fields-title">フィールド一覧 ${sourceLabel}</p>
-      <table class="fields-table">
-        <thead><tr><th>ラベル</th><th>name / id</th><th>type</th><th>推定役割</th><th>信頼度</th></tr></thead>
-        <tbody>${rows.map(f => `<tr><td>${esc(f.label)}</td><td style="font-family:monospace;font-size:11px">${esc(f.nameId)}</td><td>${esc(f.type)}</td><td>${esc(f.role)}</td><td class="conf-${f.confidence}">${f.confidence}</td></tr>`).join("")}</tbody>
-      </table>`;
+      <div class="status-change-row">
+        <span>ステータス: ${statusBadge(company.status)}</span>
+        <button class="btn-status-change" onclick="toggleStatusEdit(${id})">変更</button>
+      </div>
+      <div class="status-edit-form" id="statusEdit-${id}" hidden>
+        <select id="statusSelect-${id}">
+          <option value="pending" ${company.status === "pending" ? "selected" : ""}>未リサーチ</option>
+          <option value="researched" ${company.status === "researched" ? "selected" : ""}>完了</option>
+          <option value="captcha_blocked" ${company.status === "captcha_blocked" ? "selected" : ""}>CAPTCHA</option>
+          <option value="no_form" ${company.status === "no_form" ? "selected" : ""}>フォームなし</option>
+          <option value="error" ${company.status === "error" ? "selected" : ""}>エラー</option>
+        </select>
+        <button class="btn-status-update" onclick="updateStatus(${id})">更新</button>
+      </div>`;
+
+    const r = company.research_result;
+    if (r) {
+      const sourceLabel = r.mappingSource === "ai"
+        ? '<span class="source-label source-ai">AI推定</span>'
+        : '<span class="source-label source-heuristic">キーワード推定</span>';
+      html += `
+        <dl class="info-grid">
+          <dt>フォーム</dt><dd>${r.formFound ? "あり" : "なし"}</dd>
+          <dt>CAPTCHA</dt><dd>${r.captchaDetected ? "<span style='color:#dc2626'>🔒 検出</span>" : "なし"}</dd>
+          <dt>自動化可否</dt><dd>${r.automatable ? '<span class="badge badge-ok">✓ OK</span>' : '<span class="badge badge-ng">✕ NG</span>'}</dd>
+          <dt>フォームページ</dt><dd>${r.formPageUrl ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>` : "—"}</dd>
+          ${r.aiError ? `<dt>AI推定エラー</dt><dd style="color:#dc2626">${esc(r.aiError)}</dd>` : ""}
+          ${r.error ? `<dt>エラー</dt><dd style="color:#dc2626">${esc(r.error)}</dd>` : ""}
+        </dl>`;
+      if (r.fieldMapping && r.fieldMapping.length > 0) {
+        const fieldMap = {};
+        (r.fieldMapping || []).forEach(m => { fieldMap[`${m.formIndex}:${m.name||""}:${m.id||""}`] = m; });
+        const rows = (r.forms || []).flatMap(form => form.fields.map(f => {
+          const m = fieldMap[`${form.formIndex}:${f.name||""}:${f.id||""}`];
+          return { label: f.label||f.placeholder||"—", nameId: [f.name,f.id].filter(Boolean).join(" / ")||"—", type: f.type, role: m?m.role:"—", confidence: m?m.confidence:"—" };
+        }));
+        html += `<p class="fields-title">フィールド一覧 ${sourceLabel}</p>
+        <table class="fields-table">
+          <thead><tr><th>ラベル</th><th>name / id</th><th>type</th><th>推定役割</th><th>信頼度</th></tr></thead>
+          <tbody>${rows.map(f => `<tr><td>${esc(f.label)}</td><td style="font-family:monospace;font-size:11px">${esc(f.nameId)}</td><td>${esc(f.type)}</td><td>${esc(f.role)}</td><td class="conf-${f.confidence}">${f.confidence}</td></tr>`).join("")}</tbody>
+        </table>`;
+      } else if (!r.error) {
+        html += `<p style="color:var(--gray-400);font-size:13px">フィールドマッピングデータがありません。</p>`;
+      }
     } else {
-      html += `<p style="color:var(--gray-400);font-size:13px">フィールドマッピングデータがありません。</p>`;
+      html += `<p style="color:var(--gray-400);font-size:13px">まだリサーチが実施されていません。</p>`;
     }
+
     document.getElementById("modalBody").innerHTML = html;
     document.getElementById("modal").classList.add("open");
+  }
+
+  function toggleStatusEdit(id) {
+    const el = document.getElementById(`statusEdit-${id}`);
+    if (el) el.hidden = !el.hidden;
+  }
+
+  async function updateStatus(id) {
+    const select = document.getElementById(`statusSelect-${id}`);
+    if (!select) return;
+    const status = select.value;
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "ステータスの更新に失敗しました"), "error"); return; }
+      updateCompany(data);
+      showToast("ステータスを更新しました", "success");
+      closeModal();
+    } catch (err) {
+      showToast("ステータスの更新に失敗しました: " + esc(err.message), "error");
+    }
   }
 
   function closeModal() { document.getElementById("modal").classList.remove("open"); }

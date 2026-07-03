@@ -28,21 +28,37 @@ npm install -g vercel
 vercel dev
 ```
 
-**`ANTHROPIC_API_KEY` の設定は任意です。** 設定しなくても、キーワードベースの
-推定（`mappingSource: "heuristic"`）でフィールドの役割推定が動きます。
-Anthropic Consoleでキーを取得し課金設定をした場合のみ、より精度の高いAI推定
-（`mappingSource: "ai"`）に切り替わります。`.env.example` を参考に `.env` を
-作成してください。
+`.env.example` を参考に `.env` を作成し、Claude APIキーを設定してください。
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Vercelにデプロイする場合、設定するなら Project Settings > Environment Variables に
+Vercelにデプロイする場合は、Project Settings > Environment Variables に
 同じ変数を登録してください（前回のgunma-SaaSで起きた「認証ヘッダー漏れで
 AI機能が無言で空になる」問題を踏まえて、このコードではAPIエラー時に
-必ずエラーメッセージを返し、かつheuristic推定の結果は消えないようにしています。
-`aiError` フィールドと `mappingSource` フィールドを確認してください）。
+必ずエラーメッセージを返すようにしています。`aiError` フィールドを確認してください）。
+
+## データベースのセットアップ・マイグレーション
+
+テーブル作成やカラム追加などのスキーマ変更は `POST /api/db-setup` を叩くことで適用されます
+（`db/schema.sql` の `CREATE TABLE IF NOT EXISTS` と、`api/db-setup.js` 内の
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 文が実行されます。すべて `IF NOT EXISTS` 付きのため、
+複数回実行しても安全です）。
+
+初回セットアップ時、および companies テーブルへのカラム追加などスキーマ変更を含むデプロイの後は、
+デプロイ完了後に一度だけ以下を実行してください（`SETUP_SECRET` 環境変数の値を指定します）。
+
+```bash
+curl -X POST https://<your-deployment-url>/api/db-setup \
+  -H "Content-Type: application/json" \
+  -d '{"secret": "<SETUP_SECRET>"}'
+```
+
+- `SETUP_SECRET` はVercelの Project Settings > Environment Variables に事前に登録しておく必要があります。
+- 企業メモ機能（`companies.memo` カラム）の追加など、既存本番DBに対する追加カラムのマイグレーションも
+  このエンドポイントの再実行で反映されます。デプロイ後に実行し忘れると、該当機能がDBエラーで
+  動作しませんのでご注意ください。
 
 ## 使い方
 

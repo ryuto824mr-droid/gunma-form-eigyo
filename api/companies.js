@@ -43,27 +43,66 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, priority } = req.body || {};
+    const { id, priority, memo, status } = req.body || {};
     const companyId = parseInt(id, 10);
     if (!companyId || isNaN(companyId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
     }
-    const p = parseInt(priority, 10);
-    if (isNaN(p) || p < 0 || p > 3) {
-      return res.status(400).json({ error: "priorityは0〜3の整数で指定してください" });
+
+    if (priority !== undefined) {
+      const p = parseInt(priority, 10);
+      if (isNaN(p) || p < 0 || p > 3) {
+        return res.status(400).json({ error: "priorityは0〜3の整数で指定してください" });
+      }
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET priority = ${p}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
     }
-    try {
-      const [updated] = await sql`
-        UPDATE companies
-        SET priority = ${p}
-        WHERE id = ${companyId}
-        RETURNING *
-      `;
-      if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
-      return res.status(200).json(updated);
-    } catch (err) {
-      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+
+    if (memo !== undefined) {
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET memo = ${memo || null}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
     }
+
+    if (status !== undefined) {
+      const validStatuses = ["pending", "researching", "researched", "captcha_blocked", "no_form", "error"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: "有効なstatusを指定してください" });
+      }
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET status = ${status}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
+    }
+
+    return res.status(400).json({ error: "priority, memo, statusのいずれかが必要です" });
   }
 
   return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });
