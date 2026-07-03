@@ -290,50 +290,64 @@
   }
   .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
 
+  /* Spotlight Tour */
+  .tour-highlight {
+    position: relative;
+    z-index: 9999 !important;
+    box-shadow: 0 0 0 4px var(--green-500), 0 0 0 9999px rgba(0,0,0,0.5) !important;
+    border-radius: 8px;
+    transition: box-shadow 0.3s ease;
+  }
+  .tour-bubble {
+    position: fixed;
+    z-index: 10000;
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    max-width: 320px;
+    width: calc(100vw - 32px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    animation: tourFadeInUp 0.3s ease;
+  }
   @keyframes tourFadeInUp {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  #pageTourOverlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.55); z-index: 2000;
-    align-items: center; justify-content: center; padding: 16px;
+  .tour-bubble::before {
+    content: "";
+    position: absolute;
+    width: 0; height: 0;
+    border: 8px solid transparent;
   }
-  #pageTourOverlay.open { display: flex; }
-  #pageTourCard {
-    background: var(--white); border-radius: var(--radius-lg); max-width: 400px; width: 100%;
-    padding: 28px 24px 20px; box-shadow: 0 20px 48px rgba(0,0,0,0.25);
-    animation: tourFadeInUp 0.35s ease-out;
+  .tour-bubble.pos-bottom::before { top: -16px; left: 24px; border-bottom-color: white; }
+  .tour-bubble.pos-top::before    { bottom: -16px; left: 24px; border-top-color: white; }
+  .tour-bubble.pos-center::before { display: none; }
+  .tour-bubble-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin: 0 0 8px; }
+  .tour-bubble-desc  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin: 0 0 16px; }
+  .tour-bubble-nav   { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-bubble-counter { font-size: 11px; color: var(--gray-400); font-weight: 600; }
+  .btn-tskip {
+    padding: 6px 12px; font-size: 12px; border: 1px solid var(--gray-200);
+    background: white; color: var(--gray-500); border-radius: var(--radius-sm);
+    cursor: pointer; font-family: inherit;
   }
-  .tour-step-num { font-size: 11px; font-weight: 700; color: var(--green-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
-  .tour-title { font-size: 17px; font-weight: 700; color: var(--gray-900); margin: 0 0 8px; }
-  .tour-body  { font-size: 14px; color: var(--gray-500); line-height: 1.65; margin: 0 0 20px; }
-  .tour-dots  { display: flex; gap: 6px; margin-bottom: 16px; }
-  .tour-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-200); transition: background 200ms; }
-  .tour-dot.active { background: var(--green-500); }
-  .tour-actions { display: flex; justify-content: space-between; align-items: center; }
-  .btn-tour-next {
-    padding: 8px 20px; border: none; border-radius: var(--radius-sm);
+  .btn-tnext {
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
     background: linear-gradient(135deg, #44B13F, #2F8A2A);
-    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
-    color: var(--white); font-size: 13px; font-weight: 600; font-family: inherit;
-    cursor: pointer; transition: all 150ms;
+    color: white; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 2px 8px rgba(68,177,63,0.3);
   }
-  .btn-tour-next:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4); }
-  .btn-tour-skip {
-    background: none; border: none; font-size: 12px; color: var(--gray-400);
-    cursor: pointer; font-family: inherit; transition: color 150ms;
-  }
-  .btn-tour-skip:hover { color: var(--gray-700); }
   .btn-help-float {
-    position: fixed; bottom: 24px; right: 24px; z-index: 1500;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
-    box-shadow: 0 4px 16px rgba(68,177,63,0.4);
-    color: var(--white); border: none; border-radius: 24px;
-    padding: 10px 18px; font-size: 13px; font-weight: 600; font-family: inherit;
-    cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 150ms;
+    position: fixed; bottom: 24px; right: 24px; z-index: 500;
+    padding: 10px 18px; font-size: 13px; font-weight: 600;
+    background: white; color: var(--green-700);
+    border: 2px solid var(--green-500); border-radius: 999px;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transition: all 150ms; display: flex; align-items: center; gap: 6px;
   }
-  .btn-help-float:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(68,177,63,0.5); }
+  .btn-help-float:hover { background: var(--green-50); transform: translateY(-2px); }
 
   @media (max-width: 600px) {
     .page-header { padding: 0 12px; }
@@ -840,45 +854,104 @@
       : '<span class="badge badge-ng">✕ NG</span>';
   }
 
-  const PAGE_TOUR_KEY   = "locle_tour_companies";
-  const PAGE_TOUR_STEPS = [
-    { title: "ようこそ 企業リストへ",  body: "ここでは営業先の企業を管理します。企業を追加したあと、フォームを自動リサーチして送信の準備を整えましょう。" },
-    { title: "企業を追加する",        body: "企業名・サイトURL・メールアドレスを入力して「追加」ボタンを押すと一覧に登録されます。CSVで一括インポートも可能です。" },
-    { title: "フォームを自動リサーチ", body: "一覧の「リサーチする」ボタンを押すと、ヘッドレスブラウザがサイトを巡回してお問い合わせフォームを自動解析します。" },
-    { title: "一括リサーチで効率化",   body: "「未リサーチを一括リサーチ」ボタンを使うと、未リサーチの企業をまとめて自動解析できます。" },
-  ];
-  let pageTourStep = 0;
-  function initPageTour()    { if (!localStorage.getItem(PAGE_TOUR_KEY)) startPageTour(); }
-  function restartPageTour() { startPageTour(); }
-  function startPageTour()   { pageTourStep = 0; renderPageTour(); document.getElementById("pageTourOverlay").classList.add("open"); }
-  function nextPageTourStep(){ pageTourStep++; renderPageTour(); }
-  function endPageTour()     { localStorage.setItem(PAGE_TOUR_KEY, "1"); document.getElementById("pageTourOverlay").classList.remove("open"); }
-  function renderPageTour() {
-    const step   = PAGE_TOUR_STEPS[pageTourStep];
-    const total  = PAGE_TOUR_STEPS.length;
-    const isLast = pageTourStep === total - 1;
-    const dots   = PAGE_TOUR_STEPS.map((_, i) =>
-      '<span class="tour-dot' + (i === pageTourStep ? " active" : "") + '"></span>'
-    ).join("");
-    const nextFn = isLast ? "endPageTour()" : "nextPageTourStep()";
-    const nextLb = isLast ? "はじめる" : "次へ →";
-    document.getElementById("pageTourCard").innerHTML =
-      '<div class="tour-step-num">ステップ ' + (pageTourStep + 1) + ' / ' + total + '</div>' +
-      '<h3 class="tour-title">' + step.title + '</h3>' +
-      '<p class="tour-body">' + step.body + '</p>' +
-      '<div class="tour-dots">' + dots + '</div>' +
-      '<div class="tour-actions">' +
-        '<button class="btn-tour-skip" onclick="endPageTour()">スキップ</button>' +
-        '<button class="btn-tour-next" onclick="' + nextFn + '">' + nextLb + '</button>' +
-      '</div>';
-  }
+  // ===== Spotlight Tour =====
+  (function() {
+    var _steps, _key, _idx, _bubble;
+
+    function _resolveEl(sel) {
+      var parts = sel.split(",");
+      for (var i = 0; i < parts.length; i++) {
+        var el = document.querySelector(parts[i].trim());
+        if (el) return el;
+      }
+      return null;
+    }
+
+    function _clearHighlight() {
+      document.querySelectorAll(".tour-highlight").forEach(function(el) {
+        el.classList.remove("tour-highlight");
+      });
+      if (_bubble && _bubble.parentNode) _bubble.parentNode.removeChild(_bubble);
+      _bubble = null;
+    }
+
+    function _showStep(idx) {
+      _clearHighlight();
+      var s = _steps[idx];
+      var total = _steps.length;
+      var isLast = idx === total - 1;
+      var target = _resolveEl(s.targetSelector);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      setTimeout(function() {
+        if (target) target.classList.add("tour-highlight");
+
+        _bubble = document.createElement("div");
+        _bubble.className = "tour-bubble pos-" + (s.position || "bottom");
+        _bubble.innerHTML =
+          '<p class="tour-bubble-title">' + s.title + '</p>' +
+          '<p class="tour-bubble-desc">' + s.description + '</p>' +
+          '<div class="tour-bubble-nav">' +
+            '<button class="btn-tskip" id="_tskip">スキップ</button>' +
+            '<span class="tour-bubble-counter">' + (idx + 1) + ' / ' + total + '</span>' +
+            '<button class="btn-tnext" id="_tnext">' + (isLast ? 'はじめる ✓' : '次へ →') + '</button>' +
+          '</div>';
+        document.body.appendChild(_bubble);
+
+        _bubble.querySelector("#_tskip").addEventListener("click", function() { _end(); });
+        _bubble.querySelector("#_tnext").addEventListener("click", function() {
+          if (idx < total - 1) _showStep(idx + 1); else _end();
+        });
+
+        if (s.position === "center" || !target) {
+          _bubble.style.top = "50%"; _bubble.style.left = "50%";
+          _bubble.style.transform = "translate(-50%, -50%)";
+        } else {
+          var rect = target.getBoundingClientRect();
+          var bw = 320, margin = 12;
+          var left = Math.max(8, Math.min(rect.left, window.innerWidth - bw - 8));
+          if (s.position === "bottom") {
+            _bubble.style.top = (rect.bottom + margin) + "px";
+            _bubble.style.left = left + "px";
+          } else if (s.position === "top") {
+            _bubble.style.left = left + "px";
+            requestAnimationFrame(function() {
+              _bubble.style.top = (rect.top - _bubble.offsetHeight - margin) + "px";
+            });
+          } else if (s.position === "right") {
+            _bubble.style.top = rect.top + "px";
+            _bubble.style.left = (rect.right + margin) + "px";
+          } else if (s.position === "left") {
+            _bubble.style.top = rect.top + "px";
+            _bubble.style.left = (rect.left - bw - margin) + "px";
+          }
+        }
+      }, 300);
+    }
+
+    function _end() { _clearHighlight(); localStorage.setItem(_key, "1"); }
+
+    function startTour(steps, storageKey) {
+      _steps = steps; _key = storageKey; _idx = 0;
+      if (!localStorage.getItem(_key)) _showStep(0);
+    }
+
+    document.getElementById("helpFloatBtn").addEventListener("click", function() {
+      localStorage.removeItem(_key); _idx = 0; _showStep(0);
+    });
+
+    window.startTour = startTour;
+  })();
+  // ===== End Spotlight Tour =====
 
   lucide.createIcons();
-  initPageTour();
+  startTour([
+    { targetSelector: ".add-section",      title: "企業を追加する",         description: "企業名とURLを入力して追加します。追加するとすぐ自動でリサーチが始まります。CSVで一括インポートも可能です。",        position: "bottom" },
+    { targetSelector: "#bulkBtn",          title: "一括リサーチ",           description: "未リサーチの企業を全社まとめて自動解析します。まとめて登録してからこのボタンを押すのがおすすめです。",              position: "bottom" },
+    { targetSelector: ".table-section",    title: "リサーチ結果を確認",      description: "「自動化OK」になった企業はフォームへの自動送信が可能です。CAPTCHAありの企業は手動対応が必要です。",            position: "top" },
+    { targetSelector: ".discover-section", title: "企業を自動検索（準備中）", description: "地域・業種を指定して企業を自動検索できます。現在Brave Search APIキーの設定で有効になります。", position: "top" }
+  ], "locle_tour_companies");
 </script>
-<div id="pageTourOverlay">
-  <div id="pageTourCard"></div>
-</div>
-<button class="btn-help-float" onclick="restartPageTour()">？ 使い方</button>
+<button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 </body>
 </html>
