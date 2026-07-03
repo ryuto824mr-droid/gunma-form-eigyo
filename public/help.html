@@ -4,12 +4,21 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ヘルプ - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
     --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8;
+    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -17,6 +26,7 @@
     --white: #ffffff;
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
@@ -139,10 +149,102 @@
   @media (max-width: 700px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
     .help-layout { flex-direction: column; padding: 16px 8px; }
     .help-sidebar { display: none; }
     .help-section { padding: 20px 16px; }
   }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-title { font-weight: 600; margin-bottom: 2px; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Dark mode toggle */
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a;
+      --gray-100: #1e293b;
+      --gray-200: #334155;
+      --gray-300: #475569;
+      --gray-400: #64748b;
+      --gray-500: #94a3b8;
+      --gray-700: #cbd5e1;
+      --gray-900: #f1f5f9;
+      --white:    #1e293b;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    input, textarea, select {
+      background: #1e293b !important;
+      color: #f1f5f9 !important;
+      border-color: #334155 !important;
+    }
+    input::placeholder, textarea::placeholder { color: #475569 !important; }
+    table thead { background: #1e293b; }
+    .modal-box, .tour-bubble { background: #1e293b; color: #f1f5f9; }
+    .preview-subject, .preview-body-text { background: #0f172a; }
+  }
+  html.dark {
+    --gray-50:  #0f172a;
+    --gray-100: #1e293b;
+    --gray-200: #334155;
+    --gray-300: #475569;
+    --gray-400: #64748b;
+    --gray-500: #94a3b8;
+    --gray-700: #cbd5e1;
+    --gray-900: #f1f5f9;
+    --white:    #1e293b;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark input, html.dark textarea, html.dark select {
+    background: #1e293b !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+  }
+  html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
+  html.dark table thead { background: #1e293b; }
+  html.dark .modal-box, html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
+  html.dark .preview-subject, html.dark .preview-body-text { background: #0f172a; }
 </style>
 </head>
 <body>
@@ -158,6 +260,7 @@
     <a href="/send.html">送信管理</a>
     <a href="/analytics.html">分析</a>
     <a href="/help.html" class="active">ヘルプ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
   </nav>
 </header>
 
@@ -312,6 +415,43 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   lucide.createIcons();
+
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+  }
+
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+
+  updateThemeIcon();
 
   // Sidebar active highlight on scroll
   const sections = document.querySelectorAll(".help-section");
