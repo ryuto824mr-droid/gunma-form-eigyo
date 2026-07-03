@@ -7,6 +7,31 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "POST") {
+    const { copy_from_id } = req.body || {};
+    if (copy_from_id !== undefined) {
+      const sourceId = parseInt(copy_from_id, 10);
+      if (!sourceId || isNaN(sourceId)) {
+        return res.status(400).json({ error: "有効なcopy_from_idが必要です" });
+      }
+      const [source] = await sql`SELECT * FROM message_variants WHERE id = ${sourceId}`;
+      if (!source) {
+        return res.status(404).json({ error: "コピー元のバリアントが見つかりません" });
+      }
+      const [copied] = await sql`
+        INSERT INTO message_variants (name, channel, subject_template, body_template, tags, created_at)
+        VALUES (
+          ${source.name + " (コピー)"},
+          ${source.channel},
+          ${source.subject_template},
+          ${source.body_template},
+          ${JSON.stringify(source.tags || {})},
+          NOW()
+        )
+        RETURNING *
+      `;
+      return res.status(201).json(copied);
+    }
+
     const { name, channel, subject_template, body_template, tags } = req.body || {};
 
     if (!name || typeof name !== "string" || !name.trim()) {

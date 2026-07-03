@@ -2,8 +2,18 @@ const { sql }          = require("../lib/db");
 const { fetchReplies } = require("../lib/gmail-receiver");
 
 module.exports = async function handler(req, res) {
+  // --- 送信スケジュール（GET/POST/DELETE） ---
+  if (req.query.action === "scheduled-sends") {
+    return handleScheduledSends(req, res);
+  }
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETメソッドのみ対応しています" });
+  }
+
+  // --- スケジュール実行（枠のみ・ログ出力のみ） ---
+  if (req.query.action === "run-scheduled") {
+    return handleRunScheduled(res);
   }
 
   // --- 返信チェック ---
@@ -57,6 +67,88 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: `集計エラー: ${err.message}` });
   }
 };
+
+// ---------- 送信スケジュールハンドラー ----------
+
+async function handleScheduledSends(req, res) {
+  if (req.method === "GET") {
+    try {
+      const rows = await sql`
+        SELECT ss.*, c.name AS company_name, mv.name AS variant_name
+        FROM scheduled_sends ss
+        JOIN companies c ON c.id = ss.company_id
+        JOIN message_variants mv ON mv.id = ss.variant_id
+        ORDER BY ss.scheduled_at ASC
+      `;
+      return res.status(200).json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: `取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { company_id, variant_id, channel, scheduled_at } = req.body || {};
+    const companyId = parseInt(company_id, 10);
+    const variantId = parseInt(variant_id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なcompany_idが必要です" });
+    }
+    if (!variantId || isNaN(variantId)) {
+      return res.status(400).json({ error: "有効なvariant_idが必要です" });
+    }
+    if (!scheduled_at || isNaN(Date.parse(scheduled_at))) {
+      return res.status(400).json({ error: "有効なscheduled_atが必要です" });
+    }
+    const ch = channel === "email" ? "email" : "form";
+    try {
+      const [created] = await sql`
+        INSERT INTO scheduled_sends (company_id, variant_id, channel, scheduled_at, status)
+        VALUES (${companyId}, ${variantId}, ${ch}, ${scheduled_at}, 'pending')
+        RETURNING *
+      `;
+      return res.status(201).json(created);
+    } catch (err) {
+      return res.status(500).json({ error: `登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const scheduleId = parseInt(id, 10);
+    if (!scheduleId || isNaN(scheduleId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM scheduled_sends WHERE id = ${scheduleId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "予約が見つかりません" });
+      return res.status(200).json({ id: deleted.id, deleted: true });
+    } catch (err) {
+      return res.status(500).json({ error: `削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET/POST/DELETEのみ対応しています" });
+}
+
+// ---------- スケジュール実行ハンドラー（枠のみ） ----------
+
+async function handleRunScheduled(res) {
+  try {
+    const due = await sql`
+      SELECT ss.*, c.name AS company_name, mv.name AS variant_name
+      FROM scheduled_sends ss
+      JOIN companies c ON c.id = ss.company_id
+      JOIN message_variants mv ON mv.id = ss.variant_id
+      WHERE ss.scheduled_at <= NOW() AND ss.status = 'pending'
+    `;
+    console.log(`[run-scheduled] 実行対象: ${due.length}件`, due.map(d => ({
+      id: d.id, company: d.company_name, variant: d.variant_name, scheduled_at: d.scheduled_at,
+    })));
+    return res.status(200).json({ due: due.length, items: due });
+  } catch (err) {
+    return res.status(500).json({ error: `実行エラー: ${err.message}` });
+  }
+}
 
 // ---------- 返信チェックハンドラー ----------
 

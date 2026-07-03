@@ -176,6 +176,15 @@
   }
   .btn-send-email:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .btn-send-email svg { width: 13px; height: 13px; }
+  .btn-schedule {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); color: var(--gray-700);
+    background: var(--white); cursor: pointer; font-family: inherit; font-weight: 500;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-schedule:hover:not(:disabled) { background: var(--gray-50); transform: translateY(-1px); }
+  .btn-schedule:disabled { background: var(--gray-100); color: var(--gray-400); cursor: not-allowed; }
+  .btn-schedule svg { width: 13px; height: 13px; }
   .draft-msg { margin-top: 10px; font-size: 13px; }
   .draft-msg.ok    { color: var(--green-700); }
   .draft-msg.warn  { color: #b45309; }
@@ -185,6 +194,87 @@
     border-top: 1px solid var(--gray-100); background: var(--gray-50);
   }
   .force-row label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+  /* Schedule modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 1000;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--white); border-radius: var(--radius-lg); max-width: 420px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-200);
+  }
+  .modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--gray-900); }
+  .modal-close {
+    background: none; border: none; font-size: 18px; cursor: pointer;
+    color: var(--gray-400); line-height: 1; padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: all 150ms;
+  }
+  .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .modal-body input[type="datetime-local"] {
+    width: 100%; padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .btn-modal-close {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .btn-modal-close:hover { background: var(--gray-50); }
+  .btn-schedule-confirm {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-schedule-confirm:hover { background: linear-gradient(135deg, #3da038, #277025); }
+
+  /* Schedule list */
+  .schedule-section {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    margin-bottom: 20px; box-shadow: var(--shadow-sm);
+  }
+  .schedule-section h2 {
+    margin: 0 0 16px; font-size: 14px; font-weight: 600;
+    color: var(--gray-700); letter-spacing: -0.01em;
+  }
+  .schedule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .schedule-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md); font-size: 13px;
+  }
+  .schedule-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .schedule-item-company { font-weight: 600; color: var(--gray-900); }
+  .schedule-item-meta { font-size: 12px; color: var(--gray-500); }
+  .schedule-empty { font-size: 13px; color: var(--gray-400); padding: 8px 0; margin: 0; }
+  .btn-schedule-delete {
+    padding: 5px 10px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-schedule-delete:hover { background: #fff5f5; }
+
+  /* CSV export */
+  .btn-export-csv {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); color: var(--gray-700);
+    background: var(--white); cursor: pointer; font-family: inherit; font-weight: 500;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-export-csv:hover { background: var(--gray-50); transform: translateY(-1px); }
+  .btn-export-csv svg { width: 13px; height: 13px; }
 
   /* History filter bar */
   .filter-bar {
@@ -360,7 +450,7 @@
     .btn-generate { width: 100%; min-height: 44px; justify-content: center; }
     .preview-box { width: 100%; }
     .preview-actions { flex-direction: column; }
-    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email { min-height: 44px; width: 100%; justify-content: center; }
+    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email, .btn-schedule { min-height: 44px; width: 100%; justify-content: center; }
     .resp-form select, .resp-form input[type="text"] { font-size: 16px; }
     .btn-save-resp, .btn-cancel-resp { min-height: 44px; }
     table th:nth-child(2), table td:nth-child(2),
@@ -369,6 +459,8 @@
     .filter-bar { flex-direction: column; align-items: stretch; }
     .filter-bar input[type="text"], .filter-bar select { width: 100%; font-size: 16px; }
     .filter-count { margin-left: 0; }
+    .schedule-item { flex-direction: column; align-items: stretch; }
+    .btn-export-csv { width: 100%; justify-content: center; min-height: 44px; }
   }
 
   /* Toast notifications */
@@ -531,6 +623,9 @@
           </button>
           <span class="tooltip-text">Gmail OAuth 経由でメールを直接送信</span>
         </span>
+        <button class="btn-schedule" onclick="openScheduleModal()">
+          <i data-lucide="calendar-clock"></i>スケジュール送信
+        </button>
       </div>
       <div class="force-row" id="forceRow" hidden>
         <span class="tooltip-wrap">
@@ -542,8 +637,18 @@
     <div class="draft-msg" id="draftMsg"></div>
   </section>
 
+  <section class="schedule-section">
+    <h2>スケジュール一覧</h2>
+    <ul class="schedule-list" id="scheduleList"><li class="schedule-empty">読み込み中...</li></ul>
+  </section>
+
   <section class="history-section">
     <h2>送信履歴</h2>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+      <button class="btn-export-csv" onclick="exportLogsCSV()">
+        <i data-lucide="download"></i>CSVエクスポート
+      </button>
+    </div>
     <div class="filter-bar">
       <input type="text" id="filterCompany" placeholder="企業名で検索" oninput="onLogFilterChange()" />
       <select id="filterLogStatus" onchange="onLogFilterChange()">
@@ -582,12 +687,40 @@
 
 </div>
 
+<!-- スケジュール送信モーダル -->
+<div class="modal-overlay" id="scheduleModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>送信をスケジュール</h3>
+      <button class="modal-close" onclick="closeScheduleModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="select-group">
+        <label for="scheduleDatetime">送信日時</label>
+        <input type="datetime-local" id="scheduleDatetime" />
+      </div>
+      <div class="select-group">
+        <label for="scheduleChannel">チャネル</label>
+        <select id="scheduleChannel">
+          <option value="form">フォーム</option>
+          <option value="email">メール</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn-modal-close" onclick="closeScheduleModal()">キャンセル</button>
+        <button class="btn-schedule-confirm" onclick="confirmSchedule()">予約する</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
   let variants  = [];
   let logs      = [];
+  let scheduledSends = [];
   let currentDraft = null;
   let logFilters = { company: "", status: "all", date: "all" };
 
@@ -600,14 +733,16 @@
 
   async function init() {
     try {
-      const [cRes, vRes, lRes] = await Promise.all([
+      const [cRes, vRes, lRes, sRes] = await Promise.all([
         fetch("/api/companies"),
         fetch("/api/variants"),
         fetch("/api/send-logs"),
+        fetch("/api/analytics?action=scheduled-sends"),
       ]);
-      companies = await cRes.json();
-      variants  = await vRes.json();
-      logs      = await lRes.json();
+      companies      = await cRes.json();
+      variants       = await vRes.json();
+      logs           = await lRes.json();
+      scheduledSends = sRes.ok ? await sRes.json() : [];
 
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
@@ -617,6 +752,7 @@
 
       populateSelects();
       renderLogs();
+      renderScheduleList();
     } catch (err) {
       document.getElementById("logsBody").innerHTML =
         `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
@@ -806,6 +942,110 @@
     } finally {
       btn.disabled = false;
     }
+  }
+
+  function openScheduleModal() {
+    if (!currentDraft) {
+      showDraftMsg("企業とバリアントを選択してください", "error");
+      return;
+    }
+    document.getElementById("scheduleChannel").value = currentDraft.variant.channel === "email" ? "email" : "form";
+    const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+    now.setMinutes(now.getMinutes() + 60);
+    document.getElementById("scheduleDatetime").value = now.toISOString().slice(0, 16);
+    document.getElementById("scheduleModal").classList.add("open");
+  }
+
+  function closeScheduleModal() {
+    document.getElementById("scheduleModal").classList.remove("open");
+  }
+
+  async function confirmSchedule() {
+    if (!currentDraft) return;
+    const datetimeVal = document.getElementById("scheduleDatetime").value;
+    const channel     = document.getElementById("scheduleChannel").value;
+    if (!datetimeVal) { showToast("送信日時を選択してください", "error"); return; }
+
+    try {
+      const res = await fetch("/api/analytics?action=scheduled-sends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id:   currentDraft.companyId,
+          variant_id:   currentDraft.variantId,
+          channel,
+          scheduled_at: new Date(datetimeVal).toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "予約エラー"), "error"); return; }
+      const sRes = await fetch("/api/analytics?action=scheduled-sends");
+      scheduledSends = await sRes.json();
+      renderScheduleList();
+      closeScheduleModal();
+      showToast("送信をスケジュールしました", "success");
+    } catch (err) {
+      showToast(esc(err.message), "error");
+    }
+  }
+
+  async function deleteSchedule(id) {
+    if (!confirm("このスケジュールを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/analytics?action=scheduled-sends", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      scheduledSends = scheduledSends.filter(s => s.id !== id);
+      renderScheduleList();
+      showToast("スケジュールを削除しました", "info");
+    } catch (err) {
+      showToast(esc(err.message), "error");
+    }
+  }
+
+  function renderScheduleList() {
+    const el = document.getElementById("scheduleList");
+    if (!scheduledSends.length) {
+      el.innerHTML = '<li class="schedule-empty">スケジュールされた送信はありません</li>';
+      return;
+    }
+    el.innerHTML = scheduledSends.map(s => {
+      const dt = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString("ja-JP") : "-";
+      const channelLabel = s.channel === "email" ? "メール" : "フォーム";
+      return `
+        <li class="schedule-item">
+          <div class="schedule-item-info">
+            <span class="schedule-item-company">${esc(s.company_name)}</span>
+            <span class="schedule-item-meta">${esc(s.variant_name)}（${channelLabel}） / ${dt}</span>
+          </div>
+          <button class="btn-schedule-delete" onclick="deleteSchedule(${s.id})">削除</button>
+        </li>`;
+    }).join("");
+  }
+
+  function exportLogsCSV() {
+    const filtered = getFilteredLogs();
+    const bom = String.fromCharCode(0xFEFF);
+    const header = "送信日時,企業名,バリアント名,チャネル,ステータス,反応\n";
+    const rows = filtered.map(log => [
+      log.sent_at ? new Date(log.sent_at).toLocaleString("ja-JP") : "",
+      log.company_name || "",
+      log.variant_name || "",
+      log.channel || "",
+      log.status || "",
+      log.latest_response?.classification || log.latest_response || ""
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([bom + header + rows], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `locle_送信履歴_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function getFilteredLogs() {

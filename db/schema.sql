@@ -41,3 +41,14 @@ CREATE TABLE IF NOT EXISTS responses (
   classification TEXT,
   raw_excerpt   TEXT
 );
+
+-- scheduled_sends: 送信予約
+CREATE TABLE IF NOT EXISTS scheduled_sends (
+  id           SERIAL PRIMARY KEY,
+  company_id   INTEGER NOT NULL REFERENCES companies(id),
+  variant_id   INTEGER NOT NULL REFERENCES message_variants(id),
+  channel      TEXT NOT NULL DEFAULT 'form',
+  scheduled_at TIMESTAMPTZ NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

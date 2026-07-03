@@ -152,6 +152,14 @@
   }
   .channel-badge.email { background: #dbeafe; color: #1e40af; }
   .channel-badge.form  { background: var(--green-50); color: var(--green-700); }
+  .btn-copy-variant {
+    padding: 3px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; flex-shrink: 0; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-copy-variant:hover { background: var(--gray-50); color: var(--gray-900); }
+  .btn-copy-variant svg { width: 11px; height: 11px; }
   .btn-delete {
     padding: 3px 8px; font-size: 12px; border-radius: var(--radius-sm);
     border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
@@ -558,6 +566,9 @@
           <button class="btn-preview" onclick="openPreview(${v.id})">
             <i data-lucide="eye"></i>プレビュー
           </button>
+          <button class="btn-copy-variant" onclick="copyVariant(${v.id})">
+            <i data-lucide="copy"></i>コピー
+          </button>
           <button class="btn-delete" onclick="deleteVariant(${v.id})">
             <i data-lucide="trash-2"></i>削除
           </button>
@@ -632,6 +643,23 @@
     const replace = s => (s || "").replace(/\{\{company_name\}\}/g, name);
     document.getElementById("previewSubjectText").textContent = replace(previewVariant.subject_template) || "(件名なし)";
     document.getElementById("previewBodyText").textContent = replace(previewVariant.body_template);
+  }
+
+  async function copyVariant(id) {
+    try {
+      const res  = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ copy_from_id: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "コピーエラー"), "error"); return; }
+      variants.unshift(data);
+      renderVariants();
+      showToast("バリアントをコピーしました", "success");
+    } catch (err) {
+      showToast(esc(err.message), "error");
+    }
   }
 
   async function deleteVariant(id) {
