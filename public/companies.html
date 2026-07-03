@@ -291,6 +291,12 @@
   .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
 
   /* Spotlight Tour */
+  .tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: transparent;
+  }
   .tour-highlight {
     position: relative;
     z-index: 9999 !important;
@@ -304,7 +310,8 @@
     background: white;
     border-radius: 12px;
     padding: 20px 24px;
-    max-width: 320px;
+    min-width: 280px;
+    max-width: 340px;
     width: calc(100vw - 32px);
     box-shadow: 0 8px 24px rgba(0,0,0,0.18);
     animation: tourFadeInUp 0.3s ease;
@@ -322,7 +329,10 @@
   .tour-bubble.pos-bottom::before { top: -16px; left: 24px; border-bottom-color: white; }
   .tour-bubble.pos-top::before    { bottom: -16px; left: 24px; border-top-color: white; }
   .tour-bubble.pos-center::before { display: none; }
-  .tour-bubble-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin: 0 0 8px; }
+  .tour-bubble-dots { display: flex; gap: 6px; margin: 0 0 12px; }
+  .tour-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-200); transition: all 0.2s ease; }
+  .tour-dot.active { background: var(--green-500); width: 16px; border-radius: 3px; }
+  .tour-bubble-title { font-size: 15px; font-weight: 700; color: var(--green-700); margin: 0 0 8px; }
   .tour-bubble-desc  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin: 0 0 16px; }
   .tour-bubble-nav   { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .tour-bubble-counter { font-size: 11px; color: var(--gray-400); font-weight: 600; }
@@ -332,7 +342,7 @@
     cursor: pointer; font-family: inherit;
   }
   .btn-tnext {
-    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    padding: 10px 24px; font-size: 14px; font-weight: 600;
     background: linear-gradient(135deg, #44B13F, #2F8A2A);
     color: white; border: none; border-radius: var(--radius-sm);
     cursor: pointer; font-family: inherit;
@@ -857,7 +867,7 @@
 
   // ===== Spotlight Tour =====
   (function() {
-    var _steps, _key, _idx, _bubble;
+    var _steps, _key, _idx, _bubble, _overlay;
 
     function _resolveEl(sel) {
       var parts = sel.split(",");
@@ -874,6 +884,8 @@
       });
       if (_bubble && _bubble.parentNode) _bubble.parentNode.removeChild(_bubble);
       _bubble = null;
+      if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
+      _overlay = null;
     }
 
     function _showStep(idx) {
@@ -884,12 +896,23 @@
       var target = _resolveEl(s.targetSelector);
       if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
 
+      // オーバーレイはクリックをブロックするだけで、クリックしてもツアーは終了しない
+      _overlay = document.createElement("div");
+      _overlay.className = "tour-overlay";
+      document.body.appendChild(_overlay);
+
       setTimeout(function() {
         if (target) target.classList.add("tour-highlight");
+
+        var dots = "";
+        for (var d = 0; d < total; d++) {
+          dots += '<span class="tour-dot' + (d === idx ? ' active' : '') + '"></span>';
+        }
 
         _bubble = document.createElement("div");
         _bubble.className = "tour-bubble pos-" + (s.position || "bottom");
         _bubble.innerHTML =
+          '<div class="tour-bubble-dots">' + dots + '</div>' +
           '<p class="tour-bubble-title">' + s.title + '</p>' +
           '<p class="tour-bubble-desc">' + s.description + '</p>' +
           '<div class="tour-bubble-nav">' +
@@ -905,29 +928,38 @@
         });
 
         if (s.position === "center" || !target) {
+          _bubble.className = "tour-bubble pos-center";
           _bubble.style.top = "50%"; _bubble.style.left = "50%";
           _bubble.style.transform = "translate(-50%, -50%)";
         } else {
           var rect = target.getBoundingClientRect();
-          var bw = 320, margin = 12;
+          var bw = _bubble.offsetWidth || 320;
+          var bh = _bubble.offsetHeight || 160;
+          var margin = 12;
+          var pos = s.position || "bottom";
+
+          if (pos === "bottom" && (rect.bottom + margin + bh > window.innerHeight - 20)) {
+            pos = "top";
+          }
+          _bubble.className = "tour-bubble pos-" + pos;
+
           var left = Math.max(8, Math.min(rect.left, window.innerWidth - bw - 8));
-          if (s.position === "bottom") {
+
+          if (pos === "bottom") {
             _bubble.style.top = (rect.bottom + margin) + "px";
             _bubble.style.left = left + "px";
-          } else if (s.position === "top") {
+          } else if (pos === "top") {
             _bubble.style.left = left + "px";
-            requestAnimationFrame(function() {
-              _bubble.style.top = (rect.top - _bubble.offsetHeight - margin) + "px";
-            });
-          } else if (s.position === "right") {
+            _bubble.style.top = Math.max(8, rect.top - bh - margin) + "px";
+          } else if (pos === "right") {
             _bubble.style.top = rect.top + "px";
             _bubble.style.left = (rect.right + margin) + "px";
-          } else if (s.position === "left") {
+          } else if (pos === "left") {
             _bubble.style.top = rect.top + "px";
             _bubble.style.left = (rect.left - bw - margin) + "px";
           }
         }
-      }, 300);
+      }, 500);
     }
 
     function _end() { _clearHighlight(); localStorage.setItem(_key, "1"); }
