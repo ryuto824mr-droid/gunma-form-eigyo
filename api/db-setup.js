@@ -56,6 +56,12 @@ module.exports = async function handler(req, res) {
     await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS email TEXT");
     // memoカラム追加（企業メモ機能用）
     await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS memo TEXT");
+    // 次のアクション管理カラム追加
+    await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_action TEXT");
+    await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_action_date DATE");
+    await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS action_status TEXT DEFAULT 'none'");
+    // 企業タグ付け機能用カラム追加
+    await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_tags JSONB DEFAULT '[]'");
     // responses.message_id追加（返信自動検出用）
     await sql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS message_id TEXT");
     await sql.query("CREATE UNIQUE INDEX IF NOT EXISTS responses_message_id_uidx ON responses (message_id) WHERE message_id IS NOT NULL");

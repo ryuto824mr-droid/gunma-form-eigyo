@@ -261,6 +261,44 @@
   }
   .btn-cancel-memo:hover { background: var(--gray-100); }
 
+  /* Next action */
+  .btn-action {
+    padding: 5px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; transition: all 150ms ease; margin-left: 6px; white-space: nowrap;
+  }
+  .btn-action:hover { background: var(--gray-50); }
+  .btn-action.status-follow_up   { border-color: #fcd34d; background: #fffbeb; color: #b45309; font-weight: 600; }
+  .btn-action.status-meeting_set { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); font-weight: 600; }
+  .btn-action.status-rejected    { border-color: #fca5a5; background: #fff5f5; color: #dc2626; font-weight: 600; }
+  .btn-action.status-closed      { border-color: var(--gray-300); background: var(--gray-100); color: var(--gray-500); font-weight: 600; }
+  .action-form-row td { padding: 12px 16px; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
+  .action-form { display: flex; flex-direction: column; gap: 8px; }
+  .action-form-fields { display: flex; gap: 8px; flex-wrap: wrap; }
+  .action-form-fields select,
+  .action-form-fields input[type="text"],
+  .action-form-fields input[type="date"] {
+    padding: 7px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .action-form-fields input[type="text"] { flex: 1 1 200px; }
+  .action-form-fields select:focus,
+  .action-form-fields input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .action-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* Company tags (table + filter) */
+  .company-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .company-tag-pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 10px;
+    background: var(--green-50); color: var(--green-700); border: 1px solid var(--green-100);
+    cursor: pointer; white-space: nowrap; transition: all 150ms;
+  }
+  .company-tag-pill:hover { background: var(--green-100); }
+  .company-tag-pill.editable { padding: 1px 4px 1px 8px; display: inline-flex; align-items: center; gap: 4px; cursor: default; }
+  .tag-pill-remove { background: none; border: none; cursor: pointer; color: var(--green-700); font-size: 12px; padding: 0 2px; line-height: 1; }
+  .tag-pill-remove:hover { color: #dc2626; }
+
   /* Status change (modal) */
   .status-change-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
   .btn-status-change {
@@ -280,6 +318,29 @@
     font-family: inherit; font-weight: 600; transition: all 150ms;
   }
   .btn-status-update:hover { background: var(--green-700); }
+
+  /* Tag edit (modal) */
+  .tag-edit-section { margin-bottom: 18px; }
+  .tag-edit-label { font-size: 12px; font-weight: 600; color: var(--gray-500); margin-bottom: 8px; }
+  .tag-pill-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; min-height: 20px; }
+  .tag-add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .tag-add-row input {
+    flex: 1; padding: 7px 10px; font-size: 13px; border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm); font-family: inherit; background: var(--white); color: var(--gray-900);
+  }
+  .tag-add-row input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .btn-tag-add-inline {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-tag-add-inline:hover { background: var(--green-50); }
+  .btn-tag-save {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    background: var(--green-500); color: white; border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-tag-save:hover { background: var(--green-700); }
 
   /* Pagination */
   .pagination {
@@ -530,7 +591,7 @@
     .btn-detail   { display: flex; width: 100%; margin-left: 0; min-height: 44px; justify-content: center; }
     .filter-bar { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
     .filter-bar input[type="text"] { flex: 1 1 100%; font-size: 16px; }
-    .filter-bar select { flex: 1 1 calc(50% - 5px); font-size: 16px; }
+    .filter-bar select { flex: 1 1 140px; font-size: 16px; }
     .filter-bar .btn-filter-clear { flex: 1 1 100%; }
     .filter-count { flex: 1 1 100%; margin-left: 0; text-align: center; }
   }
@@ -734,6 +795,9 @@
         <option value="ok">自動化OK</option>
         <option value="ng">自動化NG</option>
       </select>
+      <select id="filterTag" onchange="onFilterChange()">
+        <option value="all">タグ: すべて</option>
+      </select>
       <button class="btn-filter-clear" onclick="clearFilters()">クリア</button>
       <span class="filter-count" id="filterCount"></span>
     </div>
@@ -773,7 +837,7 @@
 <script>
   let companies = [];
   let isBulkResearching = false;
-  let filters = { search: "", status: "all", automation: "all" };
+  let filters = { search: "", status: "all", automation: "all", tag: "all" };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
@@ -786,6 +850,7 @@
       companies = await res.json();
       renderTable();
       updateSummaryBar();
+      populateTagFilter();
     } catch (err) {
       document.getElementById("tableBody").innerHTML =
         `<tr class="empty-row"><td colspan="8">読み込みエラー: ${esc(err.message)}</td></tr>`;
@@ -816,8 +881,38 @@
       if (filters.status !== "all" && c.status !== filters.status) return false;
       if (filters.automation === "ok" && c.research_result?.automatable !== true) return false;
       if (filters.automation === "ng" && c.research_result?.automatable !== false) return false;
+      if (filters.tag !== "all") {
+        const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
+        if (!tags.includes(filters.tag)) return false;
+      }
       return true;
     });
+  }
+
+  function getAllTags() {
+    const tagSet = new Set();
+    companies.forEach(c => {
+      (Array.isArray(c.company_tags) ? c.company_tags : []).forEach(t => tagSet.add(t));
+    });
+    return Array.from(tagSet).sort();
+  }
+
+  function populateTagFilter() {
+    const select = document.getElementById("filterTag");
+    if (!select) return;
+    const current = select.value;
+    const tags = getAllTags();
+    select.innerHTML = '<option value="all">タグ: すべて</option>' +
+      tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    if (tags.includes(current)) select.value = current;
+  }
+
+  function filterByTag(tag) {
+    const select = document.getElementById("filterTag");
+    if (select) select.value = tag;
+    filters.tag = tag;
+    currentPage = 1;
+    renderTable();
   }
 
   function getSortedCompanies(list) {
@@ -832,6 +927,7 @@
     filters.search      = document.getElementById("filterSearch").value.trim();
     filters.status      = document.getElementById("filterStatus").value;
     filters.automation  = document.getElementById("filterAutomation").value;
+    filters.tag         = document.getElementById("filterTag").value;
     currentPage = 1;
     renderTable();
   }
@@ -840,7 +936,8 @@
     document.getElementById("filterSearch").value = "";
     document.getElementById("filterStatus").value = "all";
     document.getElementById("filterAutomation").value = "all";
-    filters = { search: "", status: "all", automation: "all" };
+    document.getElementById("filterTag").value = "all";
+    filters = { search: "", status: "all", automation: "all", tag: "all" };
     currentPage = 1;
     renderTable();
   }
@@ -848,7 +945,7 @@
   function updateFilterCount(filteredCount) {
     const el = document.getElementById("filterCount");
     if (!el) return;
-    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all";
+    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all";
     el.textContent = isFiltering ? `${companies.length}社中${filteredCount}社を表示中` : "";
   }
 
@@ -913,6 +1010,67 @@
       renderTable();
     } catch (err) {
       showToast("メモの保存に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function companyTagsHtml(c) {
+    const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
+    if (!tags.length) return "";
+    return `<div class="company-tags">${tags.map(t => `<span class="company-tag-pill" data-tag="${esc(t)}">${esc(t)}</span>`).join("")}</div>`;
+  }
+
+  document.getElementById("tableBody").addEventListener("click", (e) => {
+    const pill = e.target.closest(".company-tag-pill:not(.editable)");
+    if (pill && pill.dataset.tag) filterByTag(pill.dataset.tag);
+  });
+
+  function actionStatusLabel(status) {
+    const map = {
+      none: "アクション",
+      follow_up: "フォローアップ予定",
+      meeting_set: "商談設定済み",
+      rejected: "お断り",
+      closed: "完了",
+    };
+    return map[status] || "アクション";
+  }
+
+  function formatDateInput(d) {
+    if (!d) return "";
+    try {
+      return new Date(d).toISOString().slice(0, 10);
+    } catch {
+      return "";
+    }
+  }
+
+  function toggleActionForm(id) {
+    const row = document.getElementById(`action-row-${id}`);
+    if (row) row.hidden = !row.hidden;
+  }
+
+  async function saveAction(id) {
+    const statusSel  = document.getElementById(`action-status-${id}`);
+    const textInput  = document.getElementById(`action-text-${id}`);
+    const dateInput  = document.getElementById(`action-date-${id}`);
+    if (!statusSel || !textInput || !dateInput) return;
+
+    const action_status    = statusSel.value;
+    const next_action      = textInput.value.trim();
+    const next_action_date = dateInput.value || null;
+
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, next_action, next_action_date, action_status }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "アクションの保存に失敗しました"), "error"); return; }
+      updateCompany(data);
+      showToast("✓ 保存しました", "success");
+    } catch (err) {
+      showToast("アクションの保存に失敗しました: " + esc(err.message), "error");
     }
   }
 
@@ -993,9 +1151,12 @@
         : "";
       const priority = c.priority || 0;
       const hasMemo = !!(c.memo && c.memo.trim());
+      const actionStatus = c.action_status || "none";
+      const actionClass  = actionStatus !== "none" ? ` status-${actionStatus}` : "";
+      const actionLabel  = (actionStatus === "none" ? "📌 " : "") + actionStatusLabel(actionStatus);
       return `
         <tr id="row-${c.id}">
-          <td class="name">${esc(c.name)}</td>
+          <td class="name">${esc(c.name)}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}</td>
@@ -1010,6 +1171,7 @@
             <span class="tooltip-wrap"><button class="btn-research" id="rbtn-${c.id}" onclick="research(${c.id})" ${btnDisabled ? "disabled" : ""}>${researchLabel}</button><span class="tooltip-text">企業サイトのフォームを自動解析します</span></span>
             ${detailBtn}
             <button class="btn-memo${hasMemo ? " has-memo" : ""}" onclick="toggleMemoForm(${c.id})" title="メモ">📝</button>
+            <button class="btn-action${actionClass}" onclick="toggleActionForm(${c.id})" title="アクション">${actionLabel}</button>
           </td>
         </tr>
         <tr class="memo-form-row" id="memo-row-${c.id}" hidden>
@@ -1019,6 +1181,27 @@
               <div class="memo-form-actions">
                 <button class="btn-cancel-memo" onclick="toggleMemoForm(${c.id})">キャンセル</button>
                 <button class="btn-save-memo" onclick="saveMemo(${c.id})">保存</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+        <tr class="action-form-row" id="action-row-${c.id}" hidden>
+          <td colspan="8">
+            <div class="action-form">
+              <div class="action-form-fields">
+                <select id="action-status-${c.id}">
+                  <option value="none" ${actionStatus === "none" ? "selected" : ""}>なし</option>
+                  <option value="follow_up" ${actionStatus === "follow_up" ? "selected" : ""}>フォローアップ予定</option>
+                  <option value="meeting_set" ${actionStatus === "meeting_set" ? "selected" : ""}>商談設定済み</option>
+                  <option value="rejected" ${actionStatus === "rejected" ? "selected" : ""}>お断り</option>
+                  <option value="closed" ${actionStatus === "closed" ? "selected" : ""}>完了</option>
+                </select>
+                <input type="text" id="action-text-${c.id}" placeholder="例: 来週電話フォロー" value="${esc(c.next_action || "")}" />
+                <input type="date" id="action-date-${c.id}" value="${formatDateInput(c.next_action_date)}" />
+              </div>
+              <div class="action-form-actions">
+                <button class="btn-cancel-memo" onclick="toggleActionForm(${c.id})">キャンセル</button>
+                <button class="btn-save-memo" onclick="saveAction(${c.id})">保存</button>
               </div>
             </div>
           </td>
@@ -1420,10 +1603,14 @@
     btn.disabled = false;
   }
 
+  let modalTagsState = [];
+
   function showDetail(id) {
     const company = companies.find(c => c.id === id);
     if (!company) return;
     document.getElementById("modalTitle").textContent = company.name + " の詳細";
+
+    modalTagsState = Array.isArray(company.company_tags) ? [...company.company_tags] : [];
 
     let html = `
       <div class="status-change-row">
@@ -1439,6 +1626,15 @@
           <option value="error" ${company.status === "error" ? "selected" : ""}>エラー</option>
         </select>
         <button class="btn-status-update" onclick="updateStatus(${id})">更新</button>
+      </div>
+      <div class="tag-edit-section">
+        <div class="tag-edit-label">タグ</div>
+        <div class="tag-pill-list" id="tagPillList-${id}"></div>
+        <div class="tag-add-row">
+          <input type="text" id="tagInput-${id}" placeholder="新しいタグを入力" />
+          <button class="btn-tag-add-inline" onclick="addTagToModal(${id})">追加</button>
+        </div>
+        <button class="btn-tag-save" onclick="saveTags(${id})">保存</button>
       </div>`;
 
     const r = company.research_result;
@@ -1476,6 +1672,49 @@
 
     document.getElementById("modalBody").innerHTML = html;
     document.getElementById("modal").classList.add("open");
+    renderTagPills(id);
+  }
+
+  function renderTagPills(id) {
+    const el = document.getElementById(`tagPillList-${id}`);
+    if (!el) return;
+    el.innerHTML = modalTagsState.length
+      ? modalTagsState.map((t, i) =>
+          `<span class="company-tag-pill editable">${esc(t)}<button class="tag-pill-remove" onclick="removeTagFromModal(${id}, ${i})">×</button></span>`
+        ).join("")
+      : '<span style="color:var(--gray-300);font-size:12px">タグはまだありません</span>';
+  }
+
+  function addTagToModal(id) {
+    const input = document.getElementById(`tagInput-${id}`);
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) return;
+    if (!modalTagsState.includes(val)) modalTagsState.push(val);
+    input.value = "";
+    renderTagPills(id);
+  }
+
+  function removeTagFromModal(id, index) {
+    modalTagsState.splice(index, 1);
+    renderTagPills(id);
+  }
+
+  async function saveTags(id) {
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, company_tags: modalTagsState }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "タグの保存に失敗しました"), "error"); return; }
+      updateCompany(data);
+      populateTagFilter();
+      showToast("タグを保存しました", "success");
+    } catch (err) {
+      showToast("タグの保存に失敗しました: " + esc(err.message), "error");
+    }
   }
 
   function toggleStatusEdit(id) {

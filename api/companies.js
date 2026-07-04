@@ -48,7 +48,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, priority, memo, status } = req.body || {};
+    const { id, priority, memo, status, next_action, next_action_date, action_status, company_tags } = req.body || {};
     const companyId = parseInt(id, 10);
     if (!companyId || isNaN(companyId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -107,7 +107,55 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    return res.status(400).json({ error: "priority, memo, statusのいずれかが必要です" });
+    if (next_action !== undefined || next_action_date !== undefined || action_status !== undefined) {
+      const validActionStatuses = ["none", "follow_up", "meeting_set", "rejected", "closed"];
+      if (action_status !== undefined && !validActionStatuses.includes(action_status)) {
+        return res.status(400).json({ error: "有効なaction_statusを指定してください" });
+      }
+      try {
+        const [current] = await sql`
+          SELECT next_action, next_action_date, action_status FROM companies WHERE id = ${companyId}
+        `;
+        if (!current) return res.status(404).json({ error: "企業が見つかりません" });
+
+        const newNextAction     = next_action !== undefined ? (next_action || null) : current.next_action;
+        const newNextActionDate = next_action_date !== undefined ? (next_action_date || null) : current.next_action_date;
+        const newActionStatus   = action_status !== undefined ? action_status : current.action_status;
+
+        const [updated] = await sql`
+          UPDATE companies
+          SET
+            next_action      = ${newNextAction},
+            next_action_date = ${newNextActionDate},
+            action_status    = ${newActionStatus}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
+    }
+
+    if (company_tags !== undefined) {
+      if (!Array.isArray(company_tags)) {
+        return res.status(400).json({ error: "company_tagsは配列で指定してください" });
+      }
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET company_tags = ${JSON.stringify(company_tags)}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
+    }
+
+    return res.status(400).json({ error: "priority, memo, status, next_action, next_action_date, action_status, company_tagsのいずれかが必要です" });
   }
 
   return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });

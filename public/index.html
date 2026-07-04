@@ -138,6 +138,30 @@
   }
   .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
 
+  /* Follow-up dashboard */
+  .followup-section {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    margin-bottom: 32px; box-shadow: var(--shadow-sm);
+  }
+  .followup-section h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .followup-empty { font-size: 13px; color: var(--green-700); padding: 8px 0; margin: 0; }
+  .followup-alert { font-size: 13px; font-weight: 700; color: #ea580c; margin: 0 0 12px; }
+  .followup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .followup-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md); font-size: 13px;
+  }
+  .followup-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .followup-item-company { font-weight: 600; color: var(--gray-900); }
+  .followup-item-meta { font-size: 12px; color: var(--gray-500); }
+  .followup-item-link {
+    padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); color: var(--green-700); background: var(--white);
+    text-decoration: none; white-space: nowrap; transition: all 150ms;
+  }
+  .followup-item-link:hover { background: var(--green-50); }
+
   /* Section title */
   .section-title {
     font-size: 18px; font-weight: 700; color: var(--gray-900);
@@ -381,7 +405,18 @@
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
     </div>
+    <div class="summary-card">
+      <div class="card-label">要フォローアップ</div>
+      <div class="card-value" id="statFollowUp">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
   </div>
+
+  <section class="followup-section" id="followupSection">
+    <h2>今日のフォローアップ</h2>
+    <p class="followup-empty">読み込み中...</p>
+  </section>
 
   <p class="section-title">機能一覧</p>
   <div class="feature-grid">
@@ -529,11 +564,68 @@
       } else {
         rEl.innerHTML = `<span style="font-size:24px;color:var(--gray-300)">—</span>`;
       }
+
+      renderFollowups(Array.isArray(companies) ? companies : []);
     } catch {
-      ["statCompanies","statSent","statRate"].forEach(id => {
+      ["statCompanies","statSent","statRate","statFollowUp"].forEach(id => {
         document.getElementById(id).innerHTML =
           '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
       });
+    }
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function todayDateStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function toDateStr(v) {
+    if (!v) return null;
+    if (typeof v === "string") return v.slice(0, 10);
+    try { return new Date(v).toISOString().slice(0, 10); } catch { return null; }
+  }
+
+  function renderFollowups(companies) {
+    const todayStr = todayDateStr();
+    const followUps = companies.filter(c =>
+      c.action_status === "follow_up" &&
+      c.next_action_date &&
+      toDateStr(c.next_action_date) <= todayStr
+    );
+
+    const section = document.getElementById("followupSection");
+    if (followUps.length === 0) {
+      section.innerHTML = `
+        <h2>今日のフォローアップ</h2>
+        <p class="followup-empty">今日のフォローアップはありません ✓</p>`;
+    } else {
+      const items = followUps.map(c => `
+        <li class="followup-item">
+          <div class="followup-item-info">
+            <span class="followup-item-company">${esc(c.name)}</span>
+            <span class="followup-item-meta">${esc(c.next_action || "（内容未設定）")} / 予定日: ${esc(toDateStr(c.next_action_date))}</span>
+          </div>
+          <a class="followup-item-link" href="/companies.html">企業リストへ</a>
+        </li>`).join("");
+      section.innerHTML = `
+        <h2>今日のフォローアップ</h2>
+        <p class="followup-alert">🔔 ${followUps.length}件のフォローアップがあります</p>
+        <ul class="followup-list">${items}</ul>`;
+    }
+
+    const followUpCardEl = document.getElementById("statFollowUp");
+    if (followUpCardEl) {
+      const color = followUps.length === 0 ? "var(--green-700)" : "#ea580c";
+      followUpCardEl.innerHTML = `<span style="color:${color}">${followUps.length}</span><span class="card-unit">件</span>`;
     }
   }
 
