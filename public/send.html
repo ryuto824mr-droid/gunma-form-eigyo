@@ -128,6 +128,23 @@
     border-left: 3px solid var(--green-500);
     color: var(--gray-700);
   }
+  .draft-score-card {
+    background: var(--gray-50); border-radius: 8px; padding: 12px 16px;
+    border-top: 1px solid var(--gray-200);
+  }
+  .draft-score-row {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;
+    font-size: 12px; color: var(--gray-700); margin-bottom: 8px;
+  }
+  .draft-score-row strong { color: var(--gray-900); }
+  .draft-score-bar-track {
+    width: 100%; height: 6px; background: var(--gray-200); border-radius: 999px;
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .draft-score-bar-fill { height: 100%; border-radius: 999px; transition: width 300ms ease, background-color 300ms ease; }
+  .draft-score-hints { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .draft-score-hints li { font-size: 12px; color: var(--gray-500); }
+  .draft-score-hints li.ok { color: var(--green-700); }
   .preview-actions {
     padding: 12px 16px; display: flex; gap: 8px;
     border-top: 1px solid var(--gray-200); flex-wrap: wrap;
@@ -239,6 +256,18 @@
     font-family: inherit; font-weight: 600; transition: all 150ms;
   }
   .btn-schedule-confirm:hover { background: linear-gradient(135deg, #3da038, #277025); }
+
+  /* Send confirmation modal */
+  .modal-box-wide { max-width: 520px; }
+  .send-confirm-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
+  .send-confirm-grid dt { font-weight: 600; color: var(--gray-500); white-space: nowrap; }
+  .send-confirm-grid dd { margin: 0; color: var(--gray-900); word-break: break-word; }
+  .confirm-body-preview {
+    background: var(--gray-50); border-left: 3px solid var(--green-500);
+    border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--gray-700);
+  }
+  .confirm-section-label { font-size: 12px; font-weight: 600; color: var(--gray-500); margin-bottom: 6px; }
 
   /* Schedule list */
   .schedule-section {
@@ -604,6 +633,14 @@
         <div id="draftSubjectRow" hidden>件名: <span id="draftSubjectVal"></span></div>
       </div>
       <pre id="draftBodyText"></pre>
+      <div class="draft-score-card" id="draftScoreCard">
+        <div class="draft-score-row">
+          <span>文字数: <strong id="draftCharCount">0</strong>字</span>
+          <span>読みやすさ: <strong id="draftScoreValue">0</strong>/100</span>
+        </div>
+        <div class="draft-score-bar-track"><div class="draft-score-bar-fill" id="draftScoreBarFill"></div></div>
+        <ul class="draft-score-hints" id="draftScoreHints"></ul>
+      </div>
       <div class="preview-actions">
         <button class="btn-copy" onclick="copyDraft()">
           <i data-lucide="copy"></i>コピー
@@ -685,6 +722,33 @@
     </div>
   </section>
 
+</div>
+
+<!-- 送信前確認モーダル -->
+<div class="modal-overlay" id="sendConfirmModal">
+  <div class="modal-box modal-box-wide">
+    <div class="modal-header">
+      <h3>送信を確認してください</h3>
+      <button class="modal-close" onclick="closeSendConfirmModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <dl class="send-confirm-grid">
+        <dt>送信先企業</dt><dd id="confirmCompanyName"></dd>
+        <dt>チャネル</dt><dd id="confirmChannel"></dd>
+        <dt id="confirmEmailLabel" hidden>メールアドレス</dt><dd id="confirmEmail" hidden></dd>
+        <dt id="confirmSubjectLabel" hidden>件名プレビュー</dt><dd id="confirmSubjectPreview" hidden></dd>
+        <dt>文字数・スコア</dt><dd><strong id="confirmCharCount"></strong>字 / 読みやすさ <strong id="confirmScoreValue"></strong>/100</dd>
+      </dl>
+      <div>
+        <div class="confirm-section-label">本文プレビュー</div>
+        <p class="confirm-body-preview" id="confirmBodyPreview"></p>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn-modal-close" onclick="closeSendConfirmModal()">キャンセル</button>
+        <button class="btn-schedule-confirm" id="confirmSendBtn" onclick="confirmSend()">送信する</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- スケジュール送信モーダル -->
@@ -803,6 +867,7 @@
 
     document.getElementById("draftBodyText").textContent = body;
     document.getElementById("draftPreview").hidden = false;
+    renderDraftScore(variant.body_template);
 
     currentDraft = { companyId, variantId, company, variant, body };
     const canAutoSubmit = company.research_result?.automatable === true;
@@ -830,7 +895,76 @@
     }
   }
 
-  async function sendEmailDirectly() {
+  let pendingSendAction = null; // "form" | "email"
+
+  function autoSubmit() {
+    if (!currentDraft) return;
+    openSendConfirmModal("form");
+  }
+
+  function sendEmailDirectly() {
+    if (!currentDraft) return;
+    const { company } = currentDraft;
+    if (!company.email) {
+      showDraftMsg("この企業にメールアドレスが登録されていません", "error");
+      return;
+    }
+    openSendConfirmModal("email");
+  }
+
+  function openSendConfirmModal(action) {
+    if (!currentDraft) return;
+    pendingSendAction = action;
+    const { company, variant, body } = currentDraft;
+    const subject = (variant.subject_template || "").replace(/\{\{company_name\}\}/g, company.name);
+
+    document.getElementById("confirmCompanyName").textContent = company.name;
+    document.getElementById("confirmChannel").textContent = action === "email" ? "メール" : "フォーム";
+
+    const emailLabel = document.getElementById("confirmEmailLabel");
+    const emailVal    = document.getElementById("confirmEmail");
+    if (action === "email") {
+      emailLabel.hidden = false; emailVal.hidden = false;
+      emailVal.textContent = company.email || "(未設定)";
+    } else {
+      emailLabel.hidden = true; emailVal.hidden = true;
+    }
+
+    const subjectLabel = document.getElementById("confirmSubjectLabel");
+    const subjectVal    = document.getElementById("confirmSubjectPreview");
+    if (subject) {
+      subjectLabel.hidden = false; subjectVal.hidden = false;
+      subjectVal.textContent = subject.slice(0, 50) + (subject.length > 50 ? "..." : "");
+    } else {
+      subjectLabel.hidden = true; subjectVal.hidden = true;
+    }
+
+    document.getElementById("confirmBodyPreview").textContent =
+      body.slice(0, 150) + (body.length > 150 ? "..." : "");
+
+    const analysis = analyzeDraft(variant.body_template);
+    document.getElementById("confirmCharCount").textContent = analysis.charCount;
+    document.getElementById("confirmScoreValue").textContent = analysis.score;
+
+    document.getElementById("sendConfirmModal").classList.add("open");
+  }
+
+  function closeSendConfirmModal() {
+    document.getElementById("sendConfirmModal").classList.remove("open");
+    pendingSendAction = null;
+  }
+
+  async function confirmSend() {
+    const action = pendingSendAction;
+    closeSendConfirmModal();
+    if (action === "email") {
+      await performSendEmail();
+    } else if (action === "form") {
+      await performAutoSubmit();
+    }
+  }
+
+  async function performSendEmail() {
     if (!currentDraft) return;
     const { companyId, variantId, company } = currentDraft;
     if (!company.email) {
@@ -868,7 +1002,7 @@
     }
   }
 
-  async function autoSubmit() {
+  async function performAutoSubmit() {
     if (!currentDraft) return;
     const { companyId, variantId } = currentDraft;
     const btn = document.getElementById("autoSubmitBtn");
@@ -1196,6 +1330,56 @@
     return String(s || "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ===== 文面スコア =====
+  function analyzeDraft(text) {
+    const t = text || "";
+    const charCount = t.length;
+
+    const sentences = t.split(/[。！？\n]/).map(s => s.trim()).filter(Boolean);
+    const avgSentenceLen = sentences.length > 0
+      ? sentences.reduce((sum, s) => sum + s.length, 0) / sentences.length
+      : 0;
+
+    const paragraphs = t.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const hasKeigo = /ございます|いたします|させていただき/.test(t);
+    const hasNumber = /[0-9０-９]/.test(t);
+    const hasCompanyName = t.includes("{{company_name}}");
+
+    let score = 0;
+    if (avgSentenceLen > 0 && avgSentenceLen <= 40) score += 30;
+    if (paragraphs.length >= 2) score += 20;
+    if (hasKeigo) score += 20;
+    if (hasNumber) score += 15;
+    if (hasCompanyName) score += 15;
+    score = Math.min(100, score);
+
+    const hints = [];
+    if (charCount > 600) hints.push("文章が長い可能性があります。300〜500字を目安にしましょう");
+    if (charCount < 100) hints.push("文章が短すぎる可能性があります");
+    if (!hasKeigo) hints.push("敬語を使うと印象が良くなります");
+    if (!hasCompanyName) hints.push("{{company_name}}で企業名を差し込むとパーソナライズされます");
+    if (avgSentenceLen > 60) hints.push("文章が長い文が多いです。短く区切りましょう");
+
+    return { charCount, score, hints };
+  }
+
+  function renderDraftScore(text) {
+    const analysis = analyzeDraft(text);
+    document.getElementById("draftCharCount").textContent = analysis.charCount;
+    document.getElementById("draftScoreValue").textContent = analysis.score;
+
+    const barFill = document.getElementById("draftScoreBarFill");
+    barFill.style.width = analysis.score + "%";
+    barFill.style.backgroundColor = analysis.score >= 70 ? "#44B13F" : analysis.score >= 40 ? "#f59e0b" : "#dc2626";
+
+    const hintsEl = document.getElementById("draftScoreHints");
+    hintsEl.innerHTML = analysis.hints.length === 0
+      ? '<li class="ok">問題なし ✓</li>'
+      : analysis.hints.map(h => `<li>${esc(h)}</li>`).join("");
+
+    return analysis;
   }
 
   // ===== Toast notifications =====

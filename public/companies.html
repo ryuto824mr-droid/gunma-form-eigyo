@@ -198,6 +198,28 @@
   .bulk-result-item.captcha { color: #b45309; background: #fffbeb; }
   .bulk-summary { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--gray-700); }
 
+  /* Bulk send */
+  .btn-bulk-send-open {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+    white-space: nowrap;
+  }
+  .btn-bulk-send-open:hover { background: var(--green-50); }
+  .bulk-send-form { display: flex; flex-direction: column; gap: 14px; }
+  .bulk-send-field { display: flex; flex-direction: column; gap: 6px; }
+  .bulk-send-field label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .bulk-send-field select {
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .bulk-send-field select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .bulk-send-checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gray-700); cursor: pointer; }
+  .bulk-send-preview { font-size: 13px; color: var(--gray-700); font-weight: 600; margin: 0; }
+  .bulk-send-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .bulk-send-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
   /* Filter bar */
   .filter-bar {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -773,6 +795,10 @@
         <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
         <span class="tooltip-text">未リサーチの企業を順番に自動解析します</span>
       </span>
+      <span class="tooltip-wrap">
+        <button class="btn-bulk-send-open" id="bulkSendOpenBtn" onclick="openBulkSendModal()">一括送信</button>
+        <span class="tooltip-text">複数企業へまとめて送信・予約登録します</span>
+      </span>
       <span class="bulk-progress" id="bulkProgress"></span>
     </div>
     <div class="bulk-progress-panel" id="bulkProgressPanel" hidden>
@@ -832,17 +858,73 @@
   </div>
 </div>
 
+<!-- 一括送信モーダル -->
+<div class="modal-overlay" id="bulkSendModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>一括送信</h3>
+      <button class="modal-close" onclick="closeBulkSendModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="bulk-send-form">
+        <div class="bulk-send-field">
+          <label for="bulkSendVariant">バリアント</label>
+          <select id="bulkSendVariant" onchange="updateBulkSendPreview()">
+            <option value="">読み込み中...</option>
+          </select>
+        </div>
+        <div class="bulk-send-field">
+          <label for="bulkSendTarget">対象企業</label>
+          <select id="bulkSendTarget" onchange="updateBulkSendPreview()">
+            <option value="automatable">自動化OKの企業のみ</option>
+            <option value="email">メアド設定済みの企業のみ</option>
+            <option value="both">両方（自動化OK または メアド設定済み）</option>
+          </select>
+        </div>
+        <div class="bulk-send-field">
+          <label for="bulkSendChannel">チャネル</label>
+          <select id="bulkSendChannel" onchange="updateBulkSendPreview()">
+            <option value="auto">自動判定（自動化OK→フォーム / メアドのみ→メール）</option>
+            <option value="form">フォーム</option>
+            <option value="email">メール</option>
+          </select>
+        </div>
+        <label class="bulk-send-checkbox">
+          <input type="checkbox" id="bulkSendForce" onchange="updateBulkSendPreview()" />
+          強制送信（送信済み・24時間チェックをスキップ）
+        </label>
+        <p class="bulk-send-preview" id="bulkSendPreviewCount"></p>
+
+        <div class="bulk-progress-panel" id="bulkSendProgressPanel" hidden style="border-radius:var(--radius-md);border:1px solid var(--gray-200);">
+          <div class="bulk-progress-bar-track"><div class="bulk-progress-bar-fill" id="bulkSendProgressBarFill"></div></div>
+          <ul class="bulk-result-list" id="bulkSendResultList"></ul>
+          <p class="bulk-summary" id="bulkSendSummary" hidden></p>
+        </div>
+
+        <div class="bulk-send-actions">
+          <button class="btn-filter-clear" onclick="closeBulkSendModal()">閉じる</button>
+          <button class="btn-tag-add-inline" id="bulkSendScheduleBtn" onclick="bulkSendAsSchedule()">予約として登録</button>
+          <button class="btn-status-update" id="bulkSendNowBtn" onclick="bulkSendNow()">今すぐ送信</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
+  let variants = [];
   let isBulkResearching = false;
+  let isBulkSending = false;
   let filters = { search: "", status: "all", automation: "all", tag: "all" };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
 
   loadCompanies();
+  loadVariantsList();
 
   async function loadCompanies() {
     try {
@@ -854,6 +936,22 @@
     } catch (err) {
       document.getElementById("tableBody").innerHTML =
         `<tr class="empty-row"><td colspan="8">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  async function loadVariantsList() {
+    try {
+      const res = await fetch("/api/variants");
+      variants = await res.json();
+      const select = document.getElementById("bulkSendVariant");
+      if (select) {
+        select.innerHTML = variants.length
+          ? variants.map(v => `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`).join("")
+          : '<option value="">バリアントがありません</option>';
+      }
+    } catch {
+      const select = document.getElementById("bulkSendVariant");
+      if (select) select.innerHTML = '<option value="">読み込みエラー</option>';
     }
   }
 
@@ -1499,6 +1597,166 @@
     summaryEl.hidden = false;
     showToast(`一括リサーチが完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
     renderTable();
+  }
+
+  function getBulkSendTargets() {
+    const targetType = document.getElementById("bulkSendTarget")?.value || "automatable";
+    return companies.filter(c => {
+      const isAutomatable = c.research_result?.automatable === true;
+      const hasEmail = !!c.email;
+      if (targetType === "automatable") return isAutomatable;
+      if (targetType === "email") return hasEmail;
+      if (targetType === "both") return isAutomatable || hasEmail;
+      return false;
+    });
+  }
+
+  function resolveSendChannel(c, channelSetting) {
+    if (channelSetting === "form") return c.research_result?.automatable === true ? "form" : null;
+    if (channelSetting === "email") return c.email ? "email" : null;
+    // 自動判定: 自動化OK優先、なければメアドありでメール
+    if (c.research_result?.automatable === true) return "form";
+    if (c.email) return "email";
+    return null;
+  }
+
+  function getBulkSendSendableTargets() {
+    const channelSetting = document.getElementById("bulkSendChannel").value;
+    return getBulkSendTargets()
+      .map(c => ({ company: c, channel: resolveSendChannel(c, channelSetting) }))
+      .filter(t => t.channel !== null);
+  }
+
+  function openBulkSendModal() {
+    document.getElementById("bulkSendTarget").value = "automatable";
+    document.getElementById("bulkSendChannel").value = "auto";
+    document.getElementById("bulkSendForce").checked = false;
+    document.getElementById("bulkSendProgressPanel").hidden = true;
+    document.getElementById("bulkSendResultList").innerHTML = "";
+    document.getElementById("bulkSendSummary").hidden = true;
+    updateBulkSendPreview();
+    document.getElementById("bulkSendModal").classList.add("open");
+  }
+
+  function closeBulkSendModal() {
+    if (isBulkSending) return;
+    document.getElementById("bulkSendModal").classList.remove("open");
+  }
+
+  function updateBulkSendPreview() {
+    const targets  = getBulkSendTargets();
+    const sendable = getBulkSendSendableTargets();
+    document.getElementById("bulkSendPreviewCount").textContent =
+      `対象: ${targets.length}社中 送信可能 ${sendable.length}社`;
+  }
+
+  function setBulkSendButtonsDisabled(disabled) {
+    document.getElementById("bulkSendScheduleBtn").disabled = disabled;
+    document.getElementById("bulkSendNowBtn").disabled = disabled;
+  }
+
+  function prepareBulkSendProgress() {
+    const panel      = document.getElementById("bulkSendProgressPanel");
+    const barFill    = document.getElementById("bulkSendProgressBarFill");
+    const resultList = document.getElementById("bulkSendResultList");
+    const summaryEl  = document.getElementById("bulkSendSummary");
+    panel.hidden = false;
+    barFill.style.width = "0%";
+    resultList.innerHTML = "";
+    summaryEl.hidden = true;
+    return { barFill, resultList, summaryEl };
+  }
+
+  async function bulkSendAsSchedule() {
+    if (isBulkSending) return;
+    const variantId = parseInt(document.getElementById("bulkSendVariant").value, 10);
+    if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
+
+    const targets = getBulkSendSendableTargets();
+    if (targets.length === 0) { showToast("送信対象の企業がありません", "warning"); return; }
+
+    isBulkSending = true;
+    setBulkSendButtonsDisabled(true);
+    const { barFill, resultList, summaryEl } = prepareBulkSendProgress();
+
+    let success = 0, failure = 0;
+    const total = targets.length;
+    const nowIso = new Date().toISOString();
+
+    for (let i = 0; i < targets.length; i++) {
+      const { company, channel } = targets[i];
+      try {
+        const res = await fetch("/api/analytics?action=scheduled-sends", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, channel, scheduled_at: nowIso }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "登録エラー");
+        success++;
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item success">✓ ${esc(company.name)} → 予約登録（${channel === "email" ? "メール" : "フォーム"}）</li>`);
+      } catch (err) {
+        failure++;
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>`);
+      }
+      resultList.scrollTop = resultList.scrollHeight;
+      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+    }
+
+    isBulkSending = false;
+    setBulkSendButtonsDisabled(false);
+    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社`;
+    summaryEl.hidden = false;
+    showToast(`予約登録が完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
+  }
+
+  async function bulkSendNow() {
+    if (isBulkSending) return;
+    const variantId = parseInt(document.getElementById("bulkSendVariant").value, 10);
+    if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
+
+    const force = document.getElementById("bulkSendForce").checked;
+    const targets = getBulkSendSendableTargets();
+    if (targets.length === 0) { showToast("送信対象の企業がありません", "warning"); return; }
+    if (!confirm(`${targets.length}社へ今すぐ送信します。よろしいですか？`)) return;
+
+    isBulkSending = true;
+    setBulkSendButtonsDisabled(true);
+    const { barFill, resultList, summaryEl } = prepareBulkSendProgress();
+
+    let success = 0, failure = 0;
+    const total = targets.length;
+
+    for (let i = 0; i < targets.length; i++) {
+      const { company, channel } = targets[i];
+      const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "送信エラー");
+        success++;
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（${channel === "email" ? "メール" : "フォーム"}）</li>`);
+      } catch (err) {
+        failure++;
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>`);
+      }
+      resultList.scrollTop = resultList.scrollHeight;
+      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+    }
+
+    isBulkSending = false;
+    setBulkSendButtonsDisabled(false);
+    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社`;
+    summaryEl.hidden = false;
+    showToast(`一括送信が完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
   }
 
   async function research(id) {

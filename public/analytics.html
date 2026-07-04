@@ -125,6 +125,19 @@
 
   .chart-wrap { position: relative; height: 240px; margin-bottom: 20px; }
 
+  /* Insights */
+  .insights-section { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .insight-card {
+    background: var(--white); border-left: 3px solid var(--gray-300); border-radius: 6px;
+    padding: 12px 16px; font-size: 13px; color: var(--gray-700);
+    display: flex; align-items: flex-start; gap: 10px;
+    box-shadow: var(--shadow-sm);
+  }
+  .insight-icon { flex-shrink: 0; font-size: 14px; }
+  .insight-good { border-left-color: var(--green-500); }
+  .insight-warn { border-left-color: #f59e0b; }
+  .insight-info { border-left-color: #3b82f6; }
+
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th {
@@ -428,6 +441,7 @@
             <h2>バリアント別集計</h2>
             <div class="chart-wrap"><canvas id="variantsChart"></canvas></div>
             <div class="table-wrap">${renderVariantsTable(data.variants_stats)}</div>
+            ${generateInsights(data.variants_stats, data.tags_stats)}
           </section>
           <section class="stat-section">
             <h2>タグ別集計</h2>
@@ -554,6 +568,60 @@
         </thead>
         <tbody>${rows}</tbody>
       </table>`;
+  }
+
+  // ===== Insights =====
+  function generateInsights(variantsStats, tagsStats) {
+    const vStats = variantsStats || [];
+    const tStats = tagsStats || [];
+    const insights = [];
+
+    const withSends = vStats.filter(v => Number(v.send_count) > 0);
+    if (withSends.length > 0) {
+      const best = withSends.reduce((a, b) => Number(b.response_rate) > Number(a.response_rate) ? b : a);
+      insights.push({
+        icon: "✓", cls: "insight-good",
+        text: `最も反応率が高いバリアント: ${esc(best.variant_name)}（${Number(best.response_rate)}%）`,
+      });
+
+      const eligibleForWorst = withSends.filter(v => Number(v.send_count) >= 3);
+      if (eligibleForWorst.length > 0) {
+        const worst = eligibleForWorst.reduce((a, b) => Number(b.response_rate) < Number(a.response_rate) ? b : a);
+        if (eligibleForWorst.length > 1 || worst.variant_id !== best.variant_id) {
+          insights.push({
+            icon: "△", cls: "insight-warn",
+            text: `反応率が低いバリアント: ${esc(worst.variant_name)} — 文面の見直しを検討してください`,
+          });
+        }
+      }
+    }
+
+    if (tStats.length >= 2) {
+      const rates = tStats.map(t => Number(t.response_rate));
+      const maxRate = Math.max(...rates);
+      const minRate = Math.min(...rates);
+      if (maxRate - minRate >= 10) {
+        const topTag = tStats.find(t => Number(t.response_rate) === maxRate);
+        insights.push({
+          icon: "💡", cls: "insight-info",
+          text: `タグ「${esc(topTag.tag_key)}: ${esc(topTag.tag_value)}」の反応率が高い傾向があります`,
+        });
+      }
+    }
+
+    const totalSends = vStats.reduce((s, r) => s + Number(r.send_count), 0);
+    if (totalSends < 5) {
+      insights.push({
+        icon: "💡", cls: "insight-info",
+        text: "まだデータが少ないです。10件以上送信するとより正確な分析ができます",
+      });
+    }
+
+    if (insights.length === 0) return "";
+
+    return `<div class="insights-section">${insights.map(i =>
+      `<div class="insight-card ${i.cls}"><span class="insight-icon">${i.icon}</span><span>${i.text}</span></div>`
+    ).join("")}</div>`;
   }
 
   // ===== Charts =====
