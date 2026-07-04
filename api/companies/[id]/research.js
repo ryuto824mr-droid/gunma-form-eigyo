@@ -33,12 +33,17 @@ module.exports = async function handler(req, res) {
     status = "error";
   }
 
+  // メールアドレスは自動取得できて、かつ未設定の場合のみ更新する
+  const shouldUpdateEmail = !!(result.extractedEmail && !company.email);
+  const emailToSet = shouldUpdateEmail ? result.extractedEmail : company.email;
+
   const [updated] = await sql`
     UPDATE companies
     SET
       contact_form_url = ${result.formPageUrl ?? null},
       research_result  = ${JSON.stringify(result)},
       status           = ${status},
+      email             = ${emailToSet},
       updated_at       = NOW()
     WHERE id = ${id}
     RETURNING *

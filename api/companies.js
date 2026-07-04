@@ -30,6 +30,11 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "urlの形式が正しくありません" });
     }
 
+    const restricted = detectRestrictedUrl(url);
+    if (restricted) {
+      return res.status(400).json(restricted);
+    }
+
     try {
       const [company] = await sql`
         INSERT INTO companies (name, url, email, status)
@@ -107,6 +112,17 @@ module.exports = async function handler(req, res) {
 
   return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });
 };
+
+function detectRestrictedUrl(url) {
+  const lower = url.toLowerCase();
+  if (lower.includes("maps.google.com") || lower.includes("google.com/maps")) {
+    return { error: "Googleマップは直接登録できません。企業サイトのURLを個別に入力してください", type: "google_maps" };
+  }
+  if (lower.includes("itp.ne.jp")) {
+    return { error: "タウンページは直接登録できません。企業サイトのURLを個別に入力してください", type: "google_maps" };
+  }
+  return null;
+}
 
 async function handleImport(csvText, res) {
   const lines = csvText.split(/\r?\n/).filter(l => l.trim());

@@ -138,6 +138,19 @@
   .import-msg.ok    { color: var(--green-700); }
   .import-msg.error { color: #dc2626; }
 
+  /* Bulk URL paste */
+  .bulk-paste-area {
+    width: 100%; min-height: 100px; padding: 10px 12px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm); resize: vertical;
+    background: var(--white); color: var(--gray-900); line-height: 1.6;
+  }
+  .bulk-paste-area:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .bulk-paste-row { margin-top: 10px; }
+  .bulk-paste-format { font-size: 11px; color: var(--gray-400); margin: 8px 0 0; }
+  .bulk-paste-msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
+  .bulk-paste-msg.ok    { color: var(--green-700); }
+  .bulk-paste-msg.error { color: #dc2626; }
+
   /* Table section */
   .table-section {
     background: var(--white); border: 1px solid var(--gray-200);
@@ -680,6 +693,18 @@
     <div class="import-msg" id="importMsg"></div>
   </section>
 
+  <section class="import-section">
+    <h2>URLを一括貼り付け</h2>
+    <textarea class="bulk-paste-area" id="bulkPasteArea" placeholder="https://example1.co.jp&#10;https://example2.co.jp&#10;..."></textarea>
+    <div class="bulk-paste-row">
+      <button class="btn-primary" id="bulkPasteBtn" onclick="bulkPasteUrls()">
+        <i data-lucide="clipboard-list"></i>一括追加
+      </button>
+    </div>
+    <p class="bulk-paste-format">1行1URLで貼り付けてください。企業名はURLのドメインから自動生成され、登録後すぐに自動リサーチが始まります。Googleマップの検索結果ページや企業サイトのURL、タウンページのURLも貼り付けられます（Googleマップ・タウンページのURLは自動ではスキップされます）。</p>
+    <div class="bulk-paste-msg" id="bulkPasteMsg"></div>
+  </section>
+
   <section class="table-section">
     <div class="bulk-toolbar">
       <h2>登録企業一覧</h2>
@@ -1005,8 +1030,13 @@
   }
 
   async function callResearchAPI(id) {
+    const before = companies.find(c => c.id === id);
+    const hadEmail = !!(before && before.email);
     const res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
     const data = await res.json();
+    if (!hadEmail && data && data.email) {
+      showToast(`📧 メアドを自動取得しました: ${esc(data.email)}`, "info");
+    }
     return { ok: res.ok, data };
   }
 
@@ -1014,6 +1044,53 @@
     const idx = companies.findIndex(c => c.id === updated.id);
     if (idx !== -1) companies[idx] = updated;
     renderTable();
+  }
+
+  function urlHostname(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+  }
+
+  function isDuplicateUrl(url) {
+    const hostname = urlHostname(url);
+    if (!hostname) return false;
+    return companies.some(c => urlHostname(c.url) === hostname);
+  }
+
+  // 企業を登録し、成功したら自動でリサーチまで走らせる共通処理
+  async function registerAndResearch(name, url, email) {
+    let res, data;
+    try {
+      res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, url, email: email || null }),
+      });
+      data = await res.json();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+    if (!res.ok) {
+      return { ok: false, error: data.error || "登録エラー", errorType: data.type };
+    }
+
+    const newCompany = data;
+    companies.unshift({ ...newCompany, status: "researching" });
+    renderTable();
+
+    try {
+      const { ok, data: updated } = await callResearchAPI(newCompany.id);
+      updateCompany(updated);
+      return { ok: true, company: updated, researchOk: ok };
+    } catch (err) {
+      const idx = companies.findIndex(c => c.id === newCompany.id);
+      if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
+      renderTable();
+      return { ok: true, company: newCompany, researchOk: false, researchError: err.message };
+    }
   }
 
   async function addCompany() {
@@ -1025,74 +1102,102 @@
     if (!name) { showMsg("企業名を入力してください", "error"); return; }
     if (!url)  { showMsg("URLを入力してください", "error"); return; }
 
-    try {
-      const newHostname = new URL(url).hostname.replace(/^www\./, "");
-      const isDuplicate = companies.some(c => {
-        try {
-          return new URL(c.url).hostname.replace(/^www\./, "") === newHostname;
-        } catch {
-          return false;
-        }
-      });
-      if (isDuplicate) {
-        showToast("このURLは既に登録されています", "warning");
-        return;
-      }
-    } catch {
-      // URLの形式チェックは後続のAPI呼び出し側に任せる
+    if (isDuplicateUrl(url)) {
+      showToast("このURLは既に登録されています", "warning");
+      return;
     }
 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>登録中...';
     showMsg("登録中...", "");
 
-    let newCompany;
-    try {
-      const res = await fetch("/api/companies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, url, email: email || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) { showToast(esc(data.error || "登録エラー"), "error"); btn.disabled = false; btn.innerHTML = '<i data-lucide="plus"></i>追加'; lucide.createIcons(); return; }
-      newCompany = data;
+    const result = await registerAndResearch(name, url, email);
+
+    if (!result.ok) {
+      showToast(esc(result.error || "登録エラー"), "error");
+      showMsg(result.error || "登録エラー", "error");
+    } else {
       document.getElementById("inputName").value  = "";
       document.getElementById("inputUrl").value   = "";
       document.getElementById("inputEmail").value = "";
-    } catch (err) {
-      showToast(esc(err.message), "error");
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="plus"></i>追加';
-      lucide.createIcons();
-      return;
-    }
-
-    companies.unshift({ ...newCompany, status: "researching" });
-    renderTable();
-    showMsg("登録しました。リサーチ中...", "");
-
-    try {
-      const { ok, data: updated } = await callResearchAPI(newCompany.id);
-      updateCompany(updated);
-      if (ok) {
+      if (result.researchOk) {
         showMsg("登録・リサーチ完了", "ok");
         showToast("登録・リサーチが完了しました", "success");
+      } else if (result.researchError) {
+        showMsg("リサーチ中にエラーが発生しました", "error");
+        showToast("リサーチ中にエラーが発生しました", "error");
       } else {
-        const errMsg = `リサーチエラー: ${updated.research_result?.error || updated.error || "不明"}`;
+        const errMsg = `リサーチエラー: ${result.company.research_result?.error || "不明"}`;
         showMsg(errMsg, "error");
         showToast(esc(errMsg), "error");
       }
-    } catch (err) {
-      const idx = companies.findIndex(c => c.id === newCompany.id);
-      if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
-      renderTable();
-      showMsg("リサーチ中にエラーが発生しました", "error");
-      showToast("リサーチ中にエラーが発生しました", "error");
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="plus"></i>追加';
-      lucide.createIcons();
     }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="plus"></i>追加';
+    lucide.createIcons();
+  }
+
+  async function bulkPasteUrls() {
+    const textarea = document.getElementById("bulkPasteArea");
+    const btn      = document.getElementById("bulkPasteBtn");
+    const msgEl    = document.getElementById("bulkPasteMsg");
+
+    const urls = textarea.value.split("\n").map(u => u.trim()).filter(Boolean);
+    if (urls.length === 0) {
+      msgEl.textContent = "URLを入力してください";
+      msgEl.className = "bulk-paste-msg error";
+      return;
+    }
+
+    btn.disabled = true;
+    let added = 0;
+    let skipped = 0;
+    let skippedMapsCount = 0;
+
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      btn.innerHTML = `<span class="spinner"></span>${i + 1}/${urls.length}件 登録中...`;
+      msgEl.textContent = `${i + 1}/${urls.length}件 登録中...`;
+      msgEl.className = "bulk-paste-msg";
+
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        skipped++;
+        continue;
+      }
+
+      if (isDuplicateUrl(url)) {
+        skipped++;
+        continue;
+      }
+
+      const name = hostname;
+      const result = await registerAndResearch(name, url, "");
+      if (!result.ok) {
+        if (result.errorType === "google_maps") {
+          skippedMapsCount++;
+        }
+        skipped++;
+        continue;
+      }
+      added++;
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="clipboard-list"></i>一括追加';
+    lucide.createIcons();
+    textarea.value = "";
+
+    const skippedLabel = skippedMapsCount > 0
+      ? `${skipped}件スキップ（重複・無効／うちGoogleマップ・タウンページURLは対象外: ${skippedMapsCount}件）`
+      : `${skipped}件スキップ（重複・無効）`;
+    const summary = `${added}件追加、${skippedLabel}`;
+    msgEl.textContent = summary;
+    msgEl.className = "bulk-paste-msg ok";
+    showToast(summary, added > 0 ? "success" : "warning");
   }
 
   async function importCSV() {
