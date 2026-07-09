@@ -294,6 +294,14 @@
   .btn-action.status-meeting_set { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); font-weight: 600; }
   .btn-action.status-rejected    { border-color: #fca5a5; background: #fff5f5; color: #dc2626; font-weight: 600; }
   .btn-action.status-closed      { border-color: var(--gray-300); background: var(--gray-100); color: var(--gray-500); font-weight: 600; }
+  .btn-delete-company {
+    padding: 5px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
+    cursor: pointer; margin-left: 6px; transition: all 150ms;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .btn-delete-company:hover { background: #fff5f5; }
+  .btn-delete-company svg { width: 12px; height: 12px; }
   .action-form-row td { padding: 12px 16px; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
   .action-form { display: flex; flex-direction: column; gap: 8px; }
   .action-form-fields { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -513,6 +521,25 @@
   .auto-tags-preview {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0;
   }
+  .search-send-controls {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 12px 14px; background: var(--gray-50); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md); margin: 10px 0;
+  }
+  .search-send-controls .search-form-field { margin: 0; }
+  .search-send-mode { display: flex; flex-direction: column; gap: 6px; }
+  .search-send-mode label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--gray-700); cursor: pointer; }
+  .manual-send-draft {
+    margin-top: 10px; padding: 12px 14px; background: var(--white);
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+  }
+  .manual-send-company { font-size: 13px; font-weight: 600; color: var(--gray-900); margin: 0 0 6px; }
+  .manual-send-body {
+    white-space: pre-wrap; word-break: break-word; font-size: 12px; line-height: 1.7;
+    background: var(--gray-50); border-left: 3px solid var(--green-500); border-radius: var(--radius-sm);
+    padding: 10px 12px; margin: 0 0 10px; color: var(--gray-700); font-family: inherit;
+  }
+  .manual-send-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
   .discover-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .discover-row input { flex: 1 1 160px; }
   .badge-places { flex-shrink: 0; display: inline-block; padding: 1px 6px; background: #4285f4; color: white; font-size: 10px; border-radius: 3px; white-space: nowrap; }
@@ -1435,6 +1462,7 @@
             ${detailBtn}
             <button class="btn-memo${hasMemo ? " has-memo" : ""}" onclick="toggleMemoForm(${c.id})" title="メモ">📝</button>
             <button class="btn-action${actionClass}" onclick="toggleActionForm(${c.id})" title="アクション">${actionLabel}</button>
+            <button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>
           </td>
         </tr>
         <tr class="memo-form-row" id="memo-row-${c.id}" hidden>
@@ -1490,6 +1518,37 @@
     const idx = companies.findIndex(c => c.id === updated.id);
     if (idx !== -1) companies[idx] = updated;
     renderTable();
+  }
+
+  function deleteCompany(id) {
+    const company = companies.find(c => c.id === id);
+    if (!company) return;
+    if (!confirm(`「${company.name}」を削除しますか？この操作は取り消せません`)) return;
+    performDeleteCompany(id);
+  }
+
+  async function performDeleteCompany(id) {
+    try {
+      const res = await fetch("/api/companies", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.type === "has_logs") {
+          showToast("送信履歴がある企業は削除できません", "error");
+        } else {
+          showToast(esc(data.error || "削除エラー"), "error");
+        }
+        return;
+      }
+      companies = companies.filter(c => c.id !== id);
+      renderTable();
+      showToast("企業を削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
+    }
   }
 
   function urlHostname(url) {
@@ -2052,9 +2111,27 @@
         ? `<div class="auto-tags-preview"><span style="font-size:12px;color:var(--gray-400)">検索条件タグ:</span>${lastSearchAutoTags.map(t => `<span class="company-tag-pill">${esc(t)}</span>`).join("")}</div>`
         : "";
 
+      const variantOptionsHtml = variants.length
+        ? variants.map(v => `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`).join("")
+        : '<option value="">バリアントがありません</option>';
+
       resultEl.innerHTML = `
         <p class="discover-count">${data.results.length}件見つかりました</p>
         ${tagsPreviewHtml}
+        <div class="search-send-controls">
+          <div class="search-form-field">
+            <label for="searchVariantSelect">バリアント</label>
+            <select id="searchVariantSelect">
+              <option value="">バリアントを選択</option>
+              ${variantOptionsHtml}
+            </select>
+          </div>
+          <div class="search-send-mode">
+            <label><input type="radio" name="searchSendMode" value="auto" checked onchange="updateRunSelectedBtnLabel()" /> 自動送信モード（チェックした企業に順番に自動送信）</label>
+            <label><input type="radio" name="searchSendMode" value="manual" onchange="updateRunSelectedBtnLabel()" /> 手動モード（1社ずつ内容確認してから送信）</label>
+            <label><input type="radio" name="searchSendMode" value="register" onchange="updateRunSelectedBtnLabel()" /> 登録のみ（送信せずリストに追加するだけ）</label>
+          </div>
+        </div>
         <ul class="discover-list">
           ${data.results.map((r, i) => `
             <li><label>
@@ -2064,8 +2141,14 @@
               <a href="${esc(r.url)}" target="_blank" rel="noopener" class="discover-url">${esc(r.url)}</a>
             </label></li>`).join("")}
         </ul>
-        <button class="btn-add-selected" id="addSelectedBtn" onclick="addSelectedCompanies()">選んだ企業を追加</button>
-        <span class="add-selected-progress" id="addSelectedProgress"></span>`;
+        <button class="btn-add-selected" id="runSelectedBtn" onclick="runSelectedCompanies()">選んだ企業に自動送信</button>
+        <span class="add-selected-progress" id="addSelectedProgress"></span>
+        <div class="bulk-progress-panel" id="searchSendProgressPanel" hidden>
+          <div class="bulk-progress-bar-track"><div class="bulk-progress-bar-fill" id="searchSendProgressBarFill"></div></div>
+          <ul class="bulk-result-list" id="searchSendResultList"></ul>
+          <div class="manual-send-draft" id="manualSendDraftPanel" hidden></div>
+          <p class="bulk-summary" id="searchSendSummary" hidden></p>
+        </div>`;
       lucide.createIcons();
     } catch (err) {
       resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(err.message)}</p>`;
@@ -2076,47 +2159,97 @@
     }
   }
 
+  function getSelectedDiscoverCompanies() {
+    return Array.from(document.querySelectorAll(".discover-check:checked")).map(c => ({
+      name: c.dataset.name, url: c.dataset.url,
+    }));
+  }
+
+  function updateRunSelectedBtnLabel() {
+    const mode = document.querySelector('input[name="searchSendMode"]:checked')?.value || "auto";
+    const btn = document.getElementById("runSelectedBtn");
+    if (!btn) return;
+    const labels = {
+      auto: "選んだ企業に自動送信",
+      manual: "選んだ企業を手動送信",
+      register: "選んだ企業を追加",
+    };
+    btn.textContent = labels[mode] || "選んだ企業を実行";
+  }
+
+  function runSelectedCompanies() {
+    const mode = document.querySelector('input[name="searchSendMode"]:checked')?.value || "auto";
+    if (mode === "register") {
+      addSelectedCompanies();
+    } else if (mode === "manual") {
+      manualSendFromSearch();
+    } else {
+      bulkSendFromSearch();
+    }
+  }
+
+  function setSearchActionButtonsDisabled(disabled) {
+    const btn = document.getElementById("runSelectedBtn");
+    if (btn) btn.disabled = disabled;
+  }
+
+  function prepareSearchSendProgress() {
+    const panel      = document.getElementById("searchSendProgressPanel");
+    const barFill    = document.getElementById("searchSendProgressBarFill");
+    const resultList = document.getElementById("searchSendResultList");
+    const summaryEl  = document.getElementById("searchSendSummary");
+    panel.hidden = false;
+    barFill.style.width = "0%";
+    resultList.innerHTML = "";
+    summaryEl.hidden = true;
+    return { barFill, resultList, summaryEl };
+  }
+
+  // 検索結果の企業を登録し、検索条件タグを付与する共通処理
+  async function registerCompanyFromSearch(name, url) {
+    const res = await fetch("/api/companies", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "登録エラー");
+    let newCompany = data;
+
+    if (lastSearchAutoTags.length > 0) {
+      const existingTags = Array.isArray(newCompany.company_tags) ? newCompany.company_tags : [];
+      const mergedTags = Array.from(new Set([...existingTags, ...lastSearchAutoTags]));
+      try {
+        const tagRes = await fetch("/api/companies", {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: newCompany.id, company_tags: mergedTags }),
+        });
+        const tagData = await tagRes.json();
+        if (tagRes.ok) newCompany = tagData;
+      } catch {
+        // タグ付けに失敗しても企業登録自体は続行する
+      }
+    }
+
+    companies.unshift({ ...newCompany, status: "researching" });
+    renderTable();
+    populateTagFilter();
+    return newCompany;
+  }
+
   async function addSelectedCompanies() {
-    const checks = Array.from(document.querySelectorAll(".discover-check:checked"));
+    const checks = getSelectedDiscoverCompanies();
     if (checks.length === 0) return;
-    const btn = document.getElementById("addSelectedBtn");
+    const btn = document.getElementById("runSelectedBtn");
     const progress = document.getElementById("addSelectedProgress");
     btn.disabled = true;
     const total = checks.length;
     let added = 0;
     for (let i = 0; i < checks.length; i++) {
-      const check = checks[i];
-      const name = check.dataset.name;
-      const url  = check.dataset.url;
+      const { name, url } = checks[i];
       progress.textContent = `${i+1}/${total}件 登録中...(${name})`;
       let newCompany;
       try {
-        const res = await fetch("/api/companies", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, url }),
-        });
-        const data = await res.json();
-        if (!res.ok) continue;
-        newCompany = data;
-
-        if (lastSearchAutoTags.length > 0) {
-          const existingTags = Array.isArray(newCompany.company_tags) ? newCompany.company_tags : [];
-          const mergedTags = Array.from(new Set([...existingTags, ...lastSearchAutoTags]));
-          try {
-            const tagRes = await fetch("/api/companies", {
-              method: "PATCH", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: newCompany.id, company_tags: mergedTags }),
-            });
-            const tagData = await tagRes.json();
-            if (tagRes.ok) newCompany = tagData;
-          } catch {
-            // タグ付けに失敗しても企業登録自体は続行する
-          }
-        }
-
-        companies.unshift({ ...newCompany, status: "researching" });
-        renderTable();
-        populateTagFilter();
+        newCompany = await registerCompanyFromSearch(name, url);
       } catch { continue; }
       progress.textContent = `${i+1}/${total}件 リサーチ中...(${name})`;
       try {
@@ -2131,6 +2264,255 @@
     }
     progress.textContent = `完了しました（${added}件追加）`;
     btn.disabled = false;
+  }
+
+  async function bulkSendFromSearch() {
+    const variantId = parseInt(document.getElementById("searchVariantSelect").value, 10);
+    if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
+    const targets = getSelectedDiscoverCompanies();
+    if (targets.length === 0) return;
+
+    setSearchActionButtonsDisabled(true);
+    const { barFill, resultList, summaryEl } = prepareSearchSendProgress();
+    const progress = document.getElementById("addSelectedProgress");
+    const total = targets.length;
+    let success = 0, skipped = 0, error = 0;
+
+    for (let i = 0; i < targets.length; i++) {
+      const { name, url } = targets[i];
+
+      if (isDuplicateUrl(url)) {
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⚠ ${esc(name)} → 重複のためスキップ</li>`);
+        skipped++;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+
+      progress.textContent = `${i+1}/${total}社: ${name} → 登録中...`;
+      let company;
+      try {
+        company = await registerCompanyFromSearch(name, url);
+      } catch (err) {
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → 登録エラー: ${esc(err.message)}</li>`);
+        error++;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+
+      progress.textContent = `${i+1}/${total}社: ${name} → リサーチ中...`;
+      try {
+        const { data: updated } = await callResearchAPI(company.id);
+        updateCompany(updated);
+        company = updated;
+      } catch (err) {
+        const idx = companies.findIndex(c => c.id === company.id);
+        if (idx !== -1) companies[idx] = { ...company, status: "error", research_result: { error: err.message } };
+        renderTable();
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー</li>`);
+        error++;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+
+      const channel = resolveSendChannel(company, "auto");
+      if (!channel) {
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⚠ ${esc(name)} → 送信スキップ（フォームなし・メアドなし）</li>`);
+        skipped++;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+
+      progress.textContent = `${i+1}/${total}社: ${name} → ${channel === "email" ? "メール" : "フォーム"}送信中...`;
+      const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, tags: lastSearchAutoTags }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "送信エラー");
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item success">✓ ${esc(name)} → ${channel === "email" ? "メール" : "フォーム"}送信完了</li>`);
+        success++;
+      } catch (err) {
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → 送信エラー: ${esc(err.message)}</li>`);
+        error++;
+      }
+      resultList.scrollTop = resultList.scrollHeight;
+      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+    }
+
+    progress.textContent = "";
+    summaryEl.textContent = `成功${success}社 / スキップ${skipped}社 / エラー${error}社`;
+    summaryEl.hidden = false;
+    showToast(`一括送信が完了しました（成功${success}社 / スキップ${skipped}社 / エラー${error}社）`, "success");
+    setSearchActionButtonsDisabled(false);
+  }
+
+  let manualSendState = null;
+
+  async function manualSendFromSearch() {
+    const variantId = parseInt(document.getElementById("searchVariantSelect").value, 10);
+    if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
+    const targets = getSelectedDiscoverCompanies();
+    if (targets.length === 0) return;
+
+    setSearchActionButtonsDisabled(true);
+    const { barFill, resultList, summaryEl } = prepareSearchSendProgress();
+
+    manualSendState = {
+      queue: targets, index: 0, variantId,
+      barFill, resultList, summaryEl,
+      success: 0, skipped: 0, error: 0,
+    };
+    await processNextManualCompany();
+  }
+
+  async function processNextManualCompany() {
+    const state = manualSendState;
+    if (!state) return;
+    const total = state.queue.length;
+    const progress = document.getElementById("addSelectedProgress");
+
+    if (state.index >= total) {
+      finishManualSend(false);
+      return;
+    }
+
+    const { name, url } = state.queue[state.index];
+    progress.textContent = `${state.index+1}/${total}社: ${name} → 登録・リサーチ中...`;
+
+    if (isDuplicateUrl(url)) {
+      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⚠ ${esc(name)} → 重複のためスキップ</li>`);
+      state.skipped++;
+      state.index++;
+      state.barFill.style.width = `${Math.round((state.index / total) * 100)}%`;
+      await processNextManualCompany();
+      return;
+    }
+
+    let company;
+    try {
+      company = await registerCompanyFromSearch(name, url);
+    } catch (err) {
+      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → 登録エラー: ${esc(err.message)}</li>`);
+      state.error++;
+      state.index++;
+      state.barFill.style.width = `${Math.round((state.index / total) * 100)}%`;
+      await processNextManualCompany();
+      return;
+    }
+
+    try {
+      const { data: updated } = await callResearchAPI(company.id);
+      updateCompany(updated);
+      company = updated;
+    } catch (err) {
+      const idx = companies.findIndex(c => c.id === company.id);
+      if (idx !== -1) companies[idx] = { ...company, status: "error", research_result: { error: err.message } };
+      renderTable();
+      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー</li>`);
+      state.error++;
+      state.index++;
+      state.barFill.style.width = `${Math.round((state.index / total) * 100)}%`;
+      await processNextManualCompany();
+      return;
+    }
+
+    progress.textContent = `${state.index+1}/${total}社: ${name} → 内容確認待ち`;
+    showManualSendDraft(company);
+  }
+
+  function showManualSendDraft(company) {
+    const state = manualSendState;
+    if (!state) return;
+    const variant = variants.find(v => v.id === state.variantId);
+    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+    const subject = replace(variant?.subject_template || "");
+    const body    = replace(variant?.body_template || "");
+    const channel = resolveSendChannel(company, "auto");
+    const channelLabel = channel === "email" ? "メール送信" : channel === "form" ? "フォーム自動送信" : "送信不可（フォームなし・メアドなし）";
+
+    state.currentCompany = company;
+    state.currentChannel = channel;
+
+    const panel = document.getElementById("manualSendDraftPanel");
+    panel.hidden = false;
+    panel.innerHTML = `
+      <p class="manual-send-company">${esc(company.name)} <span style="font-size:11px;color:var(--gray-400)">（${esc(channelLabel)}）</span></p>
+      ${subject ? `<p style="font-size:12px;color:var(--gray-500);margin:4px 0">件名: ${esc(subject)}</p>` : ""}
+      <pre class="manual-send-body">${esc(body)}</pre>
+      <div class="manual-send-actions">
+        <button class="btn-filter-clear" onclick="manualSendAbort()">中断</button>
+        <button class="btn-status-change" onclick="manualSendSkipCompany()">スキップ</button>
+        <button class="btn-status-update" onclick="manualSendConfirmSend()" ${channel ? "" : "disabled"}>送信する</button>
+      </div>`;
+  }
+
+  async function manualSendConfirmSend() {
+    const state = manualSendState;
+    if (!state) return;
+    const company = state.currentCompany;
+    const channel = state.currentChannel;
+    document.getElementById("manualSendDraftPanel").hidden = true;
+
+    if (!channel) {
+      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⚠ ${esc(company.name)} → 送信スキップ（フォームなし・メアドなし）</li>`);
+      state.skipped++;
+    } else {
+      const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: company.id, variant_id: state.variantId, tags: lastSearchAutoTags }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "送信エラー");
+        state.resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item success">✓ ${esc(company.name)} → ${channel === "email" ? "メール" : "フォーム"}送信完了</li>`);
+        state.success++;
+      } catch (err) {
+        state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(company.name)} → 送信エラー: ${esc(err.message)}</li>`);
+        state.error++;
+      }
+    }
+    state.resultList.scrollTop = state.resultList.scrollHeight;
+    state.index++;
+    state.barFill.style.width = `${Math.round((state.index / state.queue.length) * 100)}%`;
+    await processNextManualCompany();
+  }
+
+  function manualSendSkipCompany() {
+    const state = manualSendState;
+    if (!state) return;
+    document.getElementById("manualSendDraftPanel").hidden = true;
+    state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⏭ ${esc(state.currentCompany.name)} → スキップ</li>`);
+    state.skipped++;
+    state.index++;
+    state.barFill.style.width = `${Math.round((state.index / state.queue.length) * 100)}%`;
+    processNextManualCompany();
+  }
+
+  function manualSendAbort() {
+    const state = manualSendState;
+    if (!state) return;
+    document.getElementById("manualSendDraftPanel").hidden = true;
+    finishManualSend(true);
+  }
+
+  function finishManualSend(aborted) {
+    const state = manualSendState;
+    if (!state) return;
+    const progress = document.getElementById("addSelectedProgress");
+    if (progress) progress.textContent = "";
+    state.summaryEl.textContent = `${aborted ? "中断されました。" : ""}成功${state.success}社 / スキップ${state.skipped}社 / エラー${state.error}社`;
+    state.summaryEl.hidden = false;
+    showToast(
+      aborted ? "手動送信を中断しました" : `手動送信が完了しました（成功${state.success}社 / スキップ${state.skipped}社 / エラー${state.error}社）`,
+      aborted ? "warning" : "success"
+    );
+    setSearchActionButtonsDisabled(false);
+    manualSendState = null;
   }
 
   let modalTagsState = [];

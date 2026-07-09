@@ -6,7 +6,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force } = req.body || {};
+  const { company_id, variant_id, force, tags } = req.body || {};
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
   }
@@ -110,9 +110,10 @@ module.exports = async function handler(req, res) {
   }
 
   // send_logsに記録
+  const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   const [logEntry] = await sql`
-    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at)
-    VALUES (${company_id}, ${variant_id}, 'form', ${logStatus}, 'auto', NOW())
+    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
+    VALUES (${company_id}, ${variant_id}, 'form', ${logStatus}, 'auto', NOW(), ${tagsJson})
     RETURNING *
   `;
 

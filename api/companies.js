@@ -158,7 +158,27 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "priority, memo, status, next_action, next_action_date, action_status, company_tagsのいずれかが必要です" });
   }
 
-  return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const companyId = parseInt(id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const logs = await sql`SELECT id FROM send_logs WHERE company_id = ${companyId} LIMIT 1`;
+      const scheduled = await sql`SELECT id FROM scheduled_sends WHERE company_id = ${companyId} LIMIT 1`;
+      if (logs.length > 0 || scheduled.length > 0) {
+        return res.status(409).json({ error: "送信履歴がある企業は削除できません", type: "has_logs" });
+      }
+      const [deleted] = await sql`DELETE FROM companies WHERE id = ${companyId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "企業が見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
 };
 
 function detectRestrictedUrl(url) {

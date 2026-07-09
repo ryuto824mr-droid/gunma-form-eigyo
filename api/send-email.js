@@ -6,7 +6,8 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force } = req.body || {};
+  const { company_id, variant_id, force, tags } = req.body || {};
+  const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
   }
@@ -66,8 +67,8 @@ module.exports = async function handler(req, res) {
     result = await sendEmail({ to: toEmail, subject, body });
   } catch (err) {
     await sql`
-      INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at)
-      VALUES (${company_id}, ${variant_id}, 'email', 'failed', 'manual', NOW())
+      INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
+      VALUES (${company_id}, ${variant_id}, 'email', 'failed', 'manual', NOW(), ${tagsJson})
     `;
     return res.status(500).json({ error: `メール送信に失敗しました: ${err.message}` });
   }
@@ -79,8 +80,8 @@ module.exports = async function handler(req, res) {
   }
 
   const [logEntry] = await sql`
-    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at)
-    VALUES (${company_id}, ${variant_id}, 'email', 'sent', 'manual', NOW())
+    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
+    VALUES (${company_id}, ${variant_id}, 'email', 'sent', 'manual', NOW(), ${tagsJson})
     RETURNING *
   `;
 
