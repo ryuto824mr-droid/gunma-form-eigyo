@@ -3,7 +3,10 @@ const { sql } = require("../lib/db");
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
     try {
-      const companies = await sql`SELECT * FROM companies ORDER BY created_at DESC`;
+      const showArchived = req.query?.show_archived === "1";
+      const companies = showArchived
+        ? await sql`SELECT * FROM companies ORDER BY created_at DESC`
+        : await sql`SELECT * FROM companies WHERE archived = FALSE ORDER BY created_at DESC`;
       return res.status(200).json(companies);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -48,7 +51,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, priority, memo, status, next_action, next_action_date, action_status, company_tags } = req.body || {};
+    const { id, priority, memo, status, next_action, next_action_date, action_status, company_tags, archived } = req.body || {};
     const companyId = parseInt(id, 10);
     if (!companyId || isNaN(companyId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -155,21 +158,46 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    return res.status(400).json({ error: "priority, memo, status, next_action, next_action_date, action_status, company_tagsのいずれかが必要です" });
+    if (archived !== undefined) {
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET archived = ${!!archived}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
+    }
+
+    return res.status(400).json({ error: "priority, memo, status, next_action, next_action_date, action_status, company_tags, archivedのいずれかが必要です" });
   }
 
   if (req.method === "DELETE") {
-    const { id } = req.body || {};
+    const { id, force } = req.body || {};
     const companyId = parseInt(id, 10);
     if (!companyId || isNaN(companyId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
     }
     try {
-      const logs = await sql`SELECT id FROM send_logs WHERE company_id = ${companyId} LIMIT 1`;
-      const scheduled = await sql`SELECT id FROM scheduled_sends WHERE company_id = ${companyId} LIMIT 1`;
-      if (logs.length > 0 || scheduled.length > 0) {
-        return res.status(409).json({ error: "送信履歴がある企業は削除できません", type: "has_logs" });
+      if (!force) {
+        const logs = await sql`SELECT id FROM send_logs WHERE company_id = ${companyId} LIMIT 1`;
+        const scheduled = await sql`SELECT id FROM scheduled_sends WHERE company_id = ${companyId} LIMIT 1`;
+        if (logs.length > 0 || scheduled.length > 0) {
+          return res.status(409).json({ error: "送信履歴がある企業は削除できません", type: "has_logs" });
+        }
+        const [deleted] = await sql`DELETE FROM companies WHERE id = ${companyId} RETURNING id`;
+        if (!deleted) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json({ deleted: true, id: deleted.id });
       }
+
+      // force=true: 送信履歴・反応データも含めて完全削除
+      await sql`DELETE FROM responses WHERE send_log_id IN (SELECT id FROM send_logs WHERE company_id = ${companyId})`;
+      await sql`DELETE FROM send_logs WHERE company_id = ${companyId}`;
+      await sql`DELETE FROM scheduled_sends WHERE company_id = ${companyId}`;
       const [deleted] = await sql`DELETE FROM companies WHERE id = ${companyId} RETURNING id`;
       if (!deleted) return res.status(404).json({ error: "企業が見つかりません" });
       return res.status(200).json({ deleted: true, id: deleted.id });

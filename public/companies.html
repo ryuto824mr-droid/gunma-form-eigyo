@@ -238,6 +238,10 @@
     cursor: pointer; font-family: inherit; transition: all 150ms;
   }
   .btn-filter-clear:hover { background: var(--gray-100); color: var(--gray-900); }
+  .filter-show-archived {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--gray-500); white-space: nowrap; cursor: pointer; font-family: inherit;
+  }
   .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
 
   /* Priority column */
@@ -302,6 +306,19 @@
   }
   .btn-delete-company:hover { background: #fff5f5; }
   .btn-delete-company svg { width: 12px; height: 12px; }
+  .btn-restore-company {
+    padding: 5px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    cursor: pointer; margin-left: 6px; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 4px; justify-content: center;
+  }
+  .btn-restore-company:hover { background: var(--green-50); }
+  .btn-restore-company svg { width: 12px; height: 12px; }
+  .archived-badge {
+    display: inline-block; margin-left: 6px; padding: 1px 7px;
+    border-radius: 4px; font-size: 11px; font-weight: 600;
+    background: var(--gray-200); color: var(--gray-500); vertical-align: middle;
+  }
   .action-form-row td { padding: 12px 16px; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
   .action-form { display: flex; flex-direction: column; gap: 8px; }
   .action-form-fields { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -460,6 +477,16 @@
   }
   .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
   .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+  .archive-choice-actions { display: flex; flex-direction: column; gap: 8px; }
+  .archive-choice-btn {
+    border: none; border-radius: var(--radius-md); padding: 10px 14px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 150ms;
+  }
+  .archive-choice-btn:hover { opacity: 0.85; }
+  .archive-choice-archive { background: var(--green-500); color: white; }
+  .archive-choice-delete { background: #dc2626; color: white; }
+  .archive-choice-cancel { background: var(--gray-100); color: var(--gray-700); }
 
   .info-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; margin-bottom: 20px; }
   .info-grid dt { font-weight: 600; color: var(--gray-500); white-space: nowrap; }
@@ -1017,6 +1044,10 @@
         <option value="all">タグ: すべて</option>
       </select>
       <button class="btn-filter-clear" onclick="clearFilters()">クリア</button>
+      <label class="filter-show-archived">
+        <input type="checkbox" id="filterShowArchived" onchange="onShowArchivedChange()" />
+        アーカイブ済みを表示
+      </label>
       <span class="filter-count" id="filterCount"></span>
     </div>
     <div class="table-wrap">
@@ -1103,6 +1134,26 @@
   </div>
 </div>
 
+<!-- アーカイブ/完全削除 選択モーダル -->
+<div class="modal-overlay" id="archiveChoiceModal" onclick="if (event.target === this) closeArchiveChoiceModal()">
+  <div class="modal-box" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>この企業には送信履歴があります</h3>
+      <button class="modal-close" onclick="closeArchiveChoiceModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 16px;font-size:13px;color:var(--gray-600);line-height:1.6;">
+        送信履歴がある企業は通常削除できません。以下のいずれかを選択してください。
+      </p>
+      <div class="archive-choice-actions">
+        <button class="archive-choice-btn archive-choice-archive" onclick="archiveCompanyFromModal()">アーカイブ（非表示にする）</button>
+        <button class="archive-choice-btn archive-choice-delete" onclick="forceDeleteCompanyFromModal()">完全削除（送信履歴も含めて削除）</button>
+        <button class="archive-choice-btn archive-choice-cancel" onclick="closeArchiveChoiceModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
@@ -1120,7 +1171,9 @@
 
   async function loadCompanies() {
     try {
-      const res = await fetch("/api/companies");
+      const showArchived = document.getElementById("filterShowArchived")?.checked;
+      const url = showArchived ? "/api/companies?show_archived=1" : "/api/companies";
+      const res = await fetch(url);
       companies = await res.json();
       renderTable();
       updateSummaryBar();
@@ -1129,6 +1182,10 @@
       document.getElementById("tableBody").innerHTML =
         `<tr class="empty-row"><td colspan="8">読み込みエラー: ${esc(err.message)}</td></tr>`;
     }
+  }
+
+  function onShowArchivedChange() {
+    loadCompanies();
   }
 
   async function loadVariantsList() {
@@ -1444,9 +1501,13 @@
       const actionStatus = c.action_status || "none";
       const actionClass  = actionStatus !== "none" ? ` status-${actionStatus}` : "";
       const actionLabel  = (actionStatus === "none" ? "📌 " : "") + actionStatusLabel(actionStatus);
+      const archivedBadge = c.archived ? '<span class="archived-badge">アーカイブ済み</span>' : "";
+      const deleteOrRestoreBtn = c.archived
+        ? `<button class="btn-restore-company" onclick="restoreCompany(${c.id})" title="元に戻す"><i data-lucide="rotate-ccw"></i> 元に戻す</button>`
+        : `<button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>`;
       return `
         <tr id="row-${c.id}">
-          <td class="name">${esc(c.name)}${companyTagsHtml(c)}</td>
+          <td class="name">${esc(c.name)}${archivedBadge}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}</td>
@@ -1462,7 +1523,7 @@
             ${detailBtn}
             <button class="btn-memo${hasMemo ? " has-memo" : ""}" onclick="toggleMemoForm(${c.id})" title="メモ">📝</button>
             <button class="btn-action${actionClass}" onclick="toggleActionForm(${c.id})" title="アクション">${actionLabel}</button>
-            <button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>
+            ${deleteOrRestoreBtn}
           </td>
         </tr>
         <tr class="memo-form-row" id="memo-row-${c.id}" hidden>
@@ -1520,6 +1581,8 @@
     renderTable();
   }
 
+  let archiveChoiceCompanyId = null;
+
   function deleteCompany(id) {
     const company = companies.find(c => c.id === id);
     if (!company) return;
@@ -1527,17 +1590,17 @@
     performDeleteCompany(id);
   }
 
-  async function performDeleteCompany(id) {
+  async function performDeleteCompany(id, force) {
     try {
       const res = await fetch("/api/companies", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify(force ? { id, force: true } : { id }),
       });
       const data = await res.json();
       if (!res.ok) {
         if (data.type === "has_logs") {
-          showToast("送信履歴がある企業は削除できません", "error");
+          openArchiveChoiceModal(id);
         } else {
           showToast(esc(data.error || "削除エラー"), "error");
         }
@@ -1548,6 +1611,72 @@
       showToast("企業を削除しました", "info");
     } catch (err) {
       showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  function openArchiveChoiceModal(id) {
+    archiveChoiceCompanyId = id;
+    document.getElementById("archiveChoiceModal").classList.add("open");
+  }
+
+  function closeArchiveChoiceModal() {
+    archiveChoiceCompanyId = null;
+    document.getElementById("archiveChoiceModal").classList.remove("open");
+  }
+
+  async function archiveCompanyFromModal() {
+    const id = archiveChoiceCompanyId;
+    if (!id) return;
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, archived: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(esc(data.error || "アーカイブエラー"), "error");
+        return;
+      }
+      closeArchiveChoiceModal();
+      companies = companies.filter(c => c.id !== id);
+      renderTable();
+      showToast("アーカイブしました", "info");
+    } catch (err) {
+      showToast("アーカイブエラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function forceDeleteCompanyFromModal() {
+    const id = archiveChoiceCompanyId;
+    if (!id) return;
+    if (!confirm("送信履歴・反応データも含めて完全削除します。この操作は取り消せません。")) return;
+    closeArchiveChoiceModal();
+    await performDeleteCompany(id, true);
+  }
+
+  async function restoreCompany(id) {
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, archived: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(esc(data.error || "復元エラー"), "error");
+        return;
+      }
+      const showArchived = document.getElementById("filterShowArchived")?.checked;
+      if (showArchived) {
+        updateCompany(data);
+      } else {
+        companies = companies.filter(c => c.id !== id);
+        renderTable();
+      }
+      showToast("元に戻しました", "info");
+    } catch (err) {
+      showToast("復元エラー: " + esc(err.message), "error");
     }
   }
 
