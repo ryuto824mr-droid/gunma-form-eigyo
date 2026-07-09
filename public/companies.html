@@ -1174,7 +1174,8 @@
       const showArchived = document.getElementById("filterShowArchived")?.checked;
       const url = showArchived ? "/api/companies?show_archived=1" : "/api/companies";
       const res = await fetch(url);
-      companies = await res.json();
+      const raw = await res.json();
+      companies = Array.isArray(raw) ? raw : [];
       renderTable();
       updateSummaryBar();
       populateTagFilter();

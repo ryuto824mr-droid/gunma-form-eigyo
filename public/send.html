@@ -803,12 +803,11 @@
         fetch("/api/send-logs"),
         fetch("/api/analytics?action=scheduled-sends"),
       ]);
-      companies      = await cRes.json();
+      const rawCompanies = await cRes.json();
+      companies      = Array.isArray(rawCompanies) ? rawCompanies : [];
       variants       = await vRes.json();
       logs           = await lRes.json();
       scheduledSends = sRes.ok ? await sRes.json() : [];
-
-      if (!Array.isArray(companies)) throw new Error("companiesの取得に失敗しました");
 
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
