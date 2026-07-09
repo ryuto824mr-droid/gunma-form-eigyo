@@ -41,8 +41,8 @@ AI機能が無言で空になる」問題を踏まえて、このコードでは
 
 ## データベースのセットアップ・マイグレーション
 
-テーブル作成やカラム追加などのスキーマ変更は `POST /api/db-setup` を叩くことで適用されます
-（`db/schema.sql` の `CREATE TABLE IF NOT EXISTS` と、`api/db-setup.js` 内の
+テーブル作成やカラム追加などのスキーマ変更は `POST /api/crm?action=db-setup` を叩くことで適用されます
+（`db/schema.sql` の `CREATE TABLE IF NOT EXISTS` と、`api/crm.js` の `handleDbSetup` 内の
 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 文が実行されます。すべて `IF NOT EXISTS` 付きのため、
 複数回実行しても安全です）。
 
@@ -50,7 +50,7 @@ AI機能が無言で空になる」問題を踏まえて、このコードでは
 デプロイ完了後に一度だけ以下を実行してください（`SETUP_SECRET` 環境変数の値を指定します）。
 
 ```bash
-curl -X POST https://<your-deployment-url>/api/db-setup \
+curl -X POST https://<your-deployment-url>/api/crm?action=db-setup \
   -H "Content-Type: application/json" \
   -d '{"secret": "<SETUP_SECRET>"}'
 ```

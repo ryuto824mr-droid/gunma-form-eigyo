@@ -1,4 +1,4 @@
-const { sql } = require("../lib/db");
+const { sql, isExcludedDomain } = require("../lib/db");
 const { submitForm } = require("../lib/form-submitter");
 
 module.exports = async function handler(req, res) {
@@ -52,6 +52,10 @@ module.exports = async function handler(req, res) {
   // 企業情報取得
   const [company] = await sql`SELECT * FROM companies WHERE id = ${company_id}`;
   if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+
+  if (await isExcludedDomain(company.url)) {
+    return res.status(400).json({ error: "除外ドメインに登録されています", type: "excluded_domain" });
+  }
 
   const researchResult = company.research_result;
   if (!researchResult?.automatable) {

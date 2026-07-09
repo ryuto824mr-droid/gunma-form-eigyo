@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CRM - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; }
+
+  .page-header {
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+
+  .container { max-width: 1120px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Tabs */
+  .crm-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--gray-200); margin-bottom: 20px; flex-wrap: wrap; }
+  .crm-tab-btn {
+    padding: 10px 16px; cursor: pointer; background: none; border: none;
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--gray-500);
+    border-bottom: 2px solid transparent; transition: all 150ms; display: flex; align-items: center; gap: 6px;
+  }
+  .crm-tab-btn:hover { color: var(--gray-900); }
+  .crm-tab-btn.active { color: var(--green-700); border-bottom-color: var(--green-500); }
+  .crm-panel { display: none; }
+  .crm-panel.active { display: block; animation: fadeInUp 0.3s ease-out; }
+
+  .panel-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+  .panel-toolbar h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--gray-900); }
+  .panel-desc { font-size: 12px; color: var(--gray-500); margin: 2px 0 0; }
+
+  .btn-add {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; font-family: inherit; font-weight: 600;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  }
+  .btn-add:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
+  .btn-add svg { width: 14px; height: 14px; }
+
+  /* Kanban */
+  .kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
+  .kanban-column {
+    flex: 0 0 240px; background: var(--gray-50); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-md); padding: 10px; min-height: 200px;
+    display: flex; flex-direction: column; gap: 8px; transition: background 150ms;
+  }
+  .kanban-column.drag-over { background: var(--green-50); border-color: var(--green-500); }
+  .kanban-column-header {
+    font-size: 12px; font-weight: 700; color: var(--gray-700);
+    display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 8px;
+  }
+  .kanban-count { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+  .kanban-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
+  .kanban-card {
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    padding: 10px; cursor: grab; box-shadow: var(--shadow-sm); transition: box-shadow 150ms, opacity 150ms;
+  }
+  .kanban-card:hover { box-shadow: var(--shadow-md); }
+  .kanban-card.dragging { opacity: 0.4; }
+  .kanban-card-company { font-size: 11px; color: var(--gray-500); margin-bottom: 2px; }
+  .kanban-card-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--gray-900); word-break: break-word; }
+  .kanban-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .kanban-card-amount { font-size: 12px; color: var(--green-700); font-weight: 700; }
+  .kanban-card-date { font-size: 11px; color: var(--gray-400); }
+  .kanban-empty { font-size: 11px; color: var(--gray-300); text-align: center; padding: 12px 0; }
+  .stage-lead        .kanban-column-header { color: var(--gray-700); }
+  .stage-contacted    .kanban-column-header { color: #1d4ed8; }
+  .stage-proposal      .kanban-column-header { color: #b45309; }
+  .stage-negotiation   .kanban-column-header { color: #7c3aed; }
+  .stage-won           .kanban-column-header { color: var(--green-700); }
+  .stage-lost           .kanban-column-header { color: #dc2626; }
+
+  /* Table */
+  .crm-table-wrap { overflow-x: auto; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+  .crm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .crm-table th {
+    text-align: left; padding: 10px 14px; background: var(--gray-50);
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--gray-500); border-bottom: 2px solid var(--gray-200); white-space: nowrap;
+  }
+  .crm-table td { padding: 10px 14px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  .crm-table tr:last-child td { border-bottom: none; }
+  .crm-table .empty-row td { text-align: center; color: var(--gray-400); padding: 24px; }
+  .btn-row-delete {
+    padding: 4px 8px; font-size: 11px; border-radius: var(--radius-sm);
+    border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-row-delete:hover { background: #fff5f5; }
+
+  /* Timeline */
+  .timeline { display: flex; flex-direction: column; gap: 10px; }
+  .timeline-item {
+    display: flex; gap: 12px; padding: 12px 14px; background: var(--white);
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  }
+  .timeline-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+  .timeline-body { flex: 1; min-width: 0; }
+  .timeline-header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .timeline-company { font-weight: 600; font-size: 13px; color: var(--gray-900); }
+  .timeline-type-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--gray-100); color: var(--gray-500); font-weight: 600; }
+  .timeline-date { font-size: 11px; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
+  .timeline-content { font-size: 13px; color: var(--gray-700); margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+  .list-empty { font-size: 13px; color: var(--gray-400); padding: 24px 0; margin: 0; text-align: center; }
+
+  /* Excluded domains */
+  .excluded-domain-desc {
+    font-size: 12px; color: var(--gray-500); background: var(--gray-50);
+    border-left: 3px solid var(--green-500); border-radius: var(--radius-sm);
+    padding: 10px 14px; margin: 0 0 16px; line-height: 1.6;
+  }
+  .excluded-add-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .excluded-add-row input {
+    padding: 8px 12px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .excluded-add-row input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  #excludedDomainInput { flex: 1 1 200px; }
+  #excludedReasonInput { flex: 1 1 200px; }
+
+  /* Forms / modals (shared) */
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .form-group input[type="text"],
+  .form-group input[type="number"],
+  .form-group input[type="date"],
+  .form-group input[type="datetime-local"],
+  .form-group select,
+  .form-group textarea {
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms; width: 100%;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
+  }
+  .form-group textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+  .modal-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  .modal-form-grid .full { grid-column: 1 / -1; }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 1000;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--white); border-radius: var(--radius-lg); max-width: 520px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-200);
+  }
+  .modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--gray-900); }
+  .modal-close {
+    background: none; border: none; font-size: 18px; cursor: pointer;
+    color: var(--gray-400); line-height: 1; padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: all 150ms;
+  }
+  .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .modal-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--gray-200); }
+  .btn-modal-cancel {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .btn-modal-cancel:hover { background: var(--gray-50); }
+  .btn-modal-submit {
+    padding: 7px 18px; font-size: 13px; border-radius: var(--radius-sm);
+    border: none; background: linear-gradient(135deg, #44B13F, #2F8A2A); color: white;
+    cursor: pointer; font-family: inherit; font-weight: 600; transition: all 150ms;
+  }
+  .btn-modal-submit:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn-modal-submit:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+  @media (max-width: 600px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
+    .container { padding: 16px 8px; }
+    .modal-form-grid { grid-template-columns: 1fr; }
+    .modal-form-grid .full { grid-column: 1; }
+    .form-group input, .form-group select, .form-group textarea { font-size: 16px; }
+    .kanban-column { flex-basis: 220px; }
+  }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+      --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+      --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    input, textarea, select { background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important; }
+    input::placeholder, textarea::placeholder { color: #475569 !important; }
+    .modal-box { background: #1e293b; color: #f1f5f9; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+    .kanban-column { background: #0f172a; }
+  }
+  html.dark {
+    --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+    --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+    --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark input, html.dark textarea, html.dark select {
+    background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important;
+  }
+  html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
+  html.dark .modal-box { background: #1e293b; color: #f1f5f9; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .kanban-column { background: #0f172a; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/index.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <nav class="page-nav">
+    <a href="/index.html">ホーム</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html">送信管理</a>
+    <a href="/analytics.html">分析</a>
+    <a href="/crm.html" class="active">CRM</a>
+    <a href="/help.html">ヘルプ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <div class="crm-tabs">
+    <button class="crm-tab-btn active" data-tab="pipeline" onclick="switchTab('pipeline')">📊 パイプライン</button>
+    <button class="crm-tab-btn" data-tab="contacts" onclick="switchTab('contacts')">👤 コンタクト</button>
+    <button class="crm-tab-btn" data-tab="activities" onclick="switchTab('activities')">🕘 活動履歴</button>
+    <button class="crm-tab-btn" data-tab="excluded" onclick="switchTab('excluded')">🚫 除外ドメイン</button>
+  </div>
+
+  <!-- パイプライン -->
+  <section class="crm-panel active" id="panel-pipeline">
+    <div class="panel-toolbar">
+      <div>
+        <h2>パイプライン</h2>
+        <p class="panel-desc">商談をドラッグ&ドロップでステージ移動できます</p>
+      </div>
+      <button class="btn-add" onclick="openDealModal()"><i data-lucide="plus"></i>商談を追加</button>
+    </div>
+    <div class="kanban-board" id="kanbanBoard"></div>
+  </section>
+
+  <!-- コンタクト -->
+  <section class="crm-panel" id="panel-contacts">
+    <div class="panel-toolbar">
+      <div>
+        <h2>コンタクト</h2>
+        <p class="panel-desc">企業ごとの担当者情報</p>
+      </div>
+      <button class="btn-add" onclick="openContactModal()"><i data-lucide="plus"></i>コンタクト追加</button>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead>
+          <tr><th>名前</th><th>役職</th><th>メール</th><th>電話</th><th>企業名</th><th></th></tr>
+        </thead>
+        <tbody id="contactsBody"><tr class="empty-row"><td colspan="6">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 活動履歴 -->
+  <section class="crm-panel" id="panel-activities">
+    <div class="panel-toolbar">
+      <div>
+        <h2>活動履歴</h2>
+        <p class="panel-desc">電話・メール・商談などのやり取りを記録します</p>
+      </div>
+      <button class="btn-add" onclick="openActivityModal()"><i data-lucide="plus"></i>活動を記録</button>
+    </div>
+    <div class="timeline" id="activitiesTimeline"><p class="list-empty">読み込み中...</p></div>
+  </section>
+
+  <!-- 除外ドメイン -->
+  <section class="crm-panel" id="panel-excluded">
+    <div class="panel-toolbar">
+      <div>
+        <h2>除外ドメイン</h2>
+      </div>
+    </div>
+    <p class="excluded-domain-desc">ここに登録したドメインの企業にはフォーム自動送信・メール送信が行われません。</p>
+    <div class="excluded-add-row">
+      <input type="text" id="excludedDomainInput" placeholder="ドメイン（例: example.co.jp）" />
+      <input type="text" id="excludedReasonInput" placeholder="理由（任意）" />
+      <button class="btn-add" onclick="addExcludedDomain()"><i data-lucide="plus"></i>追加</button>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead><tr><th>ドメイン</th><th>理由</th><th>登録日</th><th></th></tr></thead>
+        <tbody id="excludedBody"><tr class="empty-row"><td colspan="4">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- 商談モーダル -->
+<div class="modal-overlay" id="dealModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>商談を追加</h3>
+      <button class="modal-close" onclick="closeDealModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="dealCompanySelect">企業 <span style="color:#dc2626">*</span></label>
+          <select id="dealCompanySelect" class="company-select"></select>
+        </div>
+        <div class="form-group full">
+          <label for="dealTitleInput">商談タイトル <span style="color:#dc2626">*</span></label>
+          <input type="text" id="dealTitleInput" placeholder="例: Webサイトリニューアル提案" />
+        </div>
+        <div class="form-group">
+          <label for="dealStageSelect">ステージ</label>
+          <select id="dealStageSelect">
+            <option value="lead">リード</option>
+            <option value="contacted">コンタクト済み</option>
+            <option value="proposal">提案中</option>
+            <option value="negotiation">交渉中</option>
+            <option value="won">成約</option>
+            <option value="lost">失注</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="dealAmountInput">金額（円）</label>
+          <input type="number" id="dealAmountInput" placeholder="500000" min="0" />
+        </div>
+        <div class="form-group full">
+          <label for="dealCloseDateInput">期待成約日</label>
+          <input type="date" id="dealCloseDateInput" />
+        </div>
+        <div class="form-group full">
+          <label for="dealNoteInput">メモ</label>
+          <textarea id="dealNoteInput" placeholder="補足情報があれば入力してください"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeDealModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="dealSubmitBtn" onclick="createDeal()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- コンタクトモーダル -->
+<div class="modal-overlay" id="contactModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>コンタクトを追加</h3>
+      <button class="modal-close" onclick="closeContactModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="contactCompanySelect">企業 <span style="color:#dc2626">*</span></label>
+          <select id="contactCompanySelect" class="company-select"></select>
+        </div>
+        <div class="form-group">
+          <label for="contactNameInput">名前 <span style="color:#dc2626">*</span></label>
+          <input type="text" id="contactNameInput" placeholder="例: 山田 太郎" />
+        </div>
+        <div class="form-group">
+          <label for="contactTitleInput">役職</label>
+          <input type="text" id="contactTitleInput" placeholder="例: 営業部長" />
+        </div>
+        <div class="form-group">
+          <label for="contactEmailInput">メール</label>
+          <input type="text" id="contactEmailInput" placeholder="example@example.co.jp" />
+        </div>
+        <div class="form-group">
+          <label for="contactPhoneInput">電話</label>
+          <input type="text" id="contactPhoneInput" placeholder="03-1234-5678" />
+        </div>
+        <div class="form-group full">
+          <label for="contactNoteInput">メモ</label>
+          <textarea id="contactNoteInput" placeholder="補足情報があれば入力してください"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeContactModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="contactSubmitBtn" onclick="createContact()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 活動モーダル -->
+<div class="modal-overlay" id="activityModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>活動を記録</h3>
+      <button class="modal-close" onclick="closeActivityModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="activityCompanySelect">企業 <span style="color:#dc2626">*</span></label>
+          <select id="activityCompanySelect" class="company-select" onchange="populateActivityDealSelect()"></select>
+        </div>
+        <div class="form-group">
+          <label for="activityTypeSelect">種類</label>
+          <select id="activityTypeSelect">
+            <option value="note">📝 メモ</option>
+            <option value="call">📞 電話</option>
+            <option value="email">📧 メール</option>
+            <option value="meeting">🤝 商談</option>
+            <option value="form">📬 フォーム</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="activityDealSelect">関連する商談（任意）</label>
+          <select id="activityDealSelect"><option value="">なし</option></select>
+        </div>
+        <div class="form-group full">
+          <label for="activityDateInput">日時</label>
+          <input type="datetime-local" id="activityDateInput" />
+        </div>
+        <div class="form-group full">
+          <label for="activityContentInput">内容 <span style="color:#dc2626">*</span></label>
+          <textarea id="activityContentInput" placeholder="例: 電話で製品説明を実施。次回は来週訪問予定。"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeActivityModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="activitySubmitBtn" onclick="createActivity()">記録</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+  let companies = [];
+  let deals = [];
+  let contacts = [];
+  let activities = [];
+  let excludedDomains = [];
+
+  const STAGE_ORDER  = ["lead", "contacted", "proposal", "negotiation", "won", "lost"];
+  const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
+  const ACTIVITY_ICONS  = { call: "📞", email: "📧", note: "📝", meeting: "🤝", form: "📬", other: "📌" };
+  const ACTIVITY_LABELS = { call: "電話", email: "メール", note: "メモ", meeting: "商談", form: "フォーム", other: "その他" };
+
+  function switchTab(name) {
+    document.querySelectorAll(".crm-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+    document.querySelectorAll(".crm-panel").forEach(p => p.classList.toggle("active", p.id === `panel-${name}`));
+  }
+
+  async function init() {
+    await loadCompanies();
+    await Promise.all([loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains()]);
+    lucide.createIcons();
+  }
+
+  async function loadCompanies() {
+    try {
+      const res = await fetch("/api/companies");
+      const raw = await res.json();
+      companies = Array.isArray(raw) ? raw : [];
+      populateCompanySelects();
+    } catch (err) {
+      showToast("企業一覧の取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function populateCompanySelects() {
+    const options = companies.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+    document.querySelectorAll(".company-select").forEach(sel => {
+      sel.innerHTML = options || '<option value="">企業がありません</option>';
+    });
+    populateActivityDealSelect();
+  }
+
+  // ==================== パイプライン ====================
+
+  async function loadDeals() {
+    try {
+      const res = await fetch("/api/crm?action=deals");
+      const raw = await res.json();
+      deals = Array.isArray(raw) ? raw : [];
+      renderKanban();
+    } catch (err) {
+      document.getElementById("kanbanBoard").innerHTML = `<p class="list-empty">読み込みエラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderKanban() {
+    const board = document.getElementById("kanbanBoard");
+    board.innerHTML = STAGE_ORDER.map(stage => {
+      const stageDeals = deals.filter(d => d.stage === stage);
+      const cardsHtml = stageDeals.length
+        ? stageDeals.map(d => renderDealCard(d)).join("")
+        : '<p class="kanban-empty">なし</p>';
+      return `
+        <div class="kanban-column stage-${stage}" data-stage="${stage}"
+             ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)">
+          <div class="kanban-column-header">
+            <span>${STAGE_LABELS[stage]}</span>
+            <span class="kanban-count">${stageDeals.length}</span>
+          </div>
+          <div class="kanban-cards">${cardsHtml}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function renderDealCard(d) {
+    const amount = d.amount != null ? `¥${Number(d.amount).toLocaleString()}` : "";
+    const closeDate = d.expected_close_date
+      ? new Date(d.expected_close_date).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })
+      : "";
+    return `
+      <div class="kanban-card" draggable="true" data-deal-id="${d.id}"
+           ondragstart="onCardDragStart(event)" ondragend="onCardDragEnd(event)">
+        <div class="kanban-card-company">${esc(d.company_name || "")}</div>
+        <p class="kanban-card-title">${esc(d.title)}</p>
+        <div class="kanban-card-meta">
+          <span class="kanban-card-amount">${amount}</span>
+          <span class="kanban-card-date">${closeDate}</span>
+        </div>
+      </div>`;
+  }
+
+  let draggedDealId = null;
+
+  function onCardDragStart(e) {
+    draggedDealId = parseInt(e.target.closest(".kanban-card").dataset.dealId, 10);
+    e.target.closest(".kanban-card").classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function onCardDragEnd(e) {
+    e.target.closest(".kanban-card")?.classList.remove("dragging");
+  }
+  function onColumnDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add("drag-over");
+  }
+  function onColumnDragLeave(e) {
+    e.currentTarget.classList.remove("drag-over");
+  }
+  async function onColumnDrop(e) {
+    e.preventDefault();
+    const column = e.currentTarget;
+    column.classList.remove("drag-over");
+    const newStage = column.dataset.stage;
+    if (draggedDealId == null) return;
+    const deal = deals.find(d => d.id === draggedDealId);
+    if (!deal || deal.stage === newStage) return;
+    const prevStage = deal.stage;
+    deal.stage = newStage;
+    renderKanban();
+    try {
+      const res = await fetch("/api/crm?action=deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draggedDealId, stage: newStage }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新エラー");
+      showToast(`ステージを「${STAGE_LABELS[newStage]}」に変更しました`, "success");
+    } catch (err) {
+      deal.stage = prevStage;
+      renderKanban();
+      showToast("ステージ変更に失敗しました: " + esc(err.message), "error");
+    } finally {
+      draggedDealId = null;
+    }
+  }
+
+  function openDealModal() {
+    document.getElementById("dealTitleInput").value = "";
+    document.getElementById("dealStageSelect").value = "lead";
+    document.getElementById("dealAmountInput").value = "";
+    document.getElementById("dealCloseDateInput").value = "";
+    document.getElementById("dealNoteInput").value = "";
+    document.getElementById("dealModal").classList.add("open");
+  }
+  function closeDealModal() {
+    document.getElementById("dealModal").classList.remove("open");
+  }
+
+  async function createDeal() {
+    const company_id           = document.getElementById("dealCompanySelect").value;
+    const title                = document.getElementById("dealTitleInput").value.trim();
+    const stage                = document.getElementById("dealStageSelect").value;
+    const amountRaw             = document.getElementById("dealAmountInput").value;
+    const expected_close_date  = document.getElementById("dealCloseDateInput").value;
+    const note                  = document.getElementById("dealNoteInput").value.trim();
+    const btn = document.getElementById("dealSubmitBtn");
+
+    if (!company_id) { showToast("企業を選択してください", "error"); return; }
+    if (!title)       { showToast("商談タイトルを入力してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id, title, stage,
+          amount: amountRaw ? parseInt(amountRaw, 10) : null,
+          expected_close_date: expected_close_date || null,
+          note: note || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "作成エラー"), "error"); return; }
+      deals.unshift(data);
+      renderKanban();
+      closeDealModal();
+      showToast("商談を追加しました", "success");
+    } catch (err) {
+      showToast("作成エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ==================== コンタクト ====================
+
+  async function loadContacts() {
+    try {
+      const res = await fetch("/api/crm?action=contacts");
+      const raw = await res.json();
+      contacts = Array.isArray(raw) ? raw : [];
+      renderContacts();
+    } catch (err) {
+      document.getElementById("contactsBody").innerHTML =
+        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderContacts() {
+    const body = document.getElementById("contactsBody");
+    if (!contacts.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">コンタクトが登録されていません</td></tr>';
+      return;
+    }
+    body.innerHTML = contacts.map(ct => `
+      <tr>
+        <td>${esc(ct.name)}</td>
+        <td>${esc(ct.title || "—")}</td>
+        <td>${ct.email ? `<a href="mailto:${esc(ct.email)}" style="color:#2563eb">${esc(ct.email)}</a>` : "—"}</td>
+        <td>${esc(ct.phone || "—")}</td>
+        <td>${esc(ct.company_name || "—")}</td>
+        <td><button class="btn-row-delete" onclick="deleteContact(${ct.id})">削除</button></td>
+      </tr>`).join("");
+  }
+
+  function openContactModal() {
+    document.getElementById("contactNameInput").value = "";
+    document.getElementById("contactTitleInput").value = "";
+    document.getElementById("contactEmailInput").value = "";
+    document.getElementById("contactPhoneInput").value = "";
+    document.getElementById("contactNoteInput").value = "";
+    document.getElementById("contactModal").classList.add("open");
+  }
+  function closeContactModal() {
+    document.getElementById("contactModal").classList.remove("open");
+  }
+
+  async function createContact() {
+    const company_id = document.getElementById("contactCompanySelect").value;
+    const name        = document.getElementById("contactNameInput").value.trim();
+    const title        = document.getElementById("contactTitleInput").value.trim();
+    const email        = document.getElementById("contactEmailInput").value.trim();
+    const phone        = document.getElementById("contactPhoneInput").value.trim();
+    const note          = document.getElementById("contactNoteInput").value.trim();
+    const btn = document.getElementById("contactSubmitBtn");
+
+    if (!company_id) { showToast("企業を選択してください", "error"); return; }
+    if (!name)        { showToast("名前を入力してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id, name, title: title || null, email: email || null, phone: phone || null, note: note || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "作成エラー"), "error"); return; }
+      contacts.unshift(data);
+      renderContacts();
+      closeContactModal();
+      showToast("コンタクトを追加しました", "success");
+    } catch (err) {
+      showToast("作成エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function deleteContact(id) {
+    if (!confirm("このコンタクトを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=contacts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      contacts = contacts.filter(ct => ct.id !== id);
+      renderContacts();
+      showToast("コンタクトを削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  // ==================== 活動履歴 ====================
+
+  async function loadActivities() {
+    try {
+      const res = await fetch("/api/crm?action=activities");
+      const raw = await res.json();
+      activities = Array.isArray(raw) ? raw : [];
+      renderTimeline();
+    } catch (err) {
+      document.getElementById("activitiesTimeline").innerHTML = `<p class="list-empty">読み込みエラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderTimeline() {
+    const el = document.getElementById("activitiesTimeline");
+    if (!activities.length) {
+      el.innerHTML = '<p class="list-empty">活動履歴がまだありません</p>';
+      return;
+    }
+    el.innerHTML = activities.map(a => {
+      const dt = a.activity_at
+        ? new Date(a.activity_at).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+        : "—";
+      return `
+        <div class="timeline-item">
+          <span class="timeline-icon">${ACTIVITY_ICONS[a.type] || "📌"}</span>
+          <div class="timeline-body">
+            <div class="timeline-header">
+              <span class="timeline-company">${esc(a.company_name || "")}</span>
+              <span class="timeline-type-badge">${ACTIVITY_LABELS[a.type] || a.type}</span>
+              <span class="timeline-date">${dt}</span>
+            </div>
+            <p class="timeline-content">${esc(a.content)}</p>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function populateActivityDealSelect() {
+    const companyId = parseInt(document.getElementById("activityCompanySelect").value, 10);
+    const sel = document.getElementById("activityDealSelect");
+    const related = deals.filter(d => d.company_id === companyId);
+    sel.innerHTML = '<option value="">なし</option>' +
+      related.map(d => `<option value="${d.id}">${esc(d.title)}</option>`).join("");
+  }
+
+  function openActivityModal() {
+    document.getElementById("activityTypeSelect").value = "note";
+    document.getElementById("activityContentInput").value = "";
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById("activityDateInput").value = now.toISOString().slice(0, 16);
+    populateActivityDealSelect();
+    document.getElementById("activityModal").classList.add("open");
+  }
+  function closeActivityModal() {
+    document.getElementById("activityModal").classList.remove("open");
+  }
+
+  async function createActivity() {
+    const company_id  = document.getElementById("activityCompanySelect").value;
+    const deal_id      = document.getElementById("activityDealSelect").value || null;
+    const type          = document.getElementById("activityTypeSelect").value;
+    const content        = document.getElementById("activityContentInput").value.trim();
+    const activityAtRaw = document.getElementById("activityDateInput").value;
+    const btn = document.getElementById("activitySubmitBtn");
+
+    if (!company_id) { showToast("企業を選択してください", "error"); return; }
+    if (!content)     { showToast("内容を入力してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id, deal_id, type, content,
+          activity_at: activityAtRaw ? new Date(activityAtRaw).toISOString() : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "登録エラー"), "error"); return; }
+      activities.unshift(data);
+      renderTimeline();
+      closeActivityModal();
+      showToast("活動を記録しました", "success");
+    } catch (err) {
+      showToast("登録エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ==================== 除外ドメイン ====================
+
+  async function loadExcludedDomains() {
+    try {
+      const res = await fetch("/api/crm?action=excluded-domains");
+      const raw = await res.json();
+      excludedDomains = Array.isArray(raw) ? raw : [];
+      renderExcludedDomains();
+    } catch (err) {
+      document.getElementById("excludedBody").innerHTML =
+        `<tr class="empty-row"><td colspan="4">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderExcludedDomains() {
+    const body = document.getElementById("excludedBody");
+    if (!excludedDomains.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="4">除外ドメインが登録されていません</td></tr>';
+      return;
+    }
+    body.innerHTML = excludedDomains.map(d => {
+      const created = d.created_at ? new Date(d.created_at).toLocaleDateString("ja-JP") : "—";
+      return `
+        <tr>
+          <td>${esc(d.domain)}</td>
+          <td>${esc(d.reason || "—")}</td>
+          <td style="white-space:nowrap;color:var(--gray-400);font-size:12px">${created}</td>
+          <td><button class="btn-row-delete" onclick="deleteExcludedDomain(${d.id})">削除</button></td>
+        </tr>`;
+    }).join("");
+  }
+
+  async function addExcludedDomain() {
+    const domainInput = document.getElementById("excludedDomainInput");
+    const reasonInput = document.getElementById("excludedReasonInput");
+    const domain = domainInput.value.trim();
+    const reason = reasonInput.value.trim();
+    if (!domain) { showToast("ドメインを入力してください", "error"); return; }
+
+    try {
+      const res = await fetch("/api/crm?action=excluded-domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain, reason: reason || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "登録エラー"), "error"); return; }
+      excludedDomains.unshift(data);
+      renderExcludedDomains();
+      domainInput.value = "";
+      reasonInput.value = "";
+      showToast("除外ドメインを追加しました", "success");
+    } catch (err) {
+      showToast("登録エラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function deleteExcludedDomain(id) {
+    if (!confirm("この除外ドメインを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=excluded-domains", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      excludedDomains = excludedDomains.filter(d => d.id !== id);
+      renderExcludedDomains();
+      showToast("除外ドメインを削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+  }
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+  updateThemeIcon();
+
+  lucide.createIcons();
+  init();
+</script>
+</body>
+</html>

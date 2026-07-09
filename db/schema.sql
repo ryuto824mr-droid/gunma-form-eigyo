@@ -52,3 +52,49 @@ CREATE TABLE IF NOT EXISTS scheduled_sends (
   status       TEXT NOT NULL DEFAULT 'pending',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- contacts: 企業ごとの担当者
+CREATE TABLE IF NOT EXISTS contacts (
+  id          SERIAL PRIMARY KEY,
+  company_id  INTEGER NOT NULL REFERENCES companies(id),
+  name        TEXT NOT NULL,
+  title       TEXT,
+  email       TEXT,
+  phone       TEXT,
+  note        TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- deals: 商談（パイプライン管理）
+-- stage: lead(リード) / contacted(コンタクト済み) / proposal(提案中) / negotiation(交渉中) / won(成約) / lost(失注)
+CREATE TABLE IF NOT EXISTS deals (
+  id                   SERIAL PRIMARY KEY,
+  company_id           INTEGER NOT NULL REFERENCES companies(id),
+  title                TEXT NOT NULL,
+  stage                TEXT NOT NULL DEFAULT 'lead',
+  amount               INTEGER,
+  expected_close_date  DATE,
+  note                 TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- activities: 活動履歴
+-- type: note(メモ) / call(電話) / email(メール) / form(フォーム) / meeting(商談) / other(その他)
+CREATE TABLE IF NOT EXISTS activities (
+  id          SERIAL PRIMARY KEY,
+  company_id  INTEGER NOT NULL REFERENCES companies(id),
+  deal_id     INTEGER REFERENCES deals(id),
+  type        TEXT NOT NULL DEFAULT 'note',
+  content     TEXT NOT NULL,
+  activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- excluded_domains: フォーム/メール自動送信を禁止するドメイン
+CREATE TABLE IF NOT EXISTS excluded_domains (
+  id         SERIAL PRIMARY KEY,
+  domain     TEXT NOT NULL UNIQUE,
+  reason     TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
