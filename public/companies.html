@@ -877,6 +877,34 @@
           <option value="非上場">非上場のみ</option>
         </select>
       </div>
+      <div class="search-form-field">
+        <label for="searchFoundingAge">設立年数</label>
+        <select id="searchFoundingAge" onchange="updateSearchQueryPreview()">
+          <option value="">設立年数を選択</option>
+          <option value="設立10年以内">設立10年以内（新興・スタートアップ）</option>
+          <option value="設立10〜30年">設立10〜30年</option>
+          <option value="設立30年以上">設立30年以上（老舗）</option>
+        </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchRevenue">売上規模</label>
+        <select id="searchRevenue" onchange="updateSearchQueryPreview()">
+          <option value="">売上規模を選択</option>
+          <option value="売上1億円未満">〜1億円未満</option>
+          <option value="売上1億〜10億円">1億〜10億円</option>
+          <option value="売上10億〜100億円">10億〜100億円</option>
+          <option value="売上100億円以上">100億円以上</option>
+        </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchHiring">採用状況</label>
+        <select id="searchHiring" onchange="updateSearchQueryPreview()">
+          <option value="">採用状況を選択</option>
+          <option value="採用活動中">採用活動中</option>
+          <option value="中途採用中">中途採用中</option>
+          <option value="新卒採用中">新卒採用中</option>
+        </select>
+      </div>
     </div>
     <div class="search-query-preview" id="searchQueryPreview">検索条件を選択するとクエリプレビューが表示されます</div>
     <div class="discover-row">
@@ -1927,17 +1955,21 @@
 
   function getSearchParams() {
     return {
-      industry:   document.getElementById("searchIndustry").value,
-      prefecture: document.getElementById("searchPrefecture").value,
-      city:       document.getElementById("searchCity").value.trim(),
-      keyword:    document.getElementById("searchKeyword").value.trim(),
-      size:       document.getElementById("searchSize").value,
-      listing:    document.getElementById("searchListing").value,
+      industry:     document.getElementById("searchIndustry").value,
+      prefecture:   document.getElementById("searchPrefecture").value,
+      city:         document.getElementById("searchCity").value.trim(),
+      keyword:      document.getElementById("searchKeyword").value.trim(),
+      size:         document.getElementById("searchSize").value,
+      listing:      document.getElementById("searchListing").value,
+      founding_age: document.getElementById("searchFoundingAge").value,
+      revenue:      document.getElementById("searchRevenue").value,
+      hiring:       document.getElementById("searchHiring").value,
     };
   }
 
   function hasAnySearchParam(params) {
-    return !!(params.industry || params.prefecture || params.city || params.keyword || params.size || params.listing);
+    return !!(params.industry || params.prefecture || params.city || params.keyword || params.size ||
+      params.listing || params.founding_age || params.revenue || params.hiring);
   }
 
   function buildQueryPreview(params) {
@@ -1947,6 +1979,9 @@
     if (params.industry) parts.push(params.industry);
     if (params.size) parts.push(params.size);
     if (params.listing) parts.push(params.listing);
+    if (params.founding_age) parts.push(params.founding_age);
+    if (params.revenue) parts.push(params.revenue);
+    if (params.hiring) parts.push(params.hiring);
     if (params.keyword) parts.push(params.keyword);
     parts.push("公式サイト");
     // 除外ワード
@@ -1962,6 +1997,9 @@
     if (params.city) tags.push(`地域:${params.city}`);
     if (params.size) tags.push(`規模:${params.size}`);
     if (params.listing) tags.push(`上場:${params.listing}`);
+    if (params.founding_age) tags.push(`設立:${params.founding_age}`);
+    if (params.revenue) tags.push(`売上:${params.revenue}`);
+    if (params.hiring) tags.push(`採用:${params.hiring}`);
     return tags;
   }
 
@@ -1982,6 +2020,9 @@
     document.getElementById("searchKeyword").value = "";
     document.getElementById("searchSize").value = "";
     document.getElementById("searchListing").value = "";
+    document.getElementById("searchFoundingAge").value = "";
+    document.getElementById("searchRevenue").value = "";
+    document.getElementById("searchHiring").value = "";
     updateSearchQueryPreview();
   }
 

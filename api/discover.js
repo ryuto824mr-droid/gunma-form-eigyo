@@ -16,16 +16,21 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {};
   const params = {
-    industry:   String(body.industry   || "").trim(),
-    prefecture: String(body.prefecture || "").trim(),
-    city:       String(body.city       || "").trim(),
-    keyword:    String(body.keyword    || "").trim(),
-    size:       String(body.size       || "").trim(),
-    listing:    String(body.listing    || "").trim(),
+    industry:     String(body.industry     || "").trim(),
+    prefecture:   String(body.prefecture   || "").trim(),
+    city:         String(body.city         || "").trim(),
+    keyword:      String(body.keyword      || "").trim(),
+    size:         String(body.size         || "").trim(),
+    listing:      String(body.listing      || "").trim(),
+    founding_age: String(body.founding_age || "").trim(),
+    revenue:      String(body.revenue      || "").trim(),
+    hiring:       String(body.hiring       || "").trim(),
   };
 
-  if (!params.industry && !params.prefecture && !params.city && !params.keyword && !params.size && !params.listing) {
-    return res.status(400).json({ error: "industry, prefecture, city, keyword, size, listing のいずれかが必要です" });
+  const hasAnyParam = params.industry || params.prefecture || params.city || params.keyword ||
+    params.size || params.listing || params.founding_age || params.revenue || params.hiring;
+  if (!hasAnyParam) {
+    return res.status(400).json({ error: "industry, prefecture, city, keyword, size, listing, founding_age, revenue, hiring のいずれかが必要です" });
   }
 
   const braveKey = process.env.BRAVE_SEARCH_API_KEY;
@@ -38,7 +43,8 @@ module.exports = async function handler(req, res) {
 
   // AI判定フィルタ・Places検索向けの補助的な地域/キーワード文字列
   const locationStr = [params.prefecture, params.city].filter(Boolean).join("");
-  const descStr = [params.industry, params.size, params.listing, params.keyword].filter(Boolean).join(" ");
+  const descStr = [params.industry, params.size, params.listing, params.founding_age, params.revenue, params.hiring, params.keyword]
+    .filter(Boolean).join(" ");
 
   try {
     // 1. Brave検索 → ブラックリスト除外 → ホスト名重複除去
@@ -79,6 +85,9 @@ function buildQuery(params) {
   if (params.industry) parts.push(params.industry);
   if (params.size) parts.push(params.size);
   if (params.listing) parts.push(params.listing);
+  if (params.founding_age) parts.push(params.founding_age);
+  if (params.revenue) parts.push(params.revenue);
+  if (params.hiring) parts.push(params.hiring);
   if (params.keyword) parts.push(params.keyword);
   parts.push("公式サイト");
   // 除外ワード
