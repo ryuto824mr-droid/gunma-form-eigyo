@@ -64,6 +64,14 @@
 
   .container { max-width: 960px; margin: 0 auto; padding: 28px 16px; }
 
+  .link-to-reports {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+    color: var(--green-700); text-decoration: none; font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .link-to-reports:hover { text-decoration: underline; }
+  .link-to-reports svg { width: 14px; height: 14px; }
+
   .analytics-header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
   .updated-at { font-size: 12px; color: var(--gray-400); flex: 1; }
   .btn-refresh, .btn-check {
@@ -365,12 +373,15 @@
     <a href="/send.html">送信管理</a>
     <a href="/analytics.html" class="active">分析</a>
     <a href="/crm.html">CRM</a>
+    <a href="/reports.html">レポート</a>
     <a href="/help.html">ヘルプ</a>
     <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
   </nav>
 </header>
 
 <div class="container">
+
+  <a class="link-to-reports" href="/reports.html">詳細レポートはこちら<i data-lucide="arrow-right"></i></a>
 
   <div class="analytics-header">
     <span class="updated-at" id="updatedAt">読み込み中...</span>
@@ -387,6 +398,12 @@
   </div>
 
   <div class="summary-cards" id="summaryCards"></div>
+
+  <section class="stat-section">
+    <h2>月別送信数</h2>
+    <div class="chart-wrap" style="height:140px;"><canvas id="miniMonthlyChart"></canvas></div>
+  </section>
+
   <div id="mainContent"></div>
 
 </div>
@@ -397,8 +414,56 @@
 <script>
   let variantsChartInstance = null;
   let tagsChartInstance     = null;
+  let miniMonthlyChartInstance = null;
   let lastVariantsStats     = [];
   let lastTagsStats         = [];
+  let lastMonthlySends      = [];
+
+  function monthLabel(ym) {
+    const parts = String(ym).split("-");
+    return `${parseInt(parts[1], 10)}月`;
+  }
+
+  async function loadMiniMonthlyChart() {
+    try {
+      const res = await fetch("/api/crm?action=reports");
+      if (!res.ok) return;
+      const data = await res.json();
+      lastMonthlySends = data.monthly_sends || [];
+      renderMiniMonthlyChart(lastMonthlySends);
+    } catch {
+      // レポートAPI取得失敗はメイン分析表示をブロックしない
+    }
+  }
+
+  function renderMiniMonthlyChart(monthlySends) {
+    const canvas = document.getElementById("miniMonthlyChart");
+    if (!canvas) return;
+    if (miniMonthlyChartInstance) { miniMonthlyChartInstance.destroy(); miniMonthlyChartInstance = null; }
+    const dark      = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    miniMonthlyChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: monthlySends.map(r => monthLabel(r.month)),
+        datasets: [{
+          label: "送信数", data: monthlySends.map(r => r.count),
+          borderColor: "#44B13F", backgroundColor: "rgba(68,177,63,0.15)",
+          tension: 0.3, fill: true, pointRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
 
   function animateCount(el, target, isFloat = false) {
     const duration = 600;
@@ -763,6 +828,9 @@
     if (variantsChartInstance || tagsChartInstance) {
       renderCharts(lastVariantsStats, lastTagsStats);
     }
+    if (miniMonthlyChartInstance) {
+      renderMiniMonthlyChart(lastMonthlySends);
+    }
   }
 
   function updateThemeIcon() {
@@ -909,6 +977,7 @@
 
   lucide.createIcons();
   loadAnalytics();
+  loadMiniMonthlyChart();
   startTour([
     { targetSelector: "#summaryCards", title: "全体サマリー",          description: "総送信数・総反応数・全体反応率が確認できます。",                                                             position: "bottom" },
     { targetSelector: "#mainContent",  title: "バリアント別・タグ別集計", description: "どのバリアントが一番反応が良いかを比較できます。タグ別では文面の傾向ごとの反応率が分かります。",               position: "top" },

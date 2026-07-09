@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>レポート - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; }
+
+  .page-header {
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+
+  .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
+
+  .reports-header { margin-bottom: 20px; }
+  .reports-header h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; color: var(--gray-900); }
+  .reports-header p { font-size: 13px; color: var(--gray-500); margin: 0; }
+
+  .stat-section {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 24px;
+    margin-bottom: 20px; box-shadow: var(--shadow-sm);
+  }
+  .stat-section h2 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .stat-section .section-sub { font-size: 12px; color: var(--gray-400); margin: 0 0 18px; }
+
+  .report-row { display: flex; gap: 24px; flex-wrap: wrap; align-items: stretch; }
+  .report-chart-col { flex: 2 1 320px; min-width: 0; }
+  .report-summary-col { flex: 1 1 180px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+  .chart-wrap { position: relative; height: 260px; }
+  .chart-wrap.donut { height: 200px; }
+
+  .mini-stat {
+    background: var(--gray-50); border-radius: var(--radius-md);
+    padding: 14px 16px; border: 1px solid var(--gray-100);
+  }
+  .mini-stat-label { font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .mini-stat-value { font-size: 22px; font-weight: 700; color: var(--gray-900); margin-top: 4px; letter-spacing: -0.02em; }
+  .mini-stat-value.accent { color: var(--green-700); }
+
+  .donut-legend { display: flex; flex-direction: column; gap: 10px; }
+  .donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--gray-700); }
+  .donut-legend-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .donut-legend-count { margin-left: auto; font-weight: 600; color: var(--gray-900); }
+  .donut-legend-pct { font-size: 11px; color: var(--gray-400); margin-left: 6px; }
+
+  .table-wrap { overflow-x: auto; margin-top: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    background: var(--gray-50); text-align: left; padding: 10px 14px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray-500);
+    border-bottom: 2px solid var(--gray-200); white-space: nowrap;
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  th.r, td.r { text-align: right; }
+  tr:hover td { background: var(--green-50); transition: background 100ms ease; }
+  .rate-hi { color: var(--green-700); font-weight: 600; }
+  .rate-lo { color: var(--gray-300); }
+  .dash    { color: var(--gray-300); }
+  .empty   { font-size: 13px; color: var(--gray-400); padding: 16px 0; margin: 0; text-align: center; }
+
+  .link-to-analytics {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+    color: var(--green-700); text-decoration: none; font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .link-to-analytics:hover { text-decoration: underline; }
+  .link-to-analytics svg { width: 14px; height: 14px; }
+
+  @media (max-width: 700px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
+    .container { padding: 16px 8px; }
+    .report-summary-col { flex-direction: row; flex-wrap: wrap; }
+    .mini-stat { flex: 1 1 120px; }
+  }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+      --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+      --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    table thead { background: #1e293b; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+    .mini-stat { background: #0f172a; border-color: #1e293b; }
+  }
+  html.dark {
+    --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+    --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+    --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark table thead { background: #1e293b; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .mini-stat { background: #0f172a; border-color: #1e293b; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/index.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <nav class="page-nav">
+    <a href="/index.html">ホーム</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html">送信管理</a>
+    <a href="/analytics.html">分析</a>
+    <a href="/crm.html">CRM</a>
+    <a href="/reports.html" class="active">レポート</a>
+    <a href="/help.html">ヘルプ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <div class="reports-header">
+    <h1>レポート・ダッシュボード</h1>
+    <p>送信パフォーマンス・パイプライン価値・トレンドをまとめて確認できます</p>
+  </div>
+
+  <!-- セクション1: 送信パフォーマンス -->
+  <section class="stat-section">
+    <h2>送信パフォーマンス</h2>
+    <p class="section-sub">過去6ヶ月の月別送信数・反応数</p>
+    <div class="report-row">
+      <div class="report-chart-col">
+        <div class="chart-wrap"><canvas id="sendsChart"></canvas></div>
+      </div>
+      <div class="report-summary-col">
+        <div class="mini-stat">
+          <div class="mini-stat-label">合計送信数</div>
+          <div class="mini-stat-value" id="statTotalSends">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">合計反応数</div>
+          <div class="mini-stat-value" id="statTotalResponses">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">平均反応率</div>
+          <div class="mini-stat-value accent" id="statAvgRate">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- セクション2: チャネル別内訳 -->
+  <section class="stat-section">
+    <h2>チャネル別内訳</h2>
+    <p class="section-sub">フォーム送信とメール送信の比率</p>
+    <div class="report-row">
+      <div class="report-chart-col" style="flex: 1 1 220px;">
+        <div class="chart-wrap donut"><canvas id="channelChart"></canvas></div>
+      </div>
+      <div class="report-summary-col" id="channelLegend"></div>
+    </div>
+  </section>
+
+  <!-- セクション3: バリアント別パフォーマンス -->
+  <section class="stat-section">
+    <h2>バリアント別パフォーマンス</h2>
+    <p class="section-sub">反応率の高い上位5件</p>
+    <div class="chart-wrap"><canvas id="variantChart"></canvas></div>
+    <div class="table-wrap" id="variantTableWrap"></div>
+  </section>
+
+  <!-- セクション4: パイプライン価値 -->
+  <section class="stat-section">
+    <h2>パイプライン価値</h2>
+    <p class="section-sub">ステージ別の商談金額合計</p>
+    <div class="report-row">
+      <div class="report-chart-col">
+        <div class="chart-wrap"><canvas id="pipelineChart"></canvas></div>
+      </div>
+      <div class="report-summary-col">
+        <div class="mini-stat">
+          <div class="mini-stat-label">合計パイプライン金額</div>
+          <div class="mini-stat-value accent" id="statTotalPipelineValue">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">期待成約額（提案中+交渉中）</div>
+          <div class="mini-stat-value" id="statExpectedValue">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- セクション5: 月次トレンド -->
+  <section class="stat-section">
+    <h2>月次トレンド</h2>
+    <p class="section-sub">過去6ヶ月の成約・失注の推移</p>
+    <div class="report-row">
+      <div class="report-chart-col">
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="report-summary-col">
+        <div class="mini-stat">
+          <div class="mini-stat-label">累計成約金額</div>
+          <div class="mini-stat-value accent" id="statWonTotal">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+  const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
+
+  let sendsChartInstance = null;
+  let channelChartInstance = null;
+  let variantChartInstance = null;
+  let pipelineChartInstance = null;
+  let trendChartInstance = null;
+  let lastReportData = null;
+
+  function isDarkMode() {
+    return document.documentElement.classList.contains("dark") ||
+      (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+
+  function monthLabel(ym) {
+    const parts = String(ym).split("-");
+    return `${parseInt(parts[1], 10)}月`;
+  }
+
+  function formatYen(n) {
+    return `¥${Number(n || 0).toLocaleString()}`;
+  }
+  function formatManYen(n) {
+    return `¥${Math.round((n || 0) / 10000).toLocaleString()}万円`;
+  }
+
+  async function loadReports() {
+    try {
+      const res = await fetch("/api/crm?action=reports");
+      if (!res.ok) throw new Error("取得失敗");
+      const data = await res.json();
+      lastReportData = data;
+      renderAll(data);
+    } catch (err) {
+      showToast("レポートの取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function renderAll(data) {
+    renderSendsSection(data.monthly_sends, data.monthly_responses);
+    renderChannelSection(data.channel_stats);
+    renderVariantSection(data.variant_performance);
+    renderPipelineSection(data.pipeline_value);
+    renderTrendSection(data.won_lost_trend);
+    lucide.createIcons();
+  }
+
+  // ===== セクション1: 送信パフォーマンス =====
+  function renderSendsSection(monthlySends, monthlyResponses) {
+    const totalSends = (monthlySends || []).reduce((s, r) => s + r.count, 0);
+    const totalResponses = (monthlyResponses || []).reduce((s, r) => s + r.count, 0);
+    const avgRate = totalSends > 0 ? (totalResponses / totalSends * 100).toFixed(1) : "0.0";
+
+    document.getElementById("statTotalSends").textContent = `${totalSends}件`;
+    document.getElementById("statTotalResponses").textContent = `${totalResponses}件`;
+    document.getElementById("statAvgRate").textContent = `${avgRate}%`;
+
+    const canvas = document.getElementById("sendsChart");
+    if (sendsChartInstance) { sendsChartInstance.destroy(); sendsChartInstance = null; }
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    sendsChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: (monthlySends || []).map(r => monthLabel(r.month)),
+        datasets: [
+          { label: "送信数", data: (monthlySends || []).map(r => r.count), borderColor: "#94a3b8", backgroundColor: "rgba(148,163,184,0.15)", tension: 0.3, fill: true },
+          { label: "反応数", data: (monthlyResponses || []).map(r => r.count), borderColor: "#44B13F", backgroundColor: "rgba(68,177,63,0.15)", tension: 0.3, fill: true },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: true, position: "top", labels: { boxWidth: 12, font: { size: 11 }, color: textColor } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  // ===== セクション2: チャネル別内訳 =====
+  function renderChannelSection(channelStats) {
+    const stats = channelStats || { form: 0, email: 0 };
+    const total = stats.form + stats.email;
+    const canvas = document.getElementById("channelChart");
+    if (channelChartInstance) { channelChartInstance.destroy(); channelChartInstance = null; }
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+
+    channelChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "doughnut",
+      data: {
+        labels: ["フォーム", "メール"],
+        datasets: [{ data: [stats.form, stats.email], backgroundColor: ["#44B13F", "#3b82f6"], borderWidth: 0 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    const legend = document.getElementById("channelLegend");
+    const pct = n => total > 0 ? Math.round(n / total * 100) : 0;
+    legend.innerHTML = `
+      <div class="donut-legend">
+        <div class="donut-legend-item">
+          <span class="donut-legend-dot" style="background:#44B13F"></span>
+          <span>フォーム</span>
+          <span class="donut-legend-count">${stats.form}件<span class="donut-legend-pct">(${pct(stats.form)}%)</span></span>
+        </div>
+        <div class="donut-legend-item">
+          <span class="donut-legend-dot" style="background:#3b82f6"></span>
+          <span>メール</span>
+          <span class="donut-legend-count">${stats.email}件<span class="donut-legend-pct">(${pct(stats.email)}%)</span></span>
+        </div>
+      </div>`;
+  }
+
+  // ===== セクション3: バリアント別パフォーマンス =====
+  function renderVariantSection(variantPerformance) {
+    const stats = variantPerformance || [];
+    const canvas = document.getElementById("variantChart");
+    if (variantChartInstance) { variantChartInstance.destroy(); variantChartInstance = null; }
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    if (!stats.length) {
+      canvas.hidden = true;
+    } else {
+      canvas.hidden = false;
+      const labels = stats.map(r => {
+        const name = r.variant_name || "";
+        return name.length > 12 ? name.slice(0, 12) + "…" : name;
+      });
+      variantChartInstance = new Chart(canvas.getContext("2d"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{ label: "反応率", data: stats.map(r => Number(r.response_rate)), backgroundColor: "#44B13F", borderRadius: 4 }],
+        },
+        options: {
+          indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: v => v + "%" }, grid: { color: gridColor } },
+            y: { grid: { display: false }, ticks: { color: textColor } },
+          },
+        },
+      });
+    }
+
+    const wrap = document.getElementById("variantTableWrap");
+    if (!stats.length) {
+      wrap.innerHTML = '<p class="empty">データがありません（送信を記録すると集計が表示されます）</p>';
+      return;
+    }
+    const rows = stats.map(r => {
+      const sends = Number(r.send_count);
+      const rate = Number(r.response_rate);
+      const rc = rate >= 20 ? "rate-hi" : (rate === 0 ? "rate-lo" : "");
+      return `
+        <tr>
+          <td>${esc(r.variant_name)}</td>
+          <td class="r">${sends}</td>
+          <td class="r">${r.response_count}</td>
+          <td class="r"><span class="${rc}">${rate}%</span></td>
+        </tr>`;
+    }).join("");
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>バリアント名</th><th class="r">送信数</th><th class="r">反応数</th><th class="r">反応率</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // ===== セクション4: パイプライン価値 =====
+  function renderPipelineSection(pipelineValue) {
+    const stats = pipelineValue || [];
+    const totalPipeline = stats.reduce((s, r) => s + r.total_amount, 0);
+    const expected = stats
+      .filter(r => r.stage === "proposal" || r.stage === "negotiation")
+      .reduce((s, r) => s + r.total_amount, 0);
+
+    document.getElementById("statTotalPipelineValue").textContent = formatManYen(totalPipeline);
+    document.getElementById("statExpectedValue").textContent = formatManYen(expected);
+
+    const canvas = document.getElementById("pipelineChart");
+    if (pipelineChartInstance) { pipelineChartInstance.destroy(); pipelineChartInstance = null; }
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    pipelineChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => STAGE_LABELS[r.stage] || r.stage),
+        datasets: [{ label: "金額", data: stats.map(r => r.total_amount), backgroundColor: "#44B13F", borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => formatYen(ctx.raw) } },
+        },
+        scales: {
+          x: { beginAtZero: true, ticks: { color: textColor, callback: v => formatManYen(v) }, grid: { color: gridColor } },
+          y: { grid: { display: false }, ticks: { color: textColor } },
+        },
+      },
+    });
+  }
+
+  // ===== セクション5: 月次トレンド =====
+  function renderTrendSection(wonLostTrend) {
+    const stats = wonLostTrend || [];
+    const wonTotal = stats.reduce((s, r) => s + r.won, 0);
+    document.getElementById("statWonTotal").textContent = `${wonTotal}件`;
+
+    const canvas = document.getElementById("trendChart");
+    if (trendChartInstance) { trendChartInstance.destroy(); trendChartInstance = null; }
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    trendChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => monthLabel(r.month)),
+        datasets: [
+          { label: "成約", data: stats.map(r => r.won), backgroundColor: "#44B13F", borderRadius: 4 },
+          { label: "失注", data: stats.map(r => r.lost), backgroundColor: "#dc2626", borderRadius: 4 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: true, position: "top", labels: { boxWidth: 12, font: { size: 11 }, color: textColor } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+    if (lastReportData) renderAll(lastReportData);
+  }
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+  updateThemeIcon();
+
+  lucide.createIcons();
+  loadReports();
+</script>
+</body>
+</html>
