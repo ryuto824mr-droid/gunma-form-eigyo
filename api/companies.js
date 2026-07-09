@@ -6,7 +6,7 @@ module.exports = async function handler(req, res) {
       const showArchived = req.query?.show_archived === "1";
       const companies = showArchived
         ? await sql`SELECT * FROM companies ORDER BY created_at DESC`
-        : await sql`SELECT * FROM companies WHERE archived = FALSE ORDER BY created_at DESC`;
+        : await sql`SELECT * FROM companies WHERE (archived = FALSE OR archived IS NULL) ORDER BY created_at DESC`;
       return res.status(200).json(companies);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });

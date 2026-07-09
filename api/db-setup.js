@@ -64,6 +64,7 @@ module.exports = async function handler(req, res) {
     await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_tags JSONB DEFAULT '[]'");
     // アーカイブ機能用カラム追加
     await sql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE");
+    await sql.query("UPDATE companies SET archived = false WHERE archived IS NULL");
     // send_logs.tags追加（検索条件タグの記録用）
     await sql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS tags JSONB");
     // responses.message_id追加（返信自動検出用）
