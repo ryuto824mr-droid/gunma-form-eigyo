@@ -17,8 +17,10 @@ module.exports = async function handler(req, res) {
     case "deals":             return handleDeals(req, res);
     case "activities":       return handleActivities(req, res);
     case "excluded-domains": return handleExcludedDomains(req, res);
+    case "tasks":             return handleTasks(req, res);
+    case "pipeline-stats":   return handlePipelineStats(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats）を指定してください" });
   }
 };
 
@@ -79,6 +81,18 @@ async function handleDbSetup(req, res) {
     // アーカイブ機能用カラム追加
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE");
     await dbSql.query("UPDATE companies SET archived = false WHERE archived IS NULL");
+    // tasksテーブル追加（CRMタスク管理用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id          SERIAL PRIMARY KEY,
+        company_id  INTEGER REFERENCES companies(id),
+        deal_id     INTEGER REFERENCES deals(id),
+        title       TEXT NOT NULL,
+        due_date    DATE,
+        done        BOOLEAN DEFAULT FALSE,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     // send_logs.tags追加（検索条件タグの記録用）
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS tags JSONB");
     // responses.message_id追加（返信自動検出用）
@@ -362,4 +376,154 @@ async function handleExcludedDomains(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / DELETE のみ対応しています" });
+}
+
+// ==================== tasks ====================
+
+async function handleTasks(req, res) {
+  if (req.method === "GET") {
+    try {
+      const includeDone = req.query.include_done === "1";
+      const tasks = includeDone
+        ? await sql`
+            SELECT t.*, c.name AS company_name, d.title AS deal_title
+            FROM tasks t
+            LEFT JOIN companies c ON c.id = t.company_id
+            LEFT JOIN deals d ON d.id = t.deal_id
+            ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+          `
+        : await sql`
+            SELECT t.*, c.name AS company_name, d.title AS deal_title
+            FROM tasks t
+            LEFT JOIN companies c ON c.id = t.company_id
+            LEFT JOIN deals d ON d.id = t.deal_id
+            WHERE t.done = FALSE
+            ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+          `;
+      return res.status(200).json(tasks);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { company_id, deal_id, title, due_date } = req.body || {};
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "title（文字列）が必要です" });
+    }
+    const companyId = company_id ? parseInt(company_id, 10) : null;
+    const dealId    = deal_id ? parseInt(deal_id, 10) : null;
+    try {
+      const [task] = await sql`
+        INSERT INTO tasks (company_id, deal_id, title, due_date)
+        VALUES (${companyId}, ${dealId}, ${title.trim()}, ${due_date || null})
+        RETURNING *
+      `;
+      const [withNames] = await sql`
+        SELECT t.*, c.name AS company_name, d.title AS deal_title
+        FROM tasks t
+        LEFT JOIN companies c ON c.id = t.company_id
+        LEFT JOIN deals d ON d.id = t.deal_id
+        WHERE t.id = ${task.id}
+      `;
+      return res.status(201).json(withNames);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { id, done, title, due_date } = req.body || {};
+    const taskId = parseInt(id, 10);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [current] = await sql`SELECT * FROM tasks WHERE id = ${taskId}`;
+      if (!current) return res.status(404).json({ error: "タスクが見つかりません" });
+
+      const newTitle   = title !== undefined ? title : current.title;
+      const newDueDate = due_date !== undefined ? (due_date || null) : current.due_date;
+      const newDone     = done !== undefined ? !!done : current.done;
+
+      const [updated] = await sql`
+        UPDATE tasks
+        SET title = ${newTitle}, due_date = ${newDueDate}, done = ${newDone}
+        WHERE id = ${taskId}
+        RETURNING *
+      `;
+      const [withNames] = await sql`
+        SELECT t.*, c.name AS company_name, d.title AS deal_title
+        FROM tasks t
+        LEFT JOIN companies c ON c.id = t.company_id
+        LEFT JOIN deals d ON d.id = t.deal_id
+        WHERE t.id = ${updated.id}
+      `;
+      return res.status(200).json(withNames);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const taskId = parseInt(id, 10);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM tasks WHERE id = ${taskId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "タスクが見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
+}
+
+// ==================== pipeline-stats ====================
+
+async function handlePipelineStats(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    const stageRows = await sql`
+      SELECT stage,
+             COUNT(*)::int AS deal_count,
+             COALESCE(SUM(amount), 0)::int AS total_amount,
+             COALESCE(AVG(amount), 0)::int AS avg_amount
+      FROM deals
+      GROUP BY stage
+    `;
+    const stageMap = {};
+    stageRows.forEach(r => { stageMap[r.stage] = r; });
+    const stages = DEAL_STAGES.map(stage => ({
+      stage,
+      deal_count: stageMap[stage]?.deal_count || 0,
+      total_amount: stageMap[stage]?.total_amount || 0,
+      avg_amount: stageMap[stage]?.avg_amount || 0,
+    }));
+
+    const [{ total_pipeline }] = await sql`
+      SELECT COALESCE(SUM(amount), 0)::int AS total_pipeline
+      FROM deals
+      WHERE stage NOT IN ('won', 'lost')
+    `;
+    const wonCount  = stageMap["won"]?.deal_count || 0;
+    const lostCount = stageMap["lost"]?.deal_count || 0;
+    const winRate   = (wonCount + lostCount) > 0 ? (wonCount / (wonCount + lostCount)) * 100 : 0;
+
+    return res.status(200).json({
+      stages,
+      total_pipeline,
+      won_count: wonCount,
+      lost_count: lostCount,
+      win_rate: Math.round(winRate * 10) / 10,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
 }

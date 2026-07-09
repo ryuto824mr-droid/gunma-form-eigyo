@@ -90,6 +90,16 @@
   .btn-add:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
   .btn-add svg { width: 14px; height: 14px; }
 
+  /* Pipeline summary bar */
+  .pipeline-summary-bar {
+    display: flex; gap: 24px; flex-wrap: wrap; padding: 14px 20px; margin-bottom: 16px;
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+  }
+  .summary-stat { display: flex; flex-direction: column; gap: 3px; }
+  .summary-stat-label { font-size: 11px; color: var(--gray-500); font-weight: 600; }
+  .summary-stat-value { font-size: 19px; font-weight: 700; color: var(--gray-900); }
+  .summary-stat-value.accent { color: var(--green-700); }
+
   /* Kanban */
   .kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
   .kanban-column {
@@ -100,9 +110,11 @@
   .kanban-column.drag-over { background: var(--green-50); border-color: var(--green-500); }
   .kanban-column-header {
     font-size: 12px; font-weight: 700; color: var(--gray-700);
-    display: flex; justify-content: space-between; align-items: center; padding: 2px 4px 8px;
+    display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 2px 4px 8px;
   }
+  .kanban-column-header-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
   .kanban-count { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+  .kanban-column-amount { font-size: 11px; color: var(--gray-500); font-weight: 500; }
   .kanban-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
   .kanban-card {
     background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
@@ -110,11 +122,18 @@
   }
   .kanban-card:hover { box-shadow: var(--shadow-md); }
   .kanban-card.dragging { opacity: 0.4; }
-  .kanban-card-company { font-size: 11px; color: var(--gray-500); margin-bottom: 2px; }
-  .kanban-card-title { font-size: 13px; font-weight: 600; margin: 0 0 6px; color: var(--gray-900); word-break: break-word; }
+  .kanban-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; }
+  .kanban-card-company { font-size: 12px; font-weight: 700; color: var(--gray-900); margin-bottom: 2px; }
+  .kanban-card-delete {
+    background: none; border: none; color: var(--gray-300); cursor: pointer;
+    font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; transition: color 150ms;
+  }
+  .kanban-card-delete:hover { color: #dc2626; }
+  .kanban-card-title { font-size: 13px; font-weight: 500; margin: 0 0 6px; color: var(--gray-700); word-break: break-word; }
   .kanban-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
   .kanban-card-amount { font-size: 12px; color: var(--green-700); font-weight: 700; }
-  .kanban-card-date { font-size: 11px; color: var(--gray-400); }
+  .kanban-card-date { font-size: 11px; color: var(--gray-400); display: inline-flex; align-items: center; gap: 3px; }
+  .kanban-card-date svg { width: 11px; height: 11px; }
   .kanban-empty { font-size: 11px; color: var(--gray-300); text-align: center; padding: 12px 0; }
   .stage-lead        .kanban-column-header { color: var(--gray-700); }
   .stage-contacted    .kanban-column-header { color: #1d4ed8; }
@@ -141,20 +160,66 @@
   }
   .btn-row-delete:hover { background: #fff5f5; }
 
-  /* Timeline */
-  .timeline { display: flex; flex-direction: column; gap: 10px; }
-  .timeline-item {
-    display: flex; gap: 12px; padding: 12px 14px; background: var(--white);
-    border: 1px solid var(--gray-200); border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+  /* Contacts */
+  .contacts-filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .contacts-filter-row label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .contacts-filter-row select {
+    padding: 7px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
   }
-  .timeline-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
-  .timeline-body { flex: 1; min-width: 0; }
+  .contacts-filter-row select:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .contact-icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: var(--radius-sm);
+    color: var(--gray-400); text-decoration: none; transition: all 150ms; margin-right: 4px;
+  }
+  .contact-icon-btn:hover { background: var(--green-50); color: var(--green-700); }
+  .contact-icon-btn svg { width: 13px; height: 13px; }
+
+  /* Timeline */
+  .timeline { position: relative; display: flex; flex-direction: column; }
+  .timeline-item { position: relative; padding: 0 0 18px 34px; }
+  .timeline-item:last-child { padding-bottom: 0; }
+  .timeline-item::before {
+    content: ""; position: absolute; left: 12px; top: 26px; bottom: -2px; width: 2px; background: var(--gray-200);
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-marker {
+    position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
+    background: var(--white); border: 2px solid var(--gray-300); z-index: 1;
+  }
+  .timeline-marker.type-call    { border-color: #3b82f6; background: #eff6ff; }
+  .timeline-marker.type-email   { border-color: var(--green-500); background: var(--green-50); }
+  .timeline-marker.type-note    { border-color: var(--gray-400); background: var(--gray-100); }
+  .timeline-marker.type-meeting { border-color: #7c3aed; background: #f5f3ff; }
+  .timeline-marker.type-form    { border-color: #f97316; background: #fff7ed; }
+  .timeline-marker.type-other   { border-color: var(--gray-400); background: var(--gray-100); }
+  .timeline-content-box {
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+    padding: 10px 14px; box-shadow: var(--shadow-sm);
+  }
   .timeline-header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
   .timeline-company { font-weight: 600; font-size: 13px; color: var(--gray-900); }
   .timeline-type-badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--gray-100); color: var(--gray-500); font-weight: 600; }
+  .timeline-type-badge.type-call    { background: #dbeafe; color: #1d4ed8; }
+  .timeline-type-badge.type-email   { background: var(--green-50); color: var(--green-700); }
+  .timeline-type-badge.type-meeting { background: #ede9fe; color: #7c3aed; }
+  .timeline-type-badge.type-form    { background: #ffedd5; color: #c2410c; }
   .timeline-date { font-size: 11px; color: var(--gray-400); margin-left: auto; white-space: nowrap; }
   .timeline-content { font-size: 13px; color: var(--gray-700); margin: 6px 0 0; white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
   .list-empty { font-size: 13px; color: var(--gray-400); padding: 24px 0; margin: 0; text-align: center; }
+
+  /* Tasks */
+  .task-filter-row { margin-bottom: 14px; }
+  .task-filter-row label {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--gray-500); cursor: pointer; font-family: inherit;
+  }
+  .task-done-checkbox { cursor: pointer; width: 16px; height: 16px; }
+  .task-title-done { text-decoration: line-through; color: var(--gray-400); }
+  .task-overdue { color: #dc2626; font-weight: 700; }
 
   /* Excluded domains */
   .excluded-domain-desc {
@@ -337,6 +402,7 @@
     <button class="crm-tab-btn active" data-tab="pipeline" onclick="switchTab('pipeline')">📊 パイプライン</button>
     <button class="crm-tab-btn" data-tab="contacts" onclick="switchTab('contacts')">👤 コンタクト</button>
     <button class="crm-tab-btn" data-tab="activities" onclick="switchTab('activities')">🕘 活動履歴</button>
+    <button class="crm-tab-btn" data-tab="tasks" onclick="switchTab('tasks')">✅ タスク</button>
     <button class="crm-tab-btn" data-tab="excluded" onclick="switchTab('excluded')">🚫 除外ドメイン</button>
   </div>
 
@@ -349,6 +415,20 @@
       </div>
       <button class="btn-add" onclick="openDealModal()"><i data-lucide="plus"></i>商談を追加</button>
     </div>
+    <div class="pipeline-summary-bar" id="pipelineSummaryBar">
+      <div class="summary-stat">
+        <span class="summary-stat-label">パイプライン総額</span>
+        <span class="summary-stat-value accent" id="summaryTotalPipeline">—</span>
+      </div>
+      <div class="summary-stat">
+        <span class="summary-stat-label">成約</span>
+        <span class="summary-stat-value" id="summaryWonCount">—</span>
+      </div>
+      <div class="summary-stat">
+        <span class="summary-stat-label">成約率</span>
+        <span class="summary-stat-value" id="summaryWinRate">—</span>
+      </div>
+    </div>
     <div class="kanban-board" id="kanbanBoard"></div>
   </section>
 
@@ -360,6 +440,12 @@
         <p class="panel-desc">企業ごとの担当者情報</p>
       </div>
       <button class="btn-add" onclick="openContactModal()"><i data-lucide="plus"></i>コンタクト追加</button>
+    </div>
+    <div class="contacts-filter-row">
+      <label for="contactCompanyFilter">企業で絞り込み</label>
+      <select id="contactCompanyFilter" onchange="renderContacts()">
+        <option value="all">すべて</option>
+      </select>
     </div>
     <div class="crm-table-wrap">
       <table class="crm-table">
@@ -381,6 +467,26 @@
       <button class="btn-add" onclick="openActivityModal()"><i data-lucide="plus"></i>活動を記録</button>
     </div>
     <div class="timeline" id="activitiesTimeline"><p class="list-empty">読み込み中...</p></div>
+  </section>
+
+  <!-- タスク -->
+  <section class="crm-panel" id="panel-tasks">
+    <div class="panel-toolbar">
+      <div>
+        <h2>タスク</h2>
+        <p class="panel-desc">フォローアップなどのToDoを管理します</p>
+      </div>
+      <button class="btn-add" onclick="openTaskModal()"><i data-lucide="plus"></i>タスク追加</button>
+    </div>
+    <div class="task-filter-row">
+      <label><input type="checkbox" id="taskShowDoneCheckbox" onchange="loadTasks()" />完了済みを表示</label>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead><tr><th></th><th>タスク</th><th>企業</th><th>商談</th><th>期限</th><th></th></tr></thead>
+        <tbody id="tasksBody"><tr class="empty-row"><td colspan="6">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- 除外ドメイン -->
@@ -542,6 +648,42 @@
   </div>
 </div>
 
+<!-- タスクモーダル -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>タスクを追加</h3>
+      <button class="modal-close" onclick="closeTaskModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="taskTitleInput">タスク <span style="color:#dc2626">*</span></label>
+          <input type="text" id="taskTitleInput" placeholder="例: 見積書を送付する" />
+        </div>
+        <div class="form-group">
+          <label for="taskCompanySelect">企業（任意）</label>
+          <select id="taskCompanySelect" class="company-select-optional" onchange="populateTaskDealSelect()">
+            <option value="">なし</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="taskDealSelect">関連する商談（任意）</label>
+          <select id="taskDealSelect"><option value="">なし</option></select>
+        </div>
+        <div class="form-group full">
+          <label for="taskDueDateInput">期限</label>
+          <input type="date" id="taskDueDateInput" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeTaskModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="taskSubmitBtn" onclick="createTask()">追加</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
@@ -549,6 +691,8 @@
   let contacts = [];
   let activities = [];
   let excludedDomains = [];
+  let tasks = [];
+  let pipelineStats = null;
 
   const STAGE_ORDER  = ["lead", "contacted", "proposal", "negotiation", "won", "lost"];
   const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
@@ -562,7 +706,7 @@
 
   async function init() {
     await loadCompanies();
-    await Promise.all([loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains()]);
+    await Promise.all([loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats()]);
     lucide.createIcons();
   }
 
@@ -582,7 +726,15 @@
     document.querySelectorAll(".company-select").forEach(sel => {
       sel.innerHTML = options || '<option value="">企業がありません</option>';
     });
+    document.querySelectorAll(".company-select-optional").forEach(sel => {
+      sel.innerHTML = '<option value="">なし</option>' + options;
+    });
+    const filterSel = document.getElementById("contactCompanyFilter");
+    if (filterSel) {
+      filterSel.innerHTML = '<option value="all">すべて</option>' + options;
+    }
     populateActivityDealSelect();
+    populateTaskDealSelect();
   }
 
   // ==================== パイプライン ====================
@@ -598,10 +750,37 @@
     }
   }
 
+  async function loadPipelineStats() {
+    try {
+      const res = await fetch("/api/crm?action=pipeline-stats");
+      pipelineStats = await res.json();
+      renderPipelineSummary();
+      renderKanban();
+    } catch (err) {
+      // サマリー取得失敗はパイプライン表示自体をブロックしない
+    }
+  }
+
+  function formatManYen(amount) {
+    if (!amount) return "¥0";
+    return `¥${Math.round(amount / 10000).toLocaleString()}万円`;
+  }
+
+  function renderPipelineSummary() {
+    if (!pipelineStats) return;
+    document.getElementById("summaryTotalPipeline").textContent = formatManYen(pipelineStats.total_pipeline);
+    document.getElementById("summaryWonCount").textContent = `${pipelineStats.won_count}件`;
+    document.getElementById("summaryWinRate").textContent = `${pipelineStats.win_rate}%`;
+  }
+
   function renderKanban() {
     const board = document.getElementById("kanbanBoard");
+    const stageStatsMap = {};
+    (pipelineStats?.stages || []).forEach(s => { stageStatsMap[s.stage] = s; });
+
     board.innerHTML = STAGE_ORDER.map(stage => {
       const stageDeals = deals.filter(d => d.stage === stage);
+      const totalAmount = stageStatsMap[stage]?.total_amount ?? stageDeals.reduce((s, d) => s + (d.amount || 0), 0);
       const cardsHtml = stageDeals.length
         ? stageDeals.map(d => renderDealCard(d)).join("")
         : '<p class="kanban-empty">なし</p>';
@@ -609,12 +788,16 @@
         <div class="kanban-column stage-${stage}" data-stage="${stage}"
              ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)">
           <div class="kanban-column-header">
-            <span>${STAGE_LABELS[stage]}</span>
-            <span class="kanban-count">${stageDeals.length}</span>
+            <div class="kanban-column-header-top">
+              <span>${STAGE_LABELS[stage]}</span>
+              <span class="kanban-count">${stageDeals.length}件</span>
+            </div>
+            <span class="kanban-column-amount">${formatManYen(totalAmount)}</span>
           </div>
           <div class="kanban-cards">${cardsHtml}</div>
         </div>`;
     }).join("");
+    lucide.createIcons();
   }
 
   function renderDealCard(d) {
@@ -625,13 +808,35 @@
     return `
       <div class="kanban-card" draggable="true" data-deal-id="${d.id}"
            ondragstart="onCardDragStart(event)" ondragend="onCardDragEnd(event)">
-        <div class="kanban-card-company">${esc(d.company_name || "")}</div>
+        <div class="kanban-card-header">
+          <div class="kanban-card-company">${esc(d.company_name || "")}</div>
+          <button class="kanban-card-delete" onclick="deleteDeal(${d.id})" title="削除">✕</button>
+        </div>
         <p class="kanban-card-title">${esc(d.title)}</p>
         <div class="kanban-card-meta">
           <span class="kanban-card-amount">${amount}</span>
-          <span class="kanban-card-date">${closeDate}</span>
+          <span class="kanban-card-date">${closeDate ? `<i data-lucide="calendar"></i>${closeDate}` : ""}</span>
         </div>
       </div>`;
+  }
+
+  async function deleteDeal(id) {
+    if (!confirm("この商談を削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=deals", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      deals = deals.filter(d => d.id !== id);
+      renderKanban();
+      loadPipelineStats();
+      showToast("商談を削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
+    }
   }
 
   let draggedDealId = null;
@@ -671,6 +876,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "更新エラー");
       showToast(`ステージを「${STAGE_LABELS[newStage]}」に変更しました`, "success");
+      loadPipelineStats();
     } catch (err) {
       deal.stage = prevStage;
       renderKanban();
@@ -722,6 +928,7 @@
       renderKanban();
       closeDealModal();
       showToast("商談を追加しました", "success");
+      loadPipelineStats();
     } catch (err) {
       showToast("作成エラー: " + esc(err.message), "error");
     } finally {
@@ -745,19 +952,31 @@
 
   function renderContacts() {
     const body = document.getElementById("contactsBody");
-    if (!contacts.length) {
-      body.innerHTML = '<tr class="empty-row"><td colspan="6">コンタクトが登録されていません</td></tr>';
+    const filterVal = document.getElementById("contactCompanyFilter")?.value || "all";
+    const filtered = filterVal === "all" ? contacts : contacts.filter(ct => String(ct.company_id) === filterVal);
+
+    if (!filtered.length) {
+      body.innerHTML = `<tr class="empty-row"><td colspan="6">${contacts.length ? "該当するコンタクトがありません" : "コンタクトが登録されていません"}</td></tr>`;
       return;
     }
-    body.innerHTML = contacts.map(ct => `
+    body.innerHTML = filtered.map(ct => {
+      const emailCell = ct.email
+        ? `<a class="contact-icon-btn" href="mailto:${esc(ct.email)}" title="メールを送る"><i data-lucide="mail"></i></a>${esc(ct.email)}`
+        : "—";
+      const phoneCell = ct.phone
+        ? `<a class="contact-icon-btn" href="tel:${esc(ct.phone)}" title="電話をかける"><i data-lucide="phone"></i></a>${esc(ct.phone)}`
+        : "—";
+      return `
       <tr>
         <td>${esc(ct.name)}</td>
         <td>${esc(ct.title || "—")}</td>
-        <td>${ct.email ? `<a href="mailto:${esc(ct.email)}" style="color:#2563eb">${esc(ct.email)}</a>` : "—"}</td>
-        <td>${esc(ct.phone || "—")}</td>
+        <td style="white-space:nowrap">${emailCell}</td>
+        <td style="white-space:nowrap">${phoneCell}</td>
         <td>${esc(ct.company_name || "—")}</td>
         <td><button class="btn-row-delete" onclick="deleteContact(${ct.id})">削除</button></td>
-      </tr>`).join("");
+      </tr>`;
+    }).join("");
+    lucide.createIcons();
   }
 
   function openContactModal() {
@@ -845,13 +1064,14 @@
       const dt = a.activity_at
         ? new Date(a.activity_at).toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
         : "—";
+      const typeClass = `type-${a.type || "other"}`;
       return `
         <div class="timeline-item">
-          <span class="timeline-icon">${ACTIVITY_ICONS[a.type] || "📌"}</span>
-          <div class="timeline-body">
+          <span class="timeline-marker ${typeClass}">${ACTIVITY_ICONS[a.type] || "📌"}</span>
+          <div class="timeline-content-box">
             <div class="timeline-header">
               <span class="timeline-company">${esc(a.company_name || "")}</span>
-              <span class="timeline-type-badge">${ACTIVITY_LABELS[a.type] || a.type}</span>
+              <span class="timeline-type-badge ${typeClass}">${ACTIVITY_LABELS[a.type] || a.type}</span>
               <span class="timeline-date">${dt}</span>
             </div>
             <p class="timeline-content">${esc(a.content)}</p>
@@ -912,6 +1132,134 @@
       showToast("登録エラー: " + esc(err.message), "error");
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  // ==================== タスク ====================
+
+  async function loadTasks() {
+    try {
+      const includeDone = document.getElementById("taskShowDoneCheckbox")?.checked;
+      const url = includeDone ? "/api/crm?action=tasks&include_done=1" : "/api/crm?action=tasks";
+      const res = await fetch(url);
+      const raw = await res.json();
+      tasks = Array.isArray(raw) ? raw : [];
+      renderTasks();
+    } catch (err) {
+      document.getElementById("tasksBody").innerHTML =
+        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderTasks() {
+    const body = document.getElementById("tasksBody");
+    if (!tasks.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="6">タスクが登録されていません</td></tr>';
+      return;
+    }
+    const todayStr = new Date().toISOString().slice(0, 10);
+    body.innerHTML = tasks.map(t => {
+      const isOverdue = !t.done && t.due_date && String(t.due_date).slice(0, 10) <= todayStr;
+      const dueText = t.due_date ? new Date(t.due_date).toLocaleDateString("ja-JP") : "—";
+      return `
+        <tr>
+          <td><input type="checkbox" class="task-done-checkbox" ${t.done ? "checked" : ""} onchange="toggleTaskDone(${t.id}, this.checked)" /></td>
+          <td class="${t.done ? "task-title-done" : ""}">${esc(t.title)}</td>
+          <td>${esc(t.company_name || "—")}</td>
+          <td>${esc(t.deal_title || "—")}</td>
+          <td class="${isOverdue ? "task-overdue" : ""}">${dueText}</td>
+          <td><button class="btn-row-delete" onclick="deleteTask(${t.id})">削除</button></td>
+        </tr>`;
+    }).join("");
+  }
+
+  function populateTaskDealSelect() {
+    const companyId = parseInt(document.getElementById("taskCompanySelect")?.value, 10);
+    const sel = document.getElementById("taskDealSelect");
+    if (!sel) return;
+    const related = isNaN(companyId) ? [] : deals.filter(d => d.company_id === companyId);
+    sel.innerHTML = '<option value="">なし</option>' +
+      related.map(d => `<option value="${d.id}">${esc(d.title)}</option>`).join("");
+  }
+
+  function openTaskModal() {
+    document.getElementById("taskTitleInput").value = "";
+    document.getElementById("taskCompanySelect").value = "";
+    document.getElementById("taskDueDateInput").value = "";
+    populateTaskDealSelect();
+    document.getElementById("taskModal").classList.add("open");
+  }
+  function closeTaskModal() {
+    document.getElementById("taskModal").classList.remove("open");
+  }
+
+  async function createTask() {
+    const title    = document.getElementById("taskTitleInput").value.trim();
+    const company_id = document.getElementById("taskCompanySelect").value || null;
+    const deal_id     = document.getElementById("taskDealSelect").value || null;
+    const due_date     = document.getElementById("taskDueDateInput").value || null;
+    const btn = document.getElementById("taskSubmitBtn");
+
+    if (!title) { showToast("タスクを入力してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id, deal_id, title, due_date }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "作成エラー"), "error"); return; }
+      tasks.unshift(data);
+      renderTasks();
+      closeTaskModal();
+      showToast("タスクを追加しました", "success");
+    } catch (err) {
+      showToast("作成エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function toggleTaskDone(id, done) {
+    try {
+      const res = await fetch("/api/crm?action=tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, done }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "更新エラー"), "error"); return; }
+      const includeDone = document.getElementById("taskShowDoneCheckbox")?.checked;
+      if (done && !includeDone) {
+        tasks = tasks.filter(t => t.id !== id);
+      } else {
+        const idx = tasks.findIndex(t => t.id === id);
+        if (idx !== -1) tasks[idx] = data;
+      }
+      renderTasks();
+      showToast(done ? "タスクを完了しました" : "未完了に戻しました", "info");
+    } catch (err) {
+      showToast("更新エラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function deleteTask(id) {
+    if (!confirm("このタスクを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=tasks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      tasks = tasks.filter(t => t.id !== id);
+      renderTasks();
+      showToast("タスクを削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
     }
   }
 

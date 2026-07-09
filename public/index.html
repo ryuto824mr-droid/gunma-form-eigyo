@@ -412,10 +412,21 @@
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
     </div>
+    <div class="summary-card">
+      <div class="card-label">期限切れタスク</div>
+      <div class="card-value" id="statOverdueTasks">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
   </div>
 
   <section class="followup-section" id="followupSection">
     <h2>今日のフォローアップ</h2>
+    <p class="followup-empty">読み込み中...</p>
+  </section>
+
+  <section class="followup-section" id="taskSection">
+    <h2>未完了タスク</h2>
     <p class="followup-empty">読み込み中...</p>
   </section>
 
@@ -530,15 +541,18 @@
 
   async function loadStats() {
     try {
-      const [cRes, lRes, aRes] = await Promise.all([
+      const [cRes, lRes, aRes, tRes] = await Promise.all([
         fetch("/api/companies"),
         fetch("/api/send-logs"),
         fetch("/api/analytics"),
+        fetch("/api/crm?action=tasks"),
       ]);
       const rawCompanies = await cRes.json();
       const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
       const logs      = await lRes.json();
       const analytics = await aRes.json();
+      const rawTasks  = tRes.ok ? await tRes.json() : [];
+      const tasks     = Array.isArray(rawTasks) ? rawTasks : [];
 
       const totalCompanies = companies.length;
       const sentCount = Array.isArray(logs)
@@ -568,8 +582,9 @@
       }
 
       renderFollowups(companies);
+      renderTasksSummary(tasks);
     } catch {
-      ["statCompanies","statSent","statRate","statFollowUp"].forEach(id => {
+      ["statCompanies","statSent","statRate","statFollowUp","statOverdueTasks"].forEach(id => {
         document.getElementById(id).innerHTML =
           '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
       });
@@ -628,6 +643,39 @@
     if (followUpCardEl) {
       const color = followUps.length === 0 ? "var(--green-700)" : "#ea580c";
       followUpCardEl.innerHTML = `<span style="color:${color}">${followUps.length}</span><span class="card-unit">件</span>`;
+    }
+  }
+
+  function renderTasksSummary(tasks) {
+    const todayStr = todayDateStr();
+    const overdueTasks = tasks.filter(t =>
+      !t.done && t.due_date && toDateStr(t.due_date) <= todayStr
+    );
+
+    const section = document.getElementById("taskSection");
+    if (overdueTasks.length === 0) {
+      section.innerHTML = `
+        <h2>未完了タスク</h2>
+        <p class="followup-empty">期限切れのタスクはありません ✓</p>`;
+    } else {
+      const items = overdueTasks.map(t => `
+        <li class="followup-item">
+          <div class="followup-item-info">
+            <span class="followup-item-company">${esc(t.title)}</span>
+            <span class="followup-item-meta">${esc(t.company_name || "（企業未設定）")} / 期限: ${esc(toDateStr(t.due_date))}</span>
+          </div>
+          <a class="followup-item-link" href="/crm.html">CRMへ</a>
+        </li>`).join("");
+      section.innerHTML = `
+        <h2>未完了タスク</h2>
+        <p class="followup-alert">⏰ ${overdueTasks.length}件の期限切れタスクがあります</p>
+        <ul class="followup-list">${items}</ul>`;
+    }
+
+    const overdueCardEl = document.getElementById("statOverdueTasks");
+    if (overdueCardEl) {
+      const color = overdueTasks.length === 0 ? "var(--green-700)" : "#dc2626";
+      overdueCardEl.innerHTML = `<span style="color:${color}">${overdueTasks.length}</span><span class="card-unit">件</span>`;
     }
   }
 
