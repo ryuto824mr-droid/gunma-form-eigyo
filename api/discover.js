@@ -14,9 +14,18 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { region = "", keyword = "" } = req.body || {};
-  if (!String(region).trim() && !String(keyword).trim()) {
-    return res.status(400).json({ error: "regionまたはkeywordが必要です" });
+  const body = req.body || {};
+  const params = {
+    industry:   String(body.industry   || "").trim(),
+    prefecture: String(body.prefecture || "").trim(),
+    city:       String(body.city       || "").trim(),
+    keyword:    String(body.keyword    || "").trim(),
+    size:       String(body.size       || "").trim(),
+    listing:    String(body.listing    || "").trim(),
+  };
+
+  if (!params.industry && !params.prefecture && !params.city && !params.keyword && !params.size && !params.listing) {
+    return res.status(400).json({ error: "industry, prefecture, city, keyword, size, listing のいずれかが必要です" });
   }
 
   const braveKey = process.env.BRAVE_SEARCH_API_KEY;
@@ -27,15 +36,19 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  // AI判定フィルタ・Places検索向けの補助的な地域/キーワード文字列
+  const locationStr = [params.prefecture, params.city].filter(Boolean).join("");
+  const descStr = [params.industry, params.size, params.listing, params.keyword].filter(Boolean).join(" ");
+
   try {
     // 1. Brave検索 → ブラックリスト除外 → ホスト名重複除去
-    const webResults = await searchViaBrave(String(region).trim(), String(keyword).trim(), braveKey);
+    const webResults = await searchViaBrave(params, braveKey);
 
     // 2. AI判定フィルタ (ANTHROPIC_API_KEY未設定なら素通り)
-    const filteredResults = await filterResultsWithAI(webResults, String(region).trim(), String(keyword).trim());
+    const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
-    const placesResults = await searchPlacesAPI(String(region).trim(), String(keyword).trim());
+    const placesResults = await searchPlacesAPI(locationStr, descStr);
 
     // 4. マージ・ホスト名重複除去 (web優先、Placesが後ろ)
     const merged = mergeAndDedup([...filteredResults, ...placesResults]);
@@ -59,9 +72,23 @@ function isExcluded(url) {
   return EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`));
 }
 
-async function searchViaBrave(region, keyword, apiKey) {
-  const exclusions = EXCLUDE_DOMAINS.map(d => `-site:${d}`).join(" ");
-  const query = `${region} ${keyword} 公式サイト ${exclusions}`.trim();
+function buildQuery(params) {
+  const parts = [];
+  if (params.prefecture) parts.push(params.prefecture);
+  if (params.city) parts.push(params.city);
+  if (params.industry) parts.push(params.industry);
+  if (params.size) parts.push(params.size);
+  if (params.listing) parts.push(params.listing);
+  if (params.keyword) parts.push(params.keyword);
+  parts.push("公式サイト");
+  // 除外ワード
+  const excludes = EXCLUDE_DOMAINS.map(d => `-site:${d}`);
+  excludes.push("-求人", "-採用", "-転職");
+  return parts.join(" ") + " " + excludes.join(" ");
+}
+
+async function searchViaBrave(params, apiKey) {
+  const query = buildQuery(params);
   const url = `${BRAVE_SEARCH_URL}?q=${encodeURIComponent(query)}&count=20`;
 
   const res = await fetch(url, {

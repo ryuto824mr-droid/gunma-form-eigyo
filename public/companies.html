@@ -478,6 +478,41 @@
   .source-ai        { background: #6366f1; }
   .source-heuristic { background: var(--gray-500); }
 
+  .search-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 600px) {
+    .search-form-grid { grid-template-columns: 1fr; }
+  }
+  .search-form-field label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--gray-500); margin-bottom: 4px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .search-form-field select,
+  .search-form-field input[type="text"] {
+    width: 100%; padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms;
+  }
+  .search-form-field select:focus,
+  .search-form-field input[type="text"]:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
+  }
+  .search-query-preview {
+    font-size: 12px; color: var(--gray-400);
+    background: var(--gray-50); border-radius: 6px;
+    padding: 8px 12px; margin-bottom: 12px;
+    border: 1px solid var(--gray-200);
+    word-break: break-all;
+  }
+  .search-query-preview strong { color: var(--gray-600, #475569); }
+  .auto-tags-preview {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0;
+  }
   .discover-row { display: flex; gap: 10px; flex-wrap: wrap; }
   .discover-row input { flex: 1 1 160px; }
   .badge-places { flex-shrink: 0; display: inline-block; padding: 1px 6px; background: #4285f4; color: white; font-size: 10px; border-radius: 3px; white-space: nowrap; }
@@ -600,7 +635,10 @@
     .add-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
     .discover-row { flex-direction: column; }
     .discover-row input { width: 100%; font-size: 16px; }
-    .discover-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
+    .discover-row .btn-primary,
+    .discover-row .btn-filter-clear { min-height: 44px; width: 100%; justify-content: center; }
+    .search-form-field select,
+    .search-form-field input[type="text"] { font-size: 16px; }
     .import-row { flex-direction: column; }
     .import-row .btn-primary { min-height: 44px; width: 100%; justify-content: center; }
     table th:nth-child(2), table td:nth-child(2),
@@ -741,12 +779,111 @@
 
   <section class="discover-section">
     <h2>企業を自動検索</h2>
+    <div class="search-form-grid">
+      <div class="search-form-field">
+        <label for="searchIndustry">業種</label>
+        <select id="searchIndustry" onchange="updateSearchQueryPreview()">
+          <option value="">業種を選択</option>
+          <option value="製造業">製造業</option>
+          <option value="IT・情報通信">IT・情報通信</option>
+          <option value="小売・流通">小売・流通</option>
+          <option value="建設・不動産">建設・不動産</option>
+          <option value="医療・福祉">医療・福祉</option>
+          <option value="飲食・フード">飲食・フード</option>
+          <option value="サービス業">サービス業</option>
+          <option value="金融・保険">金融・保険</option>
+          <option value="教育・学習支援">教育・学習支援</option>
+          <option value="運輸・物流">運輸・物流</option>
+          <option value="農業・林業・漁業">農業・林業・漁業</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchPrefecture">都道府県</label>
+        <select id="searchPrefecture" onchange="updateSearchQueryPreview()">
+          <option value="">都道府県を選択</option>
+          <option value="北海道">北海道</option>
+          <option value="青森県">青森県</option>
+          <option value="岩手県">岩手県</option>
+          <option value="宮城県">宮城県</option>
+          <option value="秋田県">秋田県</option>
+          <option value="山形県">山形県</option>
+          <option value="福島県">福島県</option>
+          <option value="茨城県">茨城県</option>
+          <option value="栃木県">栃木県</option>
+          <option value="群馬県">群馬県</option>
+          <option value="埼玉県">埼玉県</option>
+          <option value="千葉県">千葉県</option>
+          <option value="東京都">東京都</option>
+          <option value="神奈川県">神奈川県</option>
+          <option value="新潟県">新潟県</option>
+          <option value="富山県">富山県</option>
+          <option value="石川県">石川県</option>
+          <option value="福井県">福井県</option>
+          <option value="山梨県">山梨県</option>
+          <option value="長野県">長野県</option>
+          <option value="岐阜県">岐阜県</option>
+          <option value="静岡県">静岡県</option>
+          <option value="愛知県">愛知県</option>
+          <option value="三重県">三重県</option>
+          <option value="滋賀県">滋賀県</option>
+          <option value="京都府">京都府</option>
+          <option value="大阪府">大阪府</option>
+          <option value="兵庫県">兵庫県</option>
+          <option value="奈良県">奈良県</option>
+          <option value="和歌山県">和歌山県</option>
+          <option value="鳥取県">鳥取県</option>
+          <option value="島根県">島根県</option>
+          <option value="岡山県">岡山県</option>
+          <option value="広島県">広島県</option>
+          <option value="山口県">山口県</option>
+          <option value="徳島県">徳島県</option>
+          <option value="香川県">香川県</option>
+          <option value="愛媛県">愛媛県</option>
+          <option value="高知県">高知県</option>
+          <option value="福岡県">福岡県</option>
+          <option value="佐賀県">佐賀県</option>
+          <option value="長崎県">長崎県</option>
+          <option value="熊本県">熊本県</option>
+          <option value="大分県">大分県</option>
+          <option value="宮崎県">宮崎県</option>
+          <option value="鹿児島県">鹿児島県</option>
+          <option value="沖縄県">沖縄県</option>
+        </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchCity">市区町村</label>
+        <input type="text" id="searchCity" placeholder="例: 前橋市、高崎市" oninput="updateSearchQueryPreview()" />
+      </div>
+      <div class="search-form-field">
+        <label for="searchKeyword">キーワード</label>
+        <input type="text" id="searchKeyword" placeholder="例: 自動車部品、ECサイト" oninput="updateSearchQueryPreview()" />
+      </div>
+      <div class="search-form-field">
+        <label for="searchSize">従業員規模</label>
+        <select id="searchSize" onchange="updateSearchQueryPreview()">
+          <option value="">規模を選択</option>
+          <option value="ベンチャー・スタートアップ">ベンチャー・スタートアップ</option>
+          <option value="中小企業">中小企業（〜300人）</option>
+          <option value="中堅企業">中堅企業（300〜1000人）</option>
+          <option value="大企業">大企業（1000人〜）</option>
+        </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchListing">上場区分</label>
+        <select id="searchListing" onchange="updateSearchQueryPreview()">
+          <option value="">指定なし</option>
+          <option value="上場企業">上場企業のみ</option>
+          <option value="非上場">非上場のみ</option>
+        </select>
+      </div>
+    </div>
+    <div class="search-query-preview" id="searchQueryPreview">検索条件を選択するとクエリプレビューが表示されます</div>
     <div class="discover-row">
-      <input type="text" id="discoverRegion"  placeholder="例: 群馬県" />
-      <input type="text" id="discoverKeyword" placeholder="例: IT企業、Web制作" />
       <button class="btn-primary" id="discoverBtn" onclick="discoverCompanies()">
         <i data-lucide="search"></i>検索
       </button>
+      <button class="btn-filter-clear" id="searchClearBtn" onclick="clearSearchForm()">条件をクリア</button>
     </div>
     <div id="discoverResult"></div>
   </section>
@@ -1780,12 +1917,82 @@
     }
   }
 
+  const DISCOVER_EXCLUDE_DOMAINS = [
+    "indeed.com", "mynavi.jp", "rikunabi.com", "doda.jp", "en-gage.net",
+    "townpage.ntt.co.jp", "itp.ne.jp", "facebook.com", "twitter.com",
+    "x.com", "instagram.com", "wikipedia.org", "prtimes.jp", "baitoru.com",
+  ];
+
+  let lastSearchAutoTags = [];
+
+  function getSearchParams() {
+    return {
+      industry:   document.getElementById("searchIndustry").value,
+      prefecture: document.getElementById("searchPrefecture").value,
+      city:       document.getElementById("searchCity").value.trim(),
+      keyword:    document.getElementById("searchKeyword").value.trim(),
+      size:       document.getElementById("searchSize").value,
+      listing:    document.getElementById("searchListing").value,
+    };
+  }
+
+  function hasAnySearchParam(params) {
+    return !!(params.industry || params.prefecture || params.city || params.keyword || params.size || params.listing);
+  }
+
+  function buildQueryPreview(params) {
+    const parts = [];
+    if (params.prefecture) parts.push(params.prefecture);
+    if (params.city) parts.push(params.city);
+    if (params.industry) parts.push(params.industry);
+    if (params.size) parts.push(params.size);
+    if (params.listing) parts.push(params.listing);
+    if (params.keyword) parts.push(params.keyword);
+    parts.push("公式サイト");
+    // 除外ワード
+    const excludes = DISCOVER_EXCLUDE_DOMAINS.map(d => `-site:${d}`);
+    excludes.push("-求人", "-採用", "-転職");
+    return parts.join(" ") + " " + excludes.join(" ");
+  }
+
+  function buildAutoTags(params) {
+    const tags = [];
+    if (params.industry) tags.push(`業種:${params.industry}`);
+    if (params.prefecture) tags.push(`地域:${params.prefecture}`);
+    if (params.city) tags.push(`地域:${params.city}`);
+    if (params.size) tags.push(`規模:${params.size}`);
+    if (params.listing) tags.push(`上場:${params.listing}`);
+    return tags;
+  }
+
+  function updateSearchQueryPreview() {
+    const params = getSearchParams();
+    const el = document.getElementById("searchQueryPreview");
+    if (!hasAnySearchParam(params)) {
+      el.textContent = "検索条件を選択するとクエリプレビューが表示されます";
+      return;
+    }
+    el.innerHTML = `<strong>検索クエリプレビュー:</strong> ${esc(buildQueryPreview(params))}`;
+  }
+
+  function clearSearchForm() {
+    document.getElementById("searchIndustry").value = "";
+    document.getElementById("searchPrefecture").value = "";
+    document.getElementById("searchCity").value = "";
+    document.getElementById("searchKeyword").value = "";
+    document.getElementById("searchSize").value = "";
+    document.getElementById("searchListing").value = "";
+    updateSearchQueryPreview();
+  }
+
   async function discoverCompanies() {
-    const region   = document.getElementById("discoverRegion").value.trim();
-    const keyword  = document.getElementById("discoverKeyword").value.trim();
+    const params   = getSearchParams();
     const btn      = document.getElementById("discoverBtn");
     const resultEl = document.getElementById("discoverResult");
-    if (!region && !keyword) return;
+    if (!hasAnySearchParam(params)) return;
+
+    lastSearchAutoTags = buildAutoTags(params);
+
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>検索中...';
     resultEl.innerHTML = '<p class="discover-status">検索中...</p>';
@@ -1793,14 +2000,20 @@
       const res = await fetch("/api/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ region, keyword }),
+        body: JSON.stringify(params),
       });
       const data = await res.json();
       if (!res.ok) { resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`; return; }
       if (!data.configured) { resultEl.innerHTML = `<p class="discover-unconfigured">Brave Search APIキーの設定が必要です。</p>`; return; }
       if (!data.results || data.results.length === 0) { resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。</p>`; return; }
+
+      const tagsPreviewHtml = lastSearchAutoTags.length > 0
+        ? `<div class="auto-tags-preview"><span style="font-size:12px;color:var(--gray-400)">検索条件タグ:</span>${lastSearchAutoTags.map(t => `<span class="company-tag-pill">${esc(t)}</span>`).join("")}</div>`
+        : "";
+
       resultEl.innerHTML = `
         <p class="discover-count">${data.results.length}件見つかりました</p>
+        ${tagsPreviewHtml}
         <ul class="discover-list">
           ${data.results.map((r, i) => `
             <li><label>
@@ -1812,6 +2025,7 @@
         </ul>
         <button class="btn-add-selected" id="addSelectedBtn" onclick="addSelectedCompanies()">選んだ企業を追加</button>
         <span class="add-selected-progress" id="addSelectedProgress"></span>`;
+      lucide.createIcons();
     } catch (err) {
       resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(err.message)}</p>`;
     } finally {
@@ -1843,8 +2057,25 @@
         const data = await res.json();
         if (!res.ok) continue;
         newCompany = data;
+
+        if (lastSearchAutoTags.length > 0) {
+          const existingTags = Array.isArray(newCompany.company_tags) ? newCompany.company_tags : [];
+          const mergedTags = Array.from(new Set([...existingTags, ...lastSearchAutoTags]));
+          try {
+            const tagRes = await fetch("/api/companies", {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: newCompany.id, company_tags: mergedTags }),
+            });
+            const tagData = await tagRes.json();
+            if (tagRes.ok) newCompany = tagData;
+          } catch {
+            // タグ付けに失敗しても企業登録自体は続行する
+          }
+        }
+
         companies.unshift({ ...newCompany, status: "researching" });
         renderTable();
+        populateTagFilter();
       } catch { continue; }
       progress.textContent = `${i+1}/${total}件 リサーチ中...(${name})`;
       try {
@@ -2184,7 +2415,7 @@
     { targetSelector: ".add-section",      title: "企業を追加する",         description: "企業名とURLを入力して追加します。追加するとすぐ自動でリサーチが始まります。CSVで一括インポートも可能です。",        position: "bottom" },
     { targetSelector: "#bulkBtn",          title: "一括リサーチ",           description: "未リサーチの企業を全社まとめて自動解析します。まとめて登録してからこのボタンを押すのがおすすめです。",              position: "bottom" },
     { targetSelector: ".table-section",    title: "リサーチ結果を確認",      description: "「自動化OK」になった企業はフォームへの自動送信が可能です。CAPTCHAありの企業は手動対応が必要です。",            position: "top" },
-    { targetSelector: ".discover-section", title: "企業を自動検索（準備中）", description: "地域・業種を指定して企業を自動検索できます。現在Brave Search APIキーの設定で有効になります。", position: "top" }
+    { targetSelector: ".discover-section", title: "企業を自動検索（準備中）", description: "業種・都道府県・市区町村・キーワードなどを指定して企業を自動検索できます。現在Brave Search APIキーの設定で有効になります。", position: "top" }
   ], "locle_tour_companies");
 </script>
 </body>
