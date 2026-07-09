@@ -808,6 +808,8 @@
       logs           = await lRes.json();
       scheduledSends = sRes.ok ? await sRes.json() : [];
 
+      if (!Array.isArray(companies)) throw new Error("companiesの取得に失敗しました");
+
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
         const bS = b.status === "researched" ? 0 : 1;
