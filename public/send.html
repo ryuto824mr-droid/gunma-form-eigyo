@@ -1539,7 +1539,8 @@
   startTour([
     { targetSelector: ".draft-section",   title: "下書きを生成する",     description: "企業とバリアントを選んで「下書き生成」を押すと、企業名が自動で差し込まれたメッセージが表示されます。",          position: "bottom" },
     { targetSelector: ".preview-actions", title: "送信する",             description: "「フォームに自動送信」か「メールで送信」で送信できます。24時間以内の再送信はガードされます。",               position: "top" },
-    { targetSelector: ".history-section", title: "送信履歴と反応記録",   description: "送信履歴がここに表示されます。返信が来たら「反応を記録」ボタンで記録すると、分析に反映されます。",            position: "top" }
+    { targetSelector: ".history-section", title: "送信履歴と反応記録",   description: "送信履歴がここに表示されます。返信が来たら「反応を記録」ボタンで記録すると、分析に反映されます。",            position: "top" },
+    { targetSelector: "#draftScoreCard",  title: "文面スコアで品質チェック", description: "下書き生成後に文字数・読みやすさスコア・改善ヒントが表示されます。スコア80以上を目安に文面を調整しましょう。", position: "top" }
   ], "locle_tour_send");
 </script>
 </body>

@@ -119,6 +119,75 @@
   .link-to-analytics:hover { text-decoration: underline; }
   .link-to-analytics svg { width: 14px; height: 14px; }
 
+  /* Spotlight Tour */
+  .tour-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: transparent;
+  }
+  .tour-highlight {
+    position: relative;
+    z-index: 9999 !important;
+    box-shadow: 0 0 0 4px var(--green-500), 0 0 0 9999px rgba(0,0,0,0.5) !important;
+    border-radius: 8px;
+    transition: box-shadow 0.3s ease;
+  }
+  .tour-bubble {
+    position: fixed;
+    z-index: 10000;
+    background: white;
+    border-radius: 12px;
+    padding: 20px 24px;
+    min-width: 280px;
+    max-width: 340px;
+    width: calc(100vw - 32px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    animation: tourFadeInUp 0.3s ease;
+  }
+  @keyframes tourFadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .tour-bubble::before {
+    content: "";
+    position: absolute;
+    width: 0; height: 0;
+    border: 8px solid transparent;
+  }
+  .tour-bubble.pos-bottom::before { top: -16px; left: 24px; border-bottom-color: white; }
+  .tour-bubble.pos-top::before    { bottom: -16px; left: 24px; border-top-color: white; }
+  .tour-bubble.pos-center::before { display: none; }
+  .tour-bubble-dots { display: flex; gap: 6px; margin: 0 0 12px; }
+  .tour-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-200); transition: all 0.2s ease; }
+  .tour-dot.active { background: var(--green-500); width: 16px; border-radius: 3px; }
+  .tour-bubble-title { font-size: 15px; font-weight: 700; color: var(--green-700); margin: 0 0 8px; }
+  .tour-bubble-desc  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin: 0 0 16px; }
+  .tour-bubble-nav   { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .tour-bubble-counter { font-size: 11px; color: var(--gray-400); font-weight: 600; }
+  .btn-tskip {
+    padding: 6px 12px; font-size: 12px; border: 1px solid var(--gray-200);
+    background: white; color: var(--gray-500); border-radius: var(--radius-sm);
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-tnext {
+    padding: 10px 24px; font-size: 14px; font-weight: 600;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    color: white; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 2px 8px rgba(68,177,63,0.3);
+  }
+  .btn-help-float {
+    position: fixed; bottom: 24px; right: 24px; z-index: 500;
+    padding: 10px 18px; font-size: 13px; font-weight: 600;
+    background: white; color: var(--green-700);
+    border: 2px solid var(--green-500); border-radius: 999px;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transition: all 150ms; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-help-float:hover { background: var(--green-50); transform: translateY(-2px); }
+
   @media (max-width: 700px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -177,6 +246,7 @@
     table thead { background: #1e293b; }
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .mini-stat { background: #0f172a; border-color: #1e293b; }
+    .tour-bubble { background: #1e293b; color: #f1f5f9; }
   }
   html.dark {
     --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
@@ -191,6 +261,7 @@
   html.dark table thead { background: #1e293b; }
   html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
   html.dark .mini-stat { background: #0f172a; border-color: #1e293b; }
+  html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
 </style>
 </head>
 <body>
@@ -220,7 +291,7 @@
   </div>
 
   <!-- セクション1: 送信パフォーマンス -->
-  <section class="stat-section">
+  <section class="stat-section" id="section-sends">
     <h2>送信パフォーマンス</h2>
     <p class="section-sub">過去6ヶ月の月別送信数・反応数</p>
     <div class="report-row">
@@ -265,7 +336,7 @@
   </section>
 
   <!-- セクション4: パイプライン価値 -->
-  <section class="stat-section">
+  <section class="stat-section" id="section-pipeline">
     <h2>パイプライン価値</h2>
     <p class="section-sub">ステージ別の商談金額合計</p>
     <div class="report-row">
@@ -304,6 +375,7 @@
 
 </div>
 
+<button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
@@ -597,8 +669,125 @@
   }
   updateThemeIcon();
 
+  // ===== Spotlight Tour =====
+  (function() {
+    var _steps, _key, _idx, _bubble, _overlay;
+
+    function _resolveEl(sel) {
+      var parts = sel.split(",");
+      for (var i = 0; i < parts.length; i++) {
+        var el = document.querySelector(parts[i].trim());
+        if (el) return el;
+      }
+      return null;
+    }
+
+    function _clearHighlight() {
+      document.querySelectorAll(".tour-highlight").forEach(function(el) {
+        el.classList.remove("tour-highlight");
+      });
+      if (_bubble && _bubble.parentNode) _bubble.parentNode.removeChild(_bubble);
+      _bubble = null;
+      if (_overlay && _overlay.parentNode) _overlay.parentNode.removeChild(_overlay);
+      _overlay = null;
+    }
+
+    function _showStep(idx) {
+      _clearHighlight();
+      var s = _steps[idx];
+      var total = _steps.length;
+      var isLast = idx === total - 1;
+      var target = _resolveEl(s.targetSelector);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      // オーバーレイはクリックをブロックするだけで、クリックしてもツアーは終了しない
+      _overlay = document.createElement("div");
+      _overlay.className = "tour-overlay";
+      document.body.appendChild(_overlay);
+
+      setTimeout(function() {
+        if (target) target.classList.add("tour-highlight");
+
+        var dots = "";
+        for (var d = 0; d < total; d++) {
+          dots += '<span class="tour-dot' + (d === idx ? ' active' : '') + '"></span>';
+        }
+
+        _bubble = document.createElement("div");
+        _bubble.className = "tour-bubble pos-" + (s.position || "bottom");
+        _bubble.innerHTML =
+          '<div class="tour-bubble-dots">' + dots + '</div>' +
+          '<p class="tour-bubble-title">' + s.title + '</p>' +
+          '<p class="tour-bubble-desc">' + s.description + '</p>' +
+          '<div class="tour-bubble-nav">' +
+            '<button class="btn-tskip" id="_tskip">スキップ</button>' +
+            '<span class="tour-bubble-counter">' + (idx + 1) + ' / ' + total + '</span>' +
+            '<button class="btn-tnext" id="_tnext">' + (isLast ? 'はじめる ✓' : '次へ →') + '</button>' +
+          '</div>';
+        document.body.appendChild(_bubble);
+
+        _bubble.querySelector("#_tskip").addEventListener("click", function() { _end(); });
+        _bubble.querySelector("#_tnext").addEventListener("click", function() {
+          if (idx < total - 1) _showStep(idx + 1); else _end();
+        });
+
+        if (s.position === "center" || !target) {
+          _bubble.className = "tour-bubble pos-center";
+          _bubble.style.top = "50%"; _bubble.style.left = "50%";
+          _bubble.style.transform = "translate(-50%, -50%)";
+        } else {
+          var rect = target.getBoundingClientRect();
+          var bw = _bubble.offsetWidth || 320;
+          var bh = _bubble.offsetHeight || 160;
+          var margin = 12;
+          var pos = s.position || "bottom";
+
+          if (pos === "bottom" && (rect.bottom + margin + bh > window.innerHeight - 20)) {
+            pos = "top";
+          }
+          _bubble.className = "tour-bubble pos-" + pos;
+
+          var left = Math.max(8, Math.min(rect.left, window.innerWidth - bw - 8));
+
+          if (pos === "bottom") {
+            _bubble.style.top = (rect.bottom + margin) + "px";
+            _bubble.style.left = left + "px";
+          } else if (pos === "top") {
+            _bubble.style.left = left + "px";
+            _bubble.style.top = Math.max(8, rect.top - bh - margin) + "px";
+          } else if (pos === "right") {
+            _bubble.style.top = rect.top + "px";
+            _bubble.style.left = (rect.right + margin) + "px";
+          } else if (pos === "left") {
+            _bubble.style.top = rect.top + "px";
+            _bubble.style.left = (rect.left - bw - margin) + "px";
+          }
+        }
+      }, 500);
+    }
+
+    function _end() { _clearHighlight(); localStorage.setItem(_key, "1"); }
+
+    function startTour(steps, storageKey) {
+      _steps = steps; _key = storageKey; _idx = 0;
+      if (!localStorage.getItem(_key)) _showStep(0);
+    }
+
+    document.getElementById("helpFloatBtn").addEventListener("click", function() {
+      localStorage.removeItem(_key); _idx = 0; _showStep(0);
+    });
+
+    window.startTour = startTour;
+  })();
+  // ===== End Spotlight Tour =====
+
   lucide.createIcons();
   loadReports();
+  startTour([
+    { targetSelector: ".reports-header", title: "レポートページへようこそ", description: "営業活動の成果を数値・グラフで確認するページです。月次推移・チャネル別内訳・パイプライン価値を一覧できます。", position: "bottom" },
+    { targetSelector: "#section-sends",  title: "送信パフォーマンスを確認", description: "月別の送信数・反応数の推移を折れ線グラフで確認できます。反応率が低い月は文面や送信先を見直しましょう。", position: "top" },
+    { targetSelector: "#section-pipeline", title: "パイプライン価値を把握", description: "CRMに登録した商談の金額をステージ別に集計します。提案中・交渉中の合計が期待売上の目安になります。", position: "top" }
+  ], "locle_tour_reports");
 </script>
 </body>
 </html>
