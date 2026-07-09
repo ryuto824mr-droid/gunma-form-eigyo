@@ -1,4 +1,4 @@
-const { sql, isExcludedDomain } = require("../lib/db");
+const { sql, isExcludedDomain, getSettings } = require("../lib/db");
 const { submitForm } = require("../lib/form-submitter");
 
 module.exports = async function handler(req, res) {
@@ -9,6 +9,17 @@ module.exports = async function handler(req, res) {
   const { company_id, variant_id, force, tags } = req.body || {};
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
+  }
+
+  const settings = await getSettings();
+
+  // 1日の送信上限チェック
+  const dailyLimit = parseInt(settings.daily_send_limit, 10) || 20;
+  const [{ count: todaySendCount }] = await sql`
+    SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
+  `;
+  if (todaySendCount >= dailyLimit) {
+    return res.status(429).json({ error: `本日の送信上限(${dailyLimit}件)に達しました` });
   }
 
   // 再送信ガード
@@ -58,6 +69,11 @@ module.exports = async function handler(req, res) {
   }
 
   const researchResult = company.research_result;
+
+  if (settings.skip_rejection_sites !== "false" && researchResult?.rejection_detected) {
+    return res.status(400).json({ error: "このサイトは営業お断りの文言が検出されています", type: "rejection_detected" });
+  }
+
   if (!researchResult?.automatable) {
     return res.status(400).json({
       error: "この企業はフォーム自動送信に対応していません(automatable=false)。先にリサーチを実行してください。",

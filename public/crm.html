@@ -221,6 +221,49 @@
   .task-title-done { text-decoration: line-through; color: var(--gray-400); }
   .task-overdue { color: #dc2626; font-weight: 700; }
 
+  /* Settings */
+  .settings-form { display: flex; flex-direction: column; gap: 18px; max-width: 360px; }
+  .settings-checkbox-row {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--gray-700); cursor: pointer; font-family: inherit;
+  }
+  .settings-checkbox-row input { width: 16px; height: 16px; cursor: pointer; }
+
+  /* A/B tests */
+  .ab-status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .ab-status-badge.running { background: #eff6ff; color: #1d4ed8; }
+  .ab-status-badge.done    { background: var(--gray-100); color: var(--gray-500); }
+  .btn-row-detail {
+    padding: 4px 8px; font-size: 11px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; transition: all 150ms; margin-right: 4px;
+  }
+  .btn-row-detail:hover { background: var(--gray-50); }
+
+  .ab-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ab-compare-col {
+    background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+    padding: 14px; position: relative;
+  }
+  .ab-compare-col.winner { border-color: var(--green-500); background: var(--green-50); }
+  .ab-winner-badge { position: absolute; top: -10px; right: 10px; font-size: 18px; }
+  .ab-compare-name { font-size: 13px; font-weight: 700; color: var(--gray-900); margin: 0 0 10px; word-break: break-word; }
+  .ab-compare-stat { display: flex; justify-content: space-between; font-size: 12px; color: var(--gray-500); margin-bottom: 4px; }
+  .ab-compare-stat span:last-child { font-weight: 600; color: var(--gray-900); }
+  .ab-rate-bar { width: 100%; height: 8px; background: var(--gray-200); border-radius: 999px; margin-top: 8px; overflow: hidden; }
+  .ab-rate-fill { height: 100%; background: var(--green-500); border-radius: 999px; transition: width 500ms ease; }
+  .ab-confidence-row {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 16px; font-size: 13px; color: var(--gray-700);
+  }
+  .ab-confidence-badge { font-weight: 700; }
+  .ab-confidence-badge.conf-high { color: var(--green-700); }
+  .ab-confidence-badge.conf-mid  { color: #b45309; }
+  .ab-confidence-badge.conf-low  { color: var(--gray-400); }
+
   /* Excluded domains */
   .excluded-domain-desc {
     font-size: 12px; color: var(--gray-500); background: var(--gray-50);
@@ -405,6 +448,8 @@
     <button class="crm-tab-btn" data-tab="activities" onclick="switchTab('activities')">🕘 活動履歴</button>
     <button class="crm-tab-btn" data-tab="tasks" onclick="switchTab('tasks')">✅ タスク</button>
     <button class="crm-tab-btn" data-tab="excluded" onclick="switchTab('excluded')">🚫 除外ドメイン</button>
+    <button class="crm-tab-btn" data-tab="abtests" onclick="switchTab('abtests')">🧪 A/Bテスト</button>
+    <button class="crm-tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ 設定</button>
   </div>
 
   <!-- パイプライン -->
@@ -508,6 +553,50 @@
         <thead><tr><th>ドメイン</th><th>理由</th><th>登録日</th><th></th></tr></thead>
         <tbody id="excludedBody"><tr class="empty-row"><td colspan="4">読み込み中...</td></tr></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- A/Bテスト -->
+  <section class="crm-panel" id="panel-abtests">
+    <div class="panel-toolbar">
+      <div>
+        <h2>A/Bテスト</h2>
+        <p class="panel-desc">2つのバリアントの反応率を比較します</p>
+      </div>
+      <button class="btn-add" onclick="openAbTestModal()"><i data-lucide="plus"></i>新規テスト</button>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead><tr><th>テスト名</th><th>バリアントA</th><th>バリアントB</th><th>ステータス</th><th></th></tr></thead>
+        <tbody id="abTestsBody"><tr class="empty-row"><td colspan="5">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section class="crm-panel" id="panel-settings">
+    <div class="panel-toolbar">
+      <div>
+        <h2>設定</h2>
+        <p class="panel-desc">送信の上限・間隔などを設定します</p>
+      </div>
+    </div>
+    <div class="settings-form">
+      <div class="form-group">
+        <label for="settingDailyLimit">1日の送信上限</label>
+        <input type="number" id="settingDailyLimit" min="1" placeholder="20" />
+      </div>
+      <div class="form-group">
+        <label for="settingSendInterval">送信間隔（秒）</label>
+        <input type="number" id="settingSendInterval" min="0" placeholder="30" />
+      </div>
+      <label class="settings-checkbox-row">
+        <input type="checkbox" id="settingSkipRejection" />
+        営業お断りサイトを自動スキップ
+      </label>
+      <div>
+        <button class="btn-add" onclick="saveSettings()"><i data-lucide="save"></i>保存</button>
+      </div>
     </div>
   </section>
 
@@ -685,6 +774,47 @@
   </div>
 </div>
 
+<!-- A/Bテスト作成モーダル -->
+<div class="modal-overlay" id="abTestModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>新規A/Bテスト</h3>
+      <button class="modal-close" onclick="closeAbTestModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="abTestNameInput">テスト名 <span style="color:#dc2626">*</span></label>
+          <input type="text" id="abTestNameInput" placeholder="例: 件名の比較テスト" />
+        </div>
+        <div class="form-group">
+          <label for="abTestVariantASelect">バリアントA <span style="color:#dc2626">*</span></label>
+          <select id="abTestVariantASelect"></select>
+        </div>
+        <div class="form-group">
+          <label for="abTestVariantBSelect">バリアントB <span style="color:#dc2626">*</span></label>
+          <select id="abTestVariantBSelect"></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeAbTestModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="abTestSubmitBtn" onclick="createAbTest()">作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- A/Bテスト詳細モーダル -->
+<div class="modal-overlay" id="abTestDetailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="abTestDetailTitle">テスト詳細</h3>
+      <button class="modal-close" onclick="closeAbTestDetailModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="abTestDetailBody">読み込み中...</div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let companies = [];
@@ -694,6 +824,9 @@
   let excludedDomains = [];
   let tasks = [];
   let pipelineStats = null;
+  let variants = [];
+  let abTests = [];
+  let settings = {};
 
   const STAGE_ORDER  = ["lead", "contacted", "proposal", "negotiation", "won", "lost"];
   const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
@@ -707,8 +840,26 @@
 
   async function init() {
     await loadCompanies();
-    await Promise.all([loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats()]);
+    await Promise.all([
+      loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
+      loadVariants(), loadAbTests(), loadSettings(),
+    ]);
     lucide.createIcons();
+  }
+
+  async function loadVariants() {
+    try {
+      const res = await fetch("/api/variants");
+      const raw = await res.json();
+      variants = Array.isArray(raw) ? raw : [];
+      const options = variants.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join("");
+      const aSel = document.getElementById("abTestVariantASelect");
+      const bSel = document.getElementById("abTestVariantBSelect");
+      if (aSel) aSel.innerHTML = options || '<option value="">バリアントがありません</option>';
+      if (bSel) bSel.innerHTML = options || '<option value="">バリアントがありません</option>';
+    } catch (err) {
+      showToast("バリアント一覧の取得に失敗しました: " + esc(err.message), "error");
+    }
   }
 
   async function loadCompanies() {
@@ -1336,6 +1487,174 @@
       showToast("除外ドメインを削除しました", "info");
     } catch (err) {
       showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  // ==================== A/Bテスト ====================
+
+  const AB_STATUS_LABELS = { running: "実施中", done: "終了" };
+
+  async function loadAbTests() {
+    try {
+      const res = await fetch("/api/crm?action=ab-tests");
+      const raw = await res.json();
+      abTests = Array.isArray(raw) ? raw : [];
+      renderAbTests();
+    } catch (err) {
+      document.getElementById("abTestsBody").innerHTML =
+        `<tr class="empty-row"><td colspan="5">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderAbTests() {
+    const body = document.getElementById("abTestsBody");
+    if (!abTests.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="5">A/Bテストが登録されていません</td></tr>';
+      return;
+    }
+    body.innerHTML = abTests.map(t => `
+      <tr>
+        <td>${esc(t.name)}</td>
+        <td>${esc(t.variant_a_name)}</td>
+        <td>${esc(t.variant_b_name)}</td>
+        <td><span class="ab-status-badge ${esc(t.status)}">${AB_STATUS_LABELS[t.status] || esc(t.status)}</span></td>
+        <td><button class="btn-row-detail" onclick="openAbTestDetailModal(${t.id})">詳細</button></td>
+      </tr>`).join("");
+  }
+
+  function openAbTestModal() {
+    document.getElementById("abTestNameInput").value = "";
+    document.getElementById("abTestModal").classList.add("open");
+  }
+  function closeAbTestModal() {
+    document.getElementById("abTestModal").classList.remove("open");
+  }
+
+  async function createAbTest() {
+    const name = document.getElementById("abTestNameInput").value.trim();
+    const variant_a_id = document.getElementById("abTestVariantASelect").value;
+    const variant_b_id = document.getElementById("abTestVariantBSelect").value;
+    const btn = document.getElementById("abTestSubmitBtn");
+
+    if (!name) { showToast("テスト名を入力してください", "error"); return; }
+    if (!variant_a_id || !variant_b_id) { showToast("バリアントA・Bを選択してください", "error"); return; }
+    if (variant_a_id === variant_b_id) { showToast("バリアントAとBには異なるものを選択してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=ab-tests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, variant_a_id, variant_b_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "作成エラー"), "error"); return; }
+      abTests.unshift(data);
+      renderAbTests();
+      closeAbTestModal();
+      showToast("A/Bテストを作成しました", "success");
+    } catch (err) {
+      showToast("作成エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function openAbTestDetailModal(id) {
+    const test = abTests.find(t => t.id === id);
+    document.getElementById("abTestDetailTitle").textContent = test ? test.name : "テスト詳細";
+    document.getElementById("abTestDetailBody").innerHTML = "読み込み中...";
+    document.getElementById("abTestDetailModal").classList.add("open");
+    try {
+      const res = await fetch(`/api/crm?action=ab-test-stats&id=${id}`);
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("abTestDetailBody").innerHTML = `<p class="empty">エラー: ${esc(data.error || "取得失敗")}</p>`;
+        return;
+      }
+      renderAbTestDetail(test, data);
+    } catch (err) {
+      document.getElementById("abTestDetailBody").innerHTML = `<p class="empty">エラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderAbTestDetail(test, stats) {
+    const { variant_a, variant_b, winner, confidence } = stats;
+    const isAWinner = test && winner === test.variant_a_id;
+    const isBWinner = test && winner === test.variant_b_id;
+    const confClass = confidence === "高" ? "conf-high" : (confidence === "中" ? "conf-mid" : "conf-low");
+
+    function col(v, isWinner) {
+      return `
+        <div class="ab-compare-col${isWinner ? " winner" : ""}">
+          ${isWinner ? '<span class="ab-winner-badge">🏆</span>' : ""}
+          <p class="ab-compare-name">${esc(v.name)}</p>
+          <div class="ab-compare-stat"><span>送信数</span><span>${v.send_count}</span></div>
+          <div class="ab-compare-stat"><span>反応数</span><span>${v.response_count}</span></div>
+          <div class="ab-compare-stat"><span>反応率</span><span>${v.response_rate}%</span></div>
+          <div class="ab-rate-bar"><div class="ab-rate-fill" style="width:${Math.min(v.response_rate, 100)}%"></div></div>
+        </div>`;
+    }
+
+    document.getElementById("abTestDetailBody").innerHTML = `
+      <div class="ab-compare">
+        ${col(variant_a, isAWinner)}
+        ${col(variant_b, isBWinner)}
+      </div>
+      <div class="ab-confidence-row">
+        <span>信頼度:</span>
+        <span class="ab-confidence-badge ${confClass}">${confidence}</span>
+        ${winner === null ? '<span style="color:var(--gray-400)">（まだ十分なデータがありません）</span>' : ""}
+      </div>`;
+  }
+
+  function closeAbTestDetailModal() {
+    document.getElementById("abTestDetailModal").classList.remove("open");
+  }
+
+  // ==================== 設定 ====================
+
+  async function loadSettings() {
+    try {
+      const res = await fetch("/api/crm?action=settings");
+      settings = await res.json();
+      renderSettingsForm();
+    } catch (err) {
+      showToast("設定の取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function renderSettingsForm() {
+    document.getElementById("settingDailyLimit").value = settings.daily_send_limit ?? 20;
+    document.getElementById("settingSendInterval").value = settings.send_interval_seconds ?? 30;
+    document.getElementById("settingSkipRejection").checked = settings.skip_rejection_sites !== "false";
+  }
+
+  async function saveSettings() {
+    const dailyLimit = document.getElementById("settingDailyLimit").value;
+    const sendInterval = document.getElementById("settingSendInterval").value;
+    const skipRejection = document.getElementById("settingSkipRejection").checked;
+
+    const updates = [
+      { key: "daily_send_limit", value: String(dailyLimit || 20) },
+      { key: "send_interval_seconds", value: String(sendInterval || 30) },
+      { key: "skip_rejection_sites", value: skipRejection ? "true" : "false" },
+    ];
+
+    try {
+      for (const u of updates) {
+        const res = await fetch("/api/crm?action=settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(u),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "保存エラー");
+        settings[u.key] = u.value;
+      }
+      showToast("設定を保存しました", "success");
+    } catch (err) {
+      showToast("保存エラー: " + esc(err.message), "error");
     }
   }
 

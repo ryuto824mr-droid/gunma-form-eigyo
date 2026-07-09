@@ -21,7 +21,9 @@ module.exports = async function handler(req, res) {
 
   try {
     result = await analyzeForm(company.url);
-    if (result.captchaDetected) {
+    if (result.rejection_detected) {
+      status = "rejected";
+    } else if (result.captchaDetected) {
       status = "captcha_blocked";
     } else if (!result.formFound) {
       status = "no_form";

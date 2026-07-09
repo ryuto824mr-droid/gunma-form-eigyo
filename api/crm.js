@@ -20,8 +20,11 @@ module.exports = async function handler(req, res) {
     case "tasks":             return handleTasks(req, res);
     case "pipeline-stats":   return handlePipelineStats(req, res);
     case "reports":           return handleReports(req, res);
+    case "settings":          return handleSettings(req, res);
+    case "ab-tests":          return handleAbTests(req, res);
+    case "ab-test-stats":    return handleAbTestStats(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats）を指定してください" });
   }
 };
 
@@ -99,6 +102,31 @@ async function handleDbSetup(req, res) {
     // responses.message_id追加（返信自動検出用）
     await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS message_id TEXT");
     await dbSql.query("CREATE UNIQUE INDEX IF NOT EXISTS responses_message_id_uidx ON responses (message_id) WHERE message_id IS NOT NULL");
+    // settingsテーブル追加（送信間隔・上限などの設定管理用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `);
+    await dbSql.query(`
+      INSERT INTO settings (key, value) VALUES
+        ('daily_send_limit', '20'),
+        ('send_interval_seconds', '30'),
+        ('skip_rejection_sites', 'true')
+      ON CONFLICT (key) DO NOTHING
+    `);
+    // ab_testsテーブル追加（A/Bテスト機能用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS ab_tests (
+        id           SERIAL PRIMARY KEY,
+        name         TEXT NOT NULL,
+        variant_a_id INTEGER NOT NULL REFERENCES message_variants(id),
+        variant_b_id INTEGER NOT NULL REFERENCES message_variants(id),
+        status       TEXT NOT NULL DEFAULT 'running',
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -626,6 +654,146 @@ async function handleReports(req, res) {
       pipeline_value,
       won_lost_trend,
     });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== settings ====================
+
+async function handleSettings(req, res) {
+  if (req.method === "GET") {
+    try {
+      const rows = await sql`SELECT key, value FROM settings`;
+      const settings = {};
+      rows.forEach(r => { settings[r.key] = r.value; });
+      return res.status(200).json(settings);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { key, value } = req.body || {};
+    if (!key || typeof key !== "string") {
+      return res.status(400).json({ error: "keyが必要です" });
+    }
+    if (value === undefined || value === null) {
+      return res.status(400).json({ error: "valueが必要です" });
+    }
+    try {
+      const [updated] = await sql`
+        INSERT INTO settings (key, value) VALUES (${key}, ${String(value)})
+        ON CONFLICT (key) DO UPDATE SET value = ${String(value)}
+        RETURNING *
+      `;
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / PATCH のみ対応しています" });
+}
+
+// ==================== ab-tests ====================
+
+async function handleAbTests(req, res) {
+  if (req.method === "GET") {
+    try {
+      const tests = await sql`
+        SELECT t.*, va.name AS variant_a_name, vb.name AS variant_b_name
+        FROM ab_tests t
+        JOIN message_variants va ON va.id = t.variant_a_id
+        JOIN message_variants vb ON vb.id = t.variant_b_id
+        ORDER BY t.created_at DESC
+      `;
+      return res.status(200).json(tests);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { name, variant_a_id, variant_b_id } = req.body || {};
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "name（文字列）が必要です" });
+    }
+    const variantAId = parseInt(variant_a_id, 10);
+    const variantBId = parseInt(variant_b_id, 10);
+    if (!variantAId || isNaN(variantAId) || !variantBId || isNaN(variantBId)) {
+      return res.status(400).json({ error: "variant_a_id, variant_b_idが必要です" });
+    }
+    if (variantAId === variantBId) {
+      return res.status(400).json({ error: "variant_a_idとvariant_b_idには異なるバリアントを指定してください" });
+    }
+    try {
+      const [test] = await sql`
+        INSERT INTO ab_tests (name, variant_a_id, variant_b_id)
+        VALUES (${name.trim()}, ${variantAId}, ${variantBId})
+        RETURNING *
+      `;
+      const [withNames] = await sql`
+        SELECT t.*, va.name AS variant_a_name, vb.name AS variant_b_name
+        FROM ab_tests t
+        JOIN message_variants va ON va.id = t.variant_a_id
+        JOIN message_variants vb ON vb.id = t.variant_b_id
+        WHERE t.id = ${test.id}
+      `;
+      return res.status(201).json(withNames);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST のみ対応しています" });
+}
+
+async function handleAbTestStats(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  const testId = parseInt(req.query.id, 10);
+  if (!testId || isNaN(testId)) {
+    return res.status(400).json({ error: "有効なidが必要です" });
+  }
+  try {
+    const [test] = await sql`SELECT * FROM ab_tests WHERE id = ${testId}`;
+    if (!test) return res.status(404).json({ error: "A/Bテストが見つかりません" });
+
+    async function variantStats(variantId) {
+      const [row] = await sql`
+        SELECT
+          mv.name                                                           AS name,
+          COUNT(DISTINCT sl.id)::int                                        AS send_count,
+          COUNT(DISTINCT r.id)::int                                         AS response_count
+        FROM message_variants mv
+        LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
+        LEFT JOIN responses  r  ON r.send_log_id = sl.id
+        WHERE mv.id = ${variantId}
+        GROUP BY mv.name
+      `;
+      const sendCount = row?.send_count || 0;
+      const responseCount = row?.response_count || 0;
+      const responseRate = sendCount > 0 ? Math.round((responseCount / sendCount) * 1000) / 10 : 0;
+      return { name: row?.name || "", send_count: sendCount, response_count: responseCount, response_rate: responseRate };
+    }
+
+    const variant_a = await variantStats(test.variant_a_id);
+    const variant_b = await variantStats(test.variant_b_id);
+
+    let winner = null;
+    if (variant_a.send_count > 0 || variant_b.send_count > 0) {
+      if (variant_a.response_rate > variant_b.response_rate) winner = test.variant_a_id;
+      else if (variant_b.response_rate > variant_a.response_rate) winner = test.variant_b_id;
+    }
+
+    const diff = Math.abs(variant_a.response_rate - variant_b.response_rate);
+    let confidence = "低";
+    if (diff >= 5) confidence = "高";
+    else if (diff >= 2) confidence = "中";
+
+    return res.status(200).json({ variant_a, variant_b, winner, confidence });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }

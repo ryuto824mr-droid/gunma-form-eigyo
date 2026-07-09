@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
     }
 
     if (status !== undefined) {
-      const validStatuses = ["pending", "researching", "researched", "captcha_blocked", "no_form", "error"];
+      const validStatuses = ["pending", "researching", "researched", "captcha_blocked", "no_form", "error", "rejected"];
       if (!validStatuses.includes(status)) {
         return res.status(400).json({ error: "有効なstatusを指定してください" });
       }

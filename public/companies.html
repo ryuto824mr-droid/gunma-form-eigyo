@@ -435,6 +435,7 @@
   .badge-no_form    { background: #fff7ed; color: #c2410c; }
   .badge-captcha    { background: #fffbeb; color: #b45309; }
   .badge-error      { background: #fff5f5; color: #dc2626; }
+  .badge-rejected   { background: #fff5f5; color: #dc2626; border: 1px solid #fca5a5; }
   .badge-ok         { background: var(--green-50); color: var(--green-700); }
   .badge-ng         { background: #fff5f5; color: #dc2626; }
 
@@ -2875,6 +2876,7 @@
       no_form:        { label: "フォームなし",         cls: "badge-no_form" },
       captcha_blocked:{ label: "🔒 CAPTCHA",          cls: "badge-captcha" },
       error:          { label: "✕ エラー",            cls: "badge-error" },
+      rejected:       { label: "🚫 営業お断り",         cls: "badge-rejected" },
     };
     const s = map[status] || { label: status, cls: "badge-pending" };
     return `<span class="badge ${s.cls}">${s.label}</span>`;
