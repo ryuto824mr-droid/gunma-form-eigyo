@@ -298,6 +298,13 @@
   .btn-action.status-meeting_set { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); font-weight: 600; }
   .btn-action.status-rejected    { border-color: #fca5a5; background: #fff5f5; color: #dc2626; font-weight: 600; }
   .btn-action.status-closed      { border-color: var(--gray-300); background: var(--gray-100); color: var(--gray-500); font-weight: 600; }
+  .btn-archive-company {
+    padding: 5px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-300); background: var(--white); color: var(--gray-500);
+    cursor: pointer; margin-left: 6px; transition: all 150ms;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .btn-archive-company:hover { background: var(--gray-100); }
   .btn-delete-company {
     padding: 5px 8px; font-size: 12px; border-radius: var(--radius-sm);
     border: 1px solid #fca5a5; background: var(--white); color: #dc2626;
@@ -1503,6 +1510,9 @@
       const actionClass  = actionStatus !== "none" ? ` status-${actionStatus}` : "";
       const actionLabel  = (actionStatus === "none" ? "📌 " : "") + actionStatusLabel(actionStatus);
       const archivedBadge = c.archived ? '<span class="archived-badge">アーカイブ済み</span>' : "";
+      const archiveBtn = !c.archived
+        ? `<button class="btn-archive-company" onclick="archiveCompany(${c.id})" title="アーカイブ">📦</button>`
+        : "";
       const deleteOrRestoreBtn = c.archived
         ? `<button class="btn-restore-company" onclick="restoreCompany(${c.id})" title="元に戻す"><i data-lucide="rotate-ccw"></i> 元に戻す</button>`
         : `<button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>`;
@@ -1524,6 +1534,7 @@
             ${detailBtn}
             <button class="btn-memo${hasMemo ? " has-memo" : ""}" onclick="toggleMemoForm(${c.id})" title="メモ">📝</button>
             <button class="btn-action${actionClass}" onclick="toggleActionForm(${c.id})" title="アクション">${actionLabel}</button>
+            ${archiveBtn}
             ${deleteOrRestoreBtn}
           </td>
         </tr>
@@ -1612,6 +1623,29 @@
       showToast("企業を削除しました", "info");
     } catch (err) {
       showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function archiveCompany(id) {
+    const company = companies.find(c => c.id === id);
+    if (!company) return;
+    if (!confirm(`「${company.name}」をアーカイブします。送信履歴は残ります。`)) return;
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, archived: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(esc(data.error || "アーカイブエラー"), "error");
+        return;
+      }
+      companies = companies.filter(c => c.id !== id);
+      renderTable();
+      showToast("アーカイブしました", "info");
+    } catch (err) {
+      showToast("アーカイブエラー: " + esc(err.message), "error");
     }
   }
 
