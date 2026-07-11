@@ -71,6 +71,21 @@
   .side-dot.active { background: var(--green-400); height: 24px; border-radius: 5px; }
   @media (max-width: 860px) { .side-dots { display: none; } }
 
+  /* ===== Replay demo button ===== */
+  .btn-replay-demo {
+    position: fixed; bottom: 24px; right: 24px; z-index: 500;
+    padding: 10px 20px; font-size: 13px; font-weight: 700;
+    color: white; background: var(--green-500); border: none; border-radius: 999px;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 4px 12px rgba(68,177,63,0.4);
+    transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+  .btn-replay-demo:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(68,177,63,0.55);
+    background: var(--green-400);
+  }
+
   section { position: relative; z-index: 1; }
 
   /* ===== Hero ===== */
@@ -354,6 +369,8 @@
   <button class="side-dot" data-target="ctaFinal" aria-label="CTA"></button>
 </nav>
 
+<button class="btn-replay-demo" id="replayDemoBtn">▶ デモを再生</button>
+
 <!-- ===== Hero ===== -->
 <section class="hero-section" id="hero">
   <div class="hero-logo-box"><img src="/logo.jpg" alt="LOCLE" /></div>
@@ -543,6 +560,13 @@
 </section>
 
 <script>
+  /* ===================== Pristine mock snapshots (for replay) ===================== */
+  const mockOriginalHTML = {};
+  ["mockScene1", "mockScene2", "mockScene3", "mockScene4", "mockScene5"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) mockOriginalHTML[id] = el.innerHTML;
+  });
+
   /* ===================== Particle background ===================== */
   (function () {
     const canvas = document.getElementById("particleCanvas");
@@ -620,13 +644,20 @@
 
   /* ===================== Typing effect ===================== */
   function typeText(el, text, speed) {
+    // Cancel any typing already in progress on this element so rapid
+    // replays can't interleave two intervals writing into the same node.
+    if (el._typeTimer) clearInterval(el._typeTimer);
     return new Promise(resolve => {
       let i = 0;
       el.textContent = "";
-      const timer = setInterval(() => {
+      el._typeTimer = setInterval(() => {
         el.textContent += text[i];
         i++;
-        if (i >= text.length) { clearInterval(timer); resolve(); }
+        if (i >= text.length) {
+          clearInterval(el._typeTimer);
+          el._typeTimer = null;
+          resolve();
+        }
       }, speed);
     });
   }
@@ -646,20 +677,40 @@
     requestAnimationFrame(step);
   }
 
+  /* ===================== Replay generation guard =====================
+     Incremented every time resetDemo() runs. Every deferred callback below
+     captures the generation at the moment its scene started and bails out
+     if the generation has since changed (i.e. the user hit replay while the
+     callback was still in flight and the DOM it targets has been replaced). */
+  let demoGeneration = 0;
+
   /* ===================== Hero sequence ===================== */
-  (async function heroSequence() {
+  async function heroSequence() {
+    const myGen = demoGeneration;
     await typeText(document.getElementById("heroTypingText"), "営業活動を、自動化する。", 90);
+    if (myGen !== demoGeneration) return;
     // stats
     const statCompanies = document.getElementById("statCompanies");
     const statAutomation = document.getElementById("statAutomation");
     const statAnalysis = document.getElementById("statAnalysis");
-    setTimeout(() => { statCompanies.textContent = "∞社"; statCompanies.style.animation = "heroFadeIn 0.6s ease forwards"; }, 2300);
-    setTimeout(() => countUp(statAutomation, 100, { suffix: "%" }), 2300);
-    setTimeout(() => countUp(statAnalysis, 20, { suffix: "+" }), 2500);
-  })();
+    setTimeout(() => {
+      if (myGen !== demoGeneration) return;
+      statCompanies.textContent = "∞社"; statCompanies.style.animation = "heroFadeIn 0.6s ease forwards";
+    }, 2300);
+    setTimeout(() => { if (myGen === demoGeneration) countUp(statAutomation, 100, { suffix: "%" }); }, 2300);
+    setTimeout(() => { if (myGen === demoGeneration) countUp(statAnalysis, 20, { suffix: "+" }); }, 2500);
+  }
+  heroSequence();
+
+  function replayCssAnimation(el) {
+    if (!el) return;
+    el.style.animation = "none";
+    void el.offsetWidth; // force reflow
+    el.style.animation = "";
+  }
 
   /* ===================== Mock cursor helper ===================== */
-  function moveCursor(cursorEl, containerEl, targetEl, onArrive) {
+  function moveCursor(cursorEl, containerEl, targetEl, onArrive, myGen) {
     const cRect = containerEl.getBoundingClientRect();
     const tRect = targetEl.getBoundingClientRect();
     const top = tRect.top - cRect.top + tRect.height / 2 - 10;
@@ -667,17 +718,20 @@
     cursorEl.style.top = top + "px";
     cursorEl.style.left = left + "px";
     setTimeout(() => {
+      if (myGen !== demoGeneration) return;
       cursorEl.classList.add("clicking");
       setTimeout(() => {
+        if (myGen !== demoGeneration) return;
         cursorEl.classList.remove("clicking");
         if (onArrive) onArrive();
       }, 180);
     }, 750);
   }
 
-  /* ===================== Scene animation sequences (run once) ===================== */
+  /* ===================== Scene animation sequences (run once per generation) ===================== */
   const sceneRunners = {
     scene1: function () {
+      const myGen = demoGeneration;
       const box = document.getElementById("mockScene1");
       const cursor = document.getElementById("mockCursor1");
       const addBtn = document.getElementById("mockAddBtn");
@@ -687,24 +741,28 @@
 
       moveCursor(cursor, box, addBtn, () => {
         addBtn.classList.add("glow");
-        setTimeout(() => addBtn.classList.remove("glow"), 400);
+        setTimeout(() => { if (myGen === demoGeneration) addBtn.classList.remove("glow"); }, 400);
         newRow.classList.add("show");
 
         setTimeout(() => {
+          if (myGen !== demoGeneration) return;
           statusCell.innerHTML = '<span class="mock-status-researching"><span class="mock-spinner"></span>リサーチ中...</span>';
         }, 500);
 
         setTimeout(() => {
+          if (myGen !== demoGeneration) return;
           statusCell.innerHTML = '<span class="mock-status-done">✓完了</span>';
           badgeCell.innerHTML = '<span class="mock-badge-ok">OK</span>';
           requestAnimationFrame(() => {
+            if (myGen !== demoGeneration) return;
             badgeCell.querySelector(".mock-badge-ok").classList.add("show");
           });
         }, 2000);
-      });
+      }, myGen);
     },
 
     scene2: function () {
+      const myGen = demoGeneration;
       const box = document.getElementById("mockScene2");
       const cursor = document.getElementById("mockCursor2");
       const prefEl = document.getElementById("mockPref");
@@ -714,14 +772,17 @@
 
       (async () => {
         await typeText(prefEl, "群馬県", 130);
+        if (myGen !== demoGeneration) return;
         prefEl.classList.remove("placeholder");
         await new Promise(r => setTimeout(r, 200));
+        if (myGen !== demoGeneration) return;
         await typeText(industryEl, "製造業", 130);
+        if (myGen !== demoGeneration) return;
         industryEl.classList.remove("placeholder");
 
         moveCursor(cursor, box, searchBtn, () => {
           searchBtn.classList.add("glow");
-          setTimeout(() => searchBtn.classList.remove("glow"), 500);
+          setTimeout(() => { if (myGen === demoGeneration) searchBtn.classList.remove("glow"); }, 500);
 
           const names = ["群馬製作所株式会社", "上州工業株式会社", "赤城精機株式会社", "利根川金属株式会社", "前橋テクノ株式会社"];
           resultsList.innerHTML = names.map((n, i) =>
@@ -730,18 +791,22 @@
 
           names.forEach((_, i) => {
             setTimeout(() => {
-              document.getElementById("mockResult" + i).classList.add("show");
+              if (myGen !== demoGeneration) return;
+              const el = document.getElementById("mockResult" + i);
+              if (el) el.classList.add("show");
             }, 200 * i);
             setTimeout(() => {
-              document.getElementById("mockCheck" + i).classList.add("checked");
-              document.getElementById("mockCheck" + i).textContent = "✓";
+              if (myGen !== demoGeneration) return;
+              const el = document.getElementById("mockCheck" + i);
+              if (el) { el.classList.add("checked"); el.textContent = "✓"; }
             }, 200 * i + 350);
           });
-        });
+        }, myGen);
       })();
     },
 
     scene3: function () {
+      const myGen = demoGeneration;
       const box = document.getElementById("mockScene3");
       const draftBtn = document.getElementById("mockDraftBtn");
       const textarea = document.getElementById("mockTextarea");
@@ -756,22 +821,26 @@
 
       moveCursor(cursor, box, draftBtn, async () => {
         draftBtn.classList.add("glow");
-        setTimeout(() => draftBtn.classList.remove("glow"), 400);
+        setTimeout(() => { if (myGen === demoGeneration) draftBtn.classList.remove("glow"); }, 400);
         const message = "株式会社サンプル商事 ご担当者様\n\nはじめてご連絡いたします。\n貴社の業務効率化に関するご提案がございます。";
         await typeText(textarea, message, 28);
+        if (myGen !== demoGeneration) return;
 
         setTimeout(() => {
+          if (myGen !== demoGeneration) return;
           moveCursor(cursor, box, sendBtn, () => {
             sendBtn.classList.add("glow");
             setTimeout(() => {
+              if (myGen !== demoGeneration) return;
               toast.classList.add("show");
             }, 300);
-          });
+          }, myGen);
         }, 400);
-      });
+      }, myGen);
     },
 
     scene4: function () {
+      const myGen = demoGeneration;
       const leadSlot = document.getElementById("mockKanbanLeadSlot");
       const proposalSlot = document.getElementById("mockKanbanProposalSlot");
       const totalEl = document.getElementById("mockPipelineTotal");
@@ -779,9 +848,12 @@
       leadSlot.innerHTML = '<div class="mock-kanban-card" id="mockDragCard">株式会社イプシロン<span class="amt">¥220万円</span></div>';
 
       setTimeout(() => {
+        if (myGen !== demoGeneration) return;
         const card = document.getElementById("mockDragCard");
+        if (!card) return;
         card.style.opacity = "0.4";
         setTimeout(() => {
+          if (myGen !== demoGeneration) return;
           card.remove();
           const clone = document.createElement("div");
           clone.className = "mock-kanban-card";
@@ -790,22 +862,25 @@
         }, 350);
       }, 1200);
 
-      setTimeout(() => countUp(totalEl, 2450, { suffix: "万円", duration: 1200 }), 500);
+      setTimeout(() => { if (myGen === demoGeneration) countUp(totalEl, 2450, { suffix: "万円", duration: 1200 }); }, 500);
       // fix prefix ¥ after countUp overwrites textContent
       const fixPrefix = setInterval(() => {
+        if (myGen !== demoGeneration) { clearInterval(fixPrefix); return; }
         if (!totalEl.textContent.startsWith("¥")) totalEl.textContent = "¥" + totalEl.textContent;
       }, 100);
       setTimeout(() => clearInterval(fixPrefix), 2000);
     },
 
     scene5: function () {
+      const myGen = demoGeneration;
       const bars = document.querySelectorAll("#mockChart .mock-bar");
       bars.forEach((bar, i) => {
-        setTimeout(() => { bar.style.height = bar.dataset.h + "%"; }, i * 100);
+        setTimeout(() => { if (myGen === demoGeneration) bar.style.height = bar.dataset.h + "%"; }, i * 100);
       });
       const rateEl = document.getElementById("mockRateValue");
-      setTimeout(() => countUp(rateEl, 23, { suffix: "%", duration: 1200 }), 500);
+      setTimeout(() => { if (myGen === demoGeneration) countUp(rateEl, 23, { suffix: "%", duration: 1200 }); }, 500);
       setTimeout(() => {
+        if (myGen !== demoGeneration) return;
         document.getElementById("mockWinnerBadge").classList.add("show");
       }, 1600);
     },
@@ -838,6 +913,39 @@
   }, { threshold: 0.35 });
 
   featureScenes.forEach(s => sceneObserver.observe(s));
+
+  /* ===================== Replay demo ===================== */
+  function resetDemo() {
+    demoGeneration++; // invalidate any in-flight timeouts from the previous run
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Reset scenes: drop in-view state and restore each mock to its pristine markup
+    featureScenes.forEach(scene => {
+      scene.classList.remove("in-view");
+      const titleSpan = scene.querySelector(".scene-title .typing-text");
+      if (titleSpan) {
+        titleSpan.textContent = "";
+        delete titleSpan.dataset.started;
+      }
+    });
+    Object.keys(mockOriginalHTML).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = mockOriginalHTML[id];
+    });
+    startedScenes.clear();
+
+    // Reset hero
+    document.getElementById("heroTypingText").textContent = "";
+    document.getElementById("statCompanies").textContent = "0社";
+    document.getElementById("statAutomation").textContent = "0%";
+    document.getElementById("statAnalysis").textContent = "0+";
+    replayCssAnimation(document.querySelector(".hero-subtitle"));
+    replayCssAnimation(document.querySelector(".hero-stats"));
+    replayCssAnimation(document.querySelector(".hero-actions"));
+
+    setTimeout(heroSequence, 500);
+  }
+  document.getElementById("replayDemoBtn").addEventListener("click", resetDemo);
 </script>
 </body>
 </html>
