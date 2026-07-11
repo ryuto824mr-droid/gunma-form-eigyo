@@ -3,744 +3,841 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ホーム - LOCLE営業ツール</title>
-<script>
-  (function() {
-    try {
-      var saved = localStorage.getItem("theme");
-      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
-    } catch (e) {}
-  })();
-</script>
+<title>LOCLE - 営業活動を、自動化する。</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-300: #86efac; --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
-    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
-    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
-    --gray-400: #94a3b8;  --gray-500: #64748b;
-    --gray-700: #334155;  --gray-900: #0f172a;
-    --white: #ffffff;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
-    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
-    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+    --green-500: #44B13F;
+    --green-400: #5BC952;
+    --navy: #0a0f1a;
+    --navy-light: #141c2e;
+    --navy-card: #1a2337;
   }
   * { box-sizing: border-box; }
-  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+  html { scroll-behavior: smooth; }
+  html, body {
+    margin: 0;
+    font-family: "Inter", "Noto Sans JP", sans-serif;
+    background: var(--navy);
+    color: #ffffff;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, p, ul { margin: 0; padding: 0; }
 
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .container { animation: fadeInUp 0.4s ease-out; }
-
-  /* Header */
-  .page-header {
-    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
-    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
-    padding: 0 24px; display: flex; align-items: center; gap: 16px;
-    height: 56px; position: sticky; top: 0; z-index: 100;
-  }
-  .page-header h1 {
-    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
-    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
-  }
-  .page-header h1 svg { width: 18px; height: 18px; }
-  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
-  .page-nav a {
-    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
-    text-decoration: none; white-space: nowrap;
-    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
-  }
-  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
-  .logo-img { background: white; padding: 3px 8px; }
-  .page-nav a.active {
-    color: white; font-weight: 600;
-    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  #particleCanvas {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
   }
 
-  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
-
-  /* Hero */
-  .hero {
-    text-align: center; padding: 56px 24px 44px;
-    background: linear-gradient(135deg, #1a5c17 0%, #2F8A2A 40%, #44B13F 70%, #5BC952 100%);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 4px 24px rgba(26,92,23,0.35);
-    margin-bottom: 32px;
+  /* ===== Header ===== */
+  .site-header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 32px;
+    background: transparent;
+    transition: background 250ms ease, backdrop-filter 250ms ease, border-color 250ms ease;
+    border-bottom: 1px solid transparent;
   }
-  .hero-logo {
-    font-size: 64px; font-weight: 700; color: var(--white);
-    letter-spacing: -1px; line-height: 1; margin-bottom: 10px;
+  .site-header.scrolled {
+    background: rgba(10, 15, 26, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom-color: rgba(255,255,255,0.07);
   }
-  .hero-subtitle {
-    font-size: 16px; font-weight: 600; color: var(--white);
-    opacity: 0.85; margin-bottom: 14px; letter-spacing: -0.01em;
+  .header-logo {
+    height: 28px; width: auto; object-fit: contain;
+    background: white; padding: 4px 10px; border-radius: 6px;
   }
-  .hero-copy {
-    font-size: 14px; color: rgba(255,255,255,0.72); line-height: 1.8;
-    max-width: 480px; margin: 0 auto 28px;
-  }
-  .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .btn-hero-primary {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 10px 24px;
-    background: var(--white);
-    color: var(--green-700); border: none; border-radius: var(--radius-sm);
-    cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit;
-    text-decoration: none; transition: all 150ms ease;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  }
-  .btn-hero-primary:hover {
-    background: var(--green-50);
-    transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.2);
-  }
-  .btn-hero-primary svg { width: 16px; height: 16px; }
-  .btn-hero-sub {
+  .btn-header-cta {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 18px; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500;
-    text-decoration: none; border-radius: var(--radius-sm);
-    border: 1px solid rgba(255,255,255,0.35);
-    background: rgba(255,255,255,0.12);
-    transition: all 150ms ease;
+    padding: 9px 18px; font-size: 13px; font-weight: 700;
+    color: white; text-decoration: none; border-radius: 999px;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400));
+    box-shadow: 0 4px 16px rgba(68,177,63,0.35);
+    transition: transform 150ms ease, box-shadow 150ms ease;
   }
-  .btn-hero-sub:hover {
-    color: white; background: rgba(255,255,255,0.22);
-    border-color: rgba(255,255,255,0.55); transform: translateY(-1px);
-  }
-  .btn-hero-sub svg { width: 14px; height: 14px; }
+  .btn-header-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(68,177,63,0.5); }
 
-  /* Summary cards */
-  .summary-cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
-  .summary-card {
-    flex: 1; min-width: 140px; background: var(--white);
-    border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
-    padding: 20px 24px; box-shadow: var(--shadow-sm); text-align: center;
-    position: relative; overflow: hidden;
-    transition: transform 200ms ease, box-shadow 200ms ease;
+  /* ===== Side dot nav ===== */
+  .side-dots {
+    position: fixed; right: 22px; top: 50%; transform: translateY(-50%);
+    z-index: 400; display: flex; flex-direction: column; gap: 14px;
   }
-  .summary-card::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: var(--green-500);
+  .side-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: rgba(255,255,255,0.2); border: none; cursor: pointer;
+    padding: 0; transition: all 250ms ease; position: relative;
   }
-  .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .summary-card .card-label {
-    font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
-    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
-  }
-  .summary-card .card-value {
-    font-size: 36px; font-weight: 700; color: var(--green-700);
-    line-height: 1; letter-spacing: -0.03em;
-  }
-  .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+  .side-dot:hover { background: rgba(255,255,255,0.5); }
+  .side-dot.active { background: var(--green-400); height: 24px; border-radius: 5px; }
+  @media (max-width: 860px) { .side-dots { display: none; } }
 
-  /* Follow-up dashboard */
-  .followup-section {
-    background: var(--white); border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg); padding: 20px 24px;
-    margin-bottom: 32px; box-shadow: var(--shadow-sm);
-  }
-  .followup-section h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
-  .followup-empty { font-size: 13px; color: var(--green-700); padding: 8px 0; margin: 0; }
-  .followup-alert { font-size: 13px; font-weight: 700; color: #ea580c; margin: 0 0 12px; }
-  .followup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .followup-item {
-    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
-    border: 1px solid var(--gray-200); border-radius: var(--radius-md); font-size: 13px;
-  }
-  .followup-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-  .followup-item-company { font-weight: 600; color: var(--gray-900); }
-  .followup-item-meta { font-size: 12px; color: var(--gray-500); }
-  .followup-item-link {
-    padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
-    border: 1px solid var(--green-500); color: var(--green-700); background: var(--white);
-    text-decoration: none; white-space: nowrap; transition: all 150ms;
-  }
-  .followup-item-link:hover { background: var(--green-50); }
+  section { position: relative; z-index: 1; }
 
-  /* Section title */
-  .section-title {
-    font-size: 18px; font-weight: 700; color: var(--gray-900);
-    border-left: 3px solid var(--green-500); padding-left: 12px;
-    margin: 0 0 16px;
+  /* ===== Hero ===== */
+  .hero-section {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 120px 24px 60px;
   }
+  .hero-logo-box {
+    background: white; padding: 10px 18px; border-radius: 10px;
+    display: inline-block; margin-bottom: 32px;
+    box-shadow: 0 8px 30px rgba(68,177,63,0.25);
+  }
+  .hero-logo-box img { height: 34px; display: block; }
+  .hero-title {
+    font-size: clamp(32px, 6vw, 64px); font-weight: 800; letter-spacing: -0.03em;
+    line-height: 1.3; min-height: 1.3em;
+  }
+  .hero-title .cursor-blink {
+    display: inline-block; margin-left: 3px; color: var(--green-400);
+    animation: blink 0.9s step-start infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .hero-subtitle {
+    font-size: 17px; color: rgba(255,255,255,0.65); margin: 22px 0 0;
+    max-width: 620px; line-height: 1.8;
+    opacity: 0; animation: heroFadeIn 0.8s ease 1.8s forwards;
+  }
+  @keyframes heroFadeIn { to { opacity: 1; } }
 
-  /* Feature cards */
-  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
-  .feature-card {
-    background: var(--white); border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg); padding: 24px;
-    box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
-    display: flex; flex-direction: column; gap: 12px;
-    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
-    color: inherit;
+  .hero-stats {
+    display: flex; gap: 36px; margin-top: 52px; flex-wrap: wrap; justify-content: center;
+    opacity: 0; animation: heroFadeIn 0.8s ease 2.2s forwards;
   }
-  .feature-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md); border-color: var(--green-300);
+  .stat-card { text-align: center; min-width: 140px; }
+  .stat-value {
+    font-size: 38px; font-weight: 800;
+    background: linear-gradient(135deg, var(--green-400), var(--green-500));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -0.02em;
   }
-  .feature-card-header {
-    display: flex; align-items: flex-start; justify-content: space-between;
-  }
-  .feature-icon {
-    width: 48px; height: 48px; border-radius: 50%;
-    background: var(--green-50); display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-  .feature-icon svg { width: 22px; height: 22px; color: var(--green-700); }
-  .feature-arrow-icon {
-    width: 16px; height: 16px; color: var(--gray-300);
-    transition: color 200ms ease; flex-shrink: 0; margin-top: 4px;
-  }
-  .feature-card:hover .feature-arrow-icon { color: var(--green-500); }
-  .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
-  .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
+  .stat-label { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 6px; font-weight: 600; letter-spacing: 0.03em; }
 
-  /* Welcome Tour */
-  .tour-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
-  .tour-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); pointer-events: all; }
-  .tour-popup {
-    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
-    background: var(--white); border-radius: var(--radius-lg);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-    padding: 24px 28px; max-width: 400px; width: calc(100% - 32px);
-    pointer-events: all; z-index: 1; animation: fadeInUp 0.3s ease-out;
+  .hero-actions {
+    display: flex; gap: 16px; margin-top: 52px; flex-wrap: wrap; justify-content: center;
+    opacity: 0; animation: heroFadeIn 0.8s ease 2.5s forwards;
   }
-  .tour-step-badge {
-    font-size: 11px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.08em; color: var(--green-500); margin-bottom: 8px;
+  .btn-scroll-down, .btn-cta-primary {
+    padding: 14px 30px; font-size: 14px; font-weight: 700; border-radius: 999px;
+    cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+    font-family: inherit;
   }
-  .tour-title { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
-  .tour-body  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin-bottom: 20px; }
-  .tour-actions { display: flex; justify-content: space-between; align-items: center; }
-  .tour-btn-skip {
-    font-size: 12px; color: var(--gray-400); background: none; border: none;
-    cursor: pointer; padding: 0; font-family: inherit; transition: color 150ms;
+  .btn-scroll-down {
+    background: rgba(255,255,255,0.06); color: white; border: 1px solid rgba(255,255,255,0.2);
   }
-  .tour-btn-skip:hover { color: var(--gray-700); }
-  .tour-btn-next {
-    padding: 8px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
-    color: white; border: none; border-radius: var(--radius-sm);
-    cursor: pointer; transition: all 150ms;
-    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+  .btn-scroll-down:hover { background: rgba(255,255,255,0.12); transform: translateY(-2px); }
+  .btn-cta-primary {
+    background: linear-gradient(135deg, var(--green-500), var(--green-400)); color: white; border: none;
+    box-shadow: 0 8px 24px rgba(68,177,63,0.35);
   }
-  .tour-btn-next:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
-  .tour-highlight {
-    outline: 3px solid var(--green-500) !important;
-    outline-offset: 4px !important;
-    border-radius: var(--radius-sm) !important;
-    position: relative; z-index: 999;
+  .btn-cta-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(68,177,63,0.5); }
+
+  /* ===== Feature scenes ===== */
+  .feature-scene {
+    min-height: 100vh;
+    display: flex; align-items: center;
+    padding: 100px 6vw;
+  }
+  .scene-inner {
+    display: grid; grid-template-columns: 2fr 3fr; gap: 60px; align-items: center;
+    max-width: 1280px; margin: 0 auto; width: 100%;
+  }
+  .step-number {
+    font-size: 15px; font-weight: 800; color: var(--green-400);
+    letter-spacing: 0.15em; margin-bottom: 16px;
+    opacity: 0; transform: translateY(10px); transition: all 0.5s ease;
+  }
+  .feature-scene.in-view .step-number { opacity: 1; transform: translateY(0); }
+
+  .scene-title {
+    font-size: clamp(24px, 3.2vw, 36px); font-weight: 800; line-height: 1.4;
+    letter-spacing: -0.02em; min-height: 1.4em;
+  }
+  .scene-desc {
+    font-size: 15px; line-height: 1.9; color: rgba(255,255,255,0.65);
+    margin: 20px 0 26px; max-width: 440px;
+    opacity: 0; transform: translateY(10px); transition: opacity 0.6s ease, transform 0.6s ease;
+    transition-delay: 0.6s;
+  }
+  .feature-scene.in-view .scene-desc { opacity: 1; transform: translateY(0); }
+
+  .scene-points { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  .scene-points li {
+    font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 9px;
+    opacity: 0; transform: translateY(10px); transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .feature-scene.in-view .scene-points li:nth-child(1) { transition-delay: 0.8s; opacity: 1; transform: translateY(0); }
+  .feature-scene.in-view .scene-points li:nth-child(2) { transition-delay: 1.0s; opacity: 1; transform: translateY(0); }
+  .feature-scene.in-view .scene-points li:nth-child(3) { transition-delay: 1.2s; opacity: 1; transform: translateY(0); }
+  .scene-points .check {
+    color: var(--green-400); font-weight: 800; flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 50%; background: rgba(68,177,63,0.15);
+    display: flex; align-items: center; justify-content: center; font-size: 12px;
   }
 
-  @media (max-width: 600px) {
-    .page-header { padding: 0 12px; }
-    .page-nav { overflow-x: auto; padding-bottom: 2px; }
-    .page-header h1 { font-size: 16px; }
-    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
-    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
-    .container { padding: 20px 8px; }
-    .hero { padding: 36px 16px 32px; }
-    .hero-logo { font-size: 48px; }
-    .summary-cards { flex-direction: column; }
-    .summary-card { min-width: unset; }
-    .feature-grid { grid-template-columns: 1fr; }
-    .btn-hero-primary { width: 100%; justify-content: center; }
+  /* ===== Mock container ===== */
+  .scene-mock-col { display: flex; justify-content: center; }
+  .mock-box {
+    position: relative; width: 100%; max-width: 520px; min-height: 340px;
+    background: var(--navy-card); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+    padding: 22px; overflow: hidden;
+    opacity: 0; transform: scale(0.95); transition: opacity 0.6s ease, transform 0.6s ease;
   }
+  .feature-scene.in-view .mock-box { opacity: 1; transform: scale(1); }
 
-  /* Toast notifications */
-  .toast-container {
-    position: fixed; top: 72px; right: 16px; z-index: 9999;
-    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  .mock-cursor {
+    position: absolute; width: 20px; height: 20px; border-radius: 50%;
+    background: white; opacity: 0.85; pointer-events: none; z-index: 50;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.12);
+    transition: top 0.7s cubic-bezier(0.4,0,0.2,1), left 0.7s cubic-bezier(0.4,0,0.2,1), transform 0.15s ease;
   }
-  .toast {
-    display: flex; align-items: flex-start; gap: 10px;
-    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
-    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
-    pointer-events: auto;
-  }
-  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
-  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
-  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
-  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
-  .toast-icon { flex-shrink: 0; font-size: 15px; }
-  .toast-body { flex: 1; }
-  .toast-title { font-weight: 600; margin-bottom: 2px; }
-  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
-  .toast-close:hover { opacity: 1; }
+  .mock-cursor.clicking { transform: scale(0.7); }
 
-  @keyframes slideInRight {
-    from { opacity: 0; transform: translateX(20px); }
-    to   { opacity: 1; transform: translateX(0); }
+  /* Scene 1: companies mock */
+  .mock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .mock-table th {
+    text-align: left; padding: 8px 10px; color: rgba(255,255,255,0.4);
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 700;
   }
+  .mock-table td { padding: 10px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .mock-table tr.mock-row-new { opacity: 0; transform: translateX(-16px); transition: all 0.5s ease; }
+  .mock-table tr.mock-row-new.show { opacity: 1; transform: translateX(0); }
+  .mock-status-pending { color: rgba(255,255,255,0.4); }
+  .mock-status-researching { color: #fbbf24; display: inline-flex; align-items: center; gap: 6px; }
+  .mock-status-done { color: var(--green-400); font-weight: 700; }
+  .mock-spinner {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 2px solid rgba(251,191,36,0.3); border-top-color: #fbbf24;
+    animation: mockSpin 0.6s linear infinite;
+  }
+  @keyframes mockSpin { to { transform: rotate(360deg); } }
+  .mock-badge-ok {
+    display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 800;
+    background: rgba(68,177,63,0.15); color: var(--green-400);
+    opacity: 0; transform: scale(0.5); transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .mock-badge-ok.show { opacity: 1; transform: scale(1); }
+  .mock-btn-add {
+    padding: 6px 14px; font-size: 11px; font-weight: 700; border-radius: 6px;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400)); color: white; border: none;
+    margin-bottom: 14px; transition: box-shadow 0.2s ease;
+  }
+  .mock-btn-add.glow { box-shadow: 0 0 0 6px rgba(68,177,63,0.3); }
 
-  /* Dark mode toggle */
-  .btn-theme-toggle {
-    background: rgba(255,255,255,0.15); border: none; color: white;
-    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
-    font-size: 14px; display: flex; align-items: center; justify-content: center;
-    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  /* Scene 2: search mock */
+  .mock-search-row { display: flex; gap: 10px; margin-bottom: 16px; }
+  .mock-select-fake {
+    flex: 1; padding: 9px 12px; font-size: 12px; border-radius: 6px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85); min-height: 34px; display: flex; align-items: center;
   }
-  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+  .mock-select-fake .placeholder { color: rgba(255,255,255,0.3); }
+  .mock-btn-search {
+    padding: 9px 20px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400)); color: white;
+    transition: box-shadow 0.2s ease;
+  }
+  .mock-btn-search.glow { box-shadow: 0 0 0 6px rgba(68,177,63,0.3); }
+  .mock-result-card {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px;
+    background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+    opacity: 0; transform: translateY(8px); transition: all 0.4s ease; font-size: 12px;
+  }
+  .mock-result-card.show { opacity: 1; transform: translateY(0); }
+  .mock-checkbox {
+    width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid rgba(255,255,255,0.3);
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px;
+    transition: all 0.25s ease;
+  }
+  .mock-checkbox.checked { background: var(--green-500); border-color: var(--green-500); }
 
-  /* Dark mode */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --gray-50:  #0f172a;
-      --gray-100: #1e293b;
-      --gray-200: #334155;
-      --gray-300: #475569;
-      --gray-400: #64748b;
-      --gray-500: #94a3b8;
-      --gray-700: #cbd5e1;
-      --gray-900: #f1f5f9;
-      --white:    #1e293b;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
-      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
-    }
-    body { background: #0f172a; }
-    .page-header { border-bottom-color: #334155; }
-    input, textarea, select {
-      background: #1e293b !important;
-      color: #f1f5f9 !important;
-      border-color: #334155 !important;
-    }
-    input::placeholder, textarea::placeholder { color: #475569 !important; }
-    table thead { background: #1e293b; }
-    .modal-box, .tour-bubble { background: #1e293b; color: #f1f5f9; }
-    .preview-subject, .preview-body-text { background: #0f172a; }
-    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
-    .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
-    button[class*="btn-research"], #addBtn, #bulkBtn {
-      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
-      color: white !important;
-      opacity: 1 !important;
-    }
+  /* Scene 3: send mock */
+  .mock-textarea-box {
+    width: 100%; min-height: 110px; padding: 12px; font-size: 11.5px; line-height: 1.7;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
+    color: rgba(255,255,255,0.85); white-space: pre-wrap; margin: 12px 0; font-family: inherit;
   }
-  html.dark {
-    --gray-50:  #0f172a;
-    --gray-100: #1e293b;
-    --gray-200: #334155;
-    --gray-300: #475569;
-    --gray-400: #64748b;
-    --gray-500: #94a3b8;
-    --gray-700: #cbd5e1;
-    --gray-900: #f1f5f9;
-    --white:    #1e293b;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
-    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  .mock-textarea-box .type-cursor { display: inline-block; width: 2px; height: 12px; background: var(--green-400); animation: blink 0.8s step-start infinite; vertical-align: middle; }
+  .mock-btn-send {
+    padding: 9px 18px; font-size: 12px; font-weight: 700; border-radius: 6px; border: none;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400)); color: white;
+    transition: box-shadow 0.2s ease;
   }
-  html.dark body { background: #0f172a; }
-  html.dark .page-header { border-bottom-color: #334155; }
-  html.dark input, html.dark textarea, html.dark select {
-    background: #1e293b !important;
-    color: #f1f5f9 !important;
-    border-color: #334155 !important;
+  .mock-btn-send.glow { box-shadow: 0 0 0 6px rgba(68,177,63,0.35); }
+  .mock-toast {
+    position: absolute; bottom: 18px; right: 18px; padding: 10px 16px; border-radius: 8px;
+    background: rgba(68,177,63,0.15); border: 1px solid rgba(68,177,63,0.4); color: var(--green-400);
+    font-size: 12px; font-weight: 700;
+    opacity: 0; transform: translateX(30px); transition: all 0.4s ease;
   }
-  html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
-  html.dark table thead { background: #1e293b; }
-  html.dark .modal-box, html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
-  html.dark .preview-subject, html.dark .preview-body-text { background: #0f172a; }
-  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
-  html.dark .btn-primary,
-  html.dark button[class*="btn-"] { opacity: 1; }
-  html.dark .hero-actions .btn-hero-primary { color: white !important; }
+  .mock-toast.show { opacity: 1; transform: translateX(0); }
+
+  /* Scene 4: CRM mock */
+  .mock-kanban { display: flex; gap: 10px; }
+  .mock-kanban-col { flex: 1; background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; min-height: 200px; }
+  .mock-kanban-col-title { font-size: 10px; font-weight: 800; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; }
+  .mock-kanban-card {
+    background: var(--navy); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px;
+    padding: 10px; font-size: 11px; font-weight: 700; margin-bottom: 8px;
+    transition: all 0.7s cubic-bezier(0.4,0,0.2,1);
+  }
+  .mock-kanban-card .amt { display: block; font-size: 10px; color: var(--green-400); font-weight: 800; margin-top: 4px; }
+  .mock-pipeline-total { margin-top: 16px; text-align: center; }
+  .mock-pipeline-total .val { font-size: 26px; font-weight: 800; color: var(--green-400); }
+  .mock-pipeline-total .lbl { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; font-weight: 700; }
+
+  /* Scene 5: analytics mock */
+  .mock-chart { display: flex; align-items: flex-end; gap: 10px; height: 140px; padding: 0 4px 8px; }
+  .mock-bar { flex: 1; background: linear-gradient(180deg, var(--green-400), var(--green-500)); border-radius: 4px 4px 0 0; height: 0; transition: height 0.9s cubic-bezier(0.4,0,0.2,1); }
+  .mock-rate-row { display: flex; align-items: baseline; gap: 8px; margin-top: 18px; justify-content: center; }
+  .mock-rate-value { font-size: 30px; font-weight: 800; color: var(--green-400); }
+  .mock-rate-label { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 600; }
+  .mock-winner-badge {
+    display: block; margin: 16px auto 0; padding: 8px 16px; border-radius: 999px;
+    background: rgba(68,177,63,0.12); border: 1px solid rgba(68,177,63,0.35);
+    color: var(--green-400); font-size: 11px; font-weight: 700; text-align: center;
+    opacity: 0; transform: scale(0.6); transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    width: fit-content;
+  }
+  .mock-winner-badge.show { opacity: 1; transform: scale(1); }
+
+  /* ===== CTA section ===== */
+  .cta-section {
+    min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 80px 24px;
+  }
+  .cta-title { font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.4; }
+  .btn-cta-huge {
+    display: inline-flex; align-items: center; gap: 10px; margin-top: 40px;
+    padding: 20px 48px; font-size: 18px; font-weight: 800; border-radius: 999px;
+    color: white; text-decoration: none;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400));
+    box-shadow: 0 12px 36px rgba(68,177,63,0.4);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+  .btn-cta-huge:hover { transform: translateY(-3px); box-shadow: 0 16px 44px rgba(68,177,63,0.55); }
+  .feature-mini-list {
+    list-style: none; display: flex; gap: 24px; flex-wrap: wrap; justify-content: center;
+    margin-top: 48px; max-width: 700px;
+  }
+  .feature-mini-list li { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 600; }
+  .cta-footer-note { margin-top: 60px; font-size: 11px; color: rgba(255,255,255,0.25); }
+
+  @media (max-width: 860px) {
+    .scene-inner { grid-template-columns: 1fr; gap: 32px; }
+    .feature-scene { padding: 70px 20px; min-height: auto; }
+    .scene-desc { max-width: none; }
+    .site-header { padding: 14px 18px; }
+  }
 </style>
 </head>
 <body>
 
-<header class="page-header">
-  <h1><a href="/index.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
-    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
-  </a></h1>
-  <nav class="page-nav">
-    <a href="/index.html" class="active">ホーム</a>
-    <a href="/companies.html" id="nav-companies">企業リスト</a>
-    <a href="/variants.html" id="nav-variants">メッセージ管理</a>
-    <a href="/send.html" id="nav-send">送信管理</a>
-    <a href="/analytics.html" id="nav-analytics">分析</a>
-    <a href="/crm.html" id="nav-crm">CRM</a>
-    <a href="/reports.html">レポート</a>
-    <a href="/help.html">ヘルプ</a>
-    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
-  </nav>
+<canvas id="particleCanvas"></canvas>
+
+<header class="site-header" id="siteHeader">
+  <img src="/logo.jpg" alt="LOCLE" class="header-logo" />
+  <a href="/app.html" class="btn-header-cta">今すぐ使う →</a>
 </header>
 
-<div class="container">
+<nav class="side-dots" id="sideDots">
+  <button class="side-dot active" data-target="hero" aria-label="ヒーロー"></button>
+  <button class="side-dot" data-target="scene1" aria-label="企業リスト"></button>
+  <button class="side-dot" data-target="scene2" aria-label="自動検索"></button>
+  <button class="side-dot" data-target="scene3" aria-label="送信管理"></button>
+  <button class="side-dot" data-target="scene4" aria-label="CRM"></button>
+  <button class="side-dot" data-target="scene5" aria-label="分析"></button>
+  <button class="side-dot" data-target="ctaFinal" aria-label="CTA"></button>
+</nav>
 
-  <section class="hero">
-    <h1 style="font-size:64px; font-weight:800; color:white; letter-spacing:-1px; margin:0 0 8px;">LOCLE</h1>
-    <div class="hero-subtitle">営業自動化ツール</div>
-    <p class="hero-copy">企業リサーチからフォーム送信・反応分析まで、営業活動を一気通貫で自動化します</p>
-    <div class="hero-actions">
-      <a href="/companies.html" class="btn-hero-primary">
-        <i data-lucide="plus-circle"></i>企業を追加
-      </a>
-      <a href="/analyzer.html" class="btn-hero-sub">
-        <i data-lucide="search"></i>フォーム解析テスト
-      </a>
-    </div>
-  </section>
+<!-- ===== Hero ===== -->
+<section class="hero-section" id="hero">
+  <div class="hero-logo-box"><img src="/logo.jpg" alt="LOCLE" /></div>
+  <h1 class="hero-title" id="heroTitle"><span class="typing-text" id="heroTypingText"></span><span class="cursor-blink">|</span></h1>
+  <p class="hero-subtitle">企業リサーチ → フォーム送信 → 反応分析まで、一気通貫で自動化。</p>
+  <div class="hero-stats">
+    <div class="stat-card"><div class="stat-value" id="statCompanies">0社</div><div class="stat-label">登録企業数</div></div>
+    <div class="stat-card"><div class="stat-value" id="statAutomation">0%</div><div class="stat-label">送信自動化</div></div>
+    <div class="stat-card"><div class="stat-value" id="statAnalysis">0+</div><div class="stat-label">分析項目</div></div>
+  </div>
+  <div class="hero-actions">
+    <button class="btn-scroll-down" onclick="scrollToSection('scene1')">デモを見る ↓</button>
+    <a href="/app.html" class="btn-cta-primary">今すぐ使う →</a>
+  </div>
+</section>
 
-  <div class="summary-cards">
-    <div class="summary-card">
-      <div class="card-label">登録企業数</div>
-      <div class="card-value" id="statCompanies">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
+<!-- ===== Scene 1: 企業リスト ===== -->
+<section class="feature-scene" id="scene1" data-scene="1">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">01</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="企業を集めて、すぐ動ける。"></span></h2>
+      <p class="scene-desc">業種・地域・規模で企業を絞り込み、URLを貼るだけで一括登録。お問い合わせフォームの自動解析からメアドの取得まで、全自動で行います。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>9軸の詳細検索で企業を収集</li>
+        <li><span class="check">✓</span>フォーム構造を自動解析</li>
+        <li><span class="check">✓</span>メアドも自動で取得</li>
+      </ul>
     </div>
-    <div class="summary-card">
-      <div class="card-label">送信済み</div>
-      <div class="card-value" id="statSent">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-label">全体反応率</div>
-      <div class="card-value" id="statRate">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-label">要フォローアップ</div>
-      <div class="card-value" id="statFollowUp">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-label">期限切れタスク</div>
-      <div class="card-value" id="statOverdueTasks">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene1">
+        <button class="mock-btn-add" id="mockAddBtn">＋ 追加</button>
+        <table class="mock-table">
+          <thead><tr><th>企業名</th><th>ステータス</th><th>自動化</th></tr></thead>
+          <tbody id="mockCompaniesBody">
+            <tr><td>株式会社アルファ</td><td class="mock-status-done">✓完了</td><td><span class="mock-badge-ok show">OK</span></td></tr>
+            <tr><td>株式会社ベータ</td><td class="mock-status-done">✓完了</td><td><span class="mock-badge-ok show">OK</span></td></tr>
+            <tr class="mock-row-new" id="mockNewRow">
+              <td>株式会社サンプル商事</td>
+              <td class="mock-status-pending" id="mockNewStatus">未リサーチ</td>
+              <td id="mockNewBadgeCell"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="mock-cursor" id="mockCursor1" style="top:14px; left:14px;"></div>
       </div>
     </div>
   </div>
+</section>
 
-  <section class="followup-section" id="followupSection">
-    <h2>今日のフォローアップ</h2>
-    <p class="followup-empty">読み込み中...</p>
-  </section>
-
-  <section class="followup-section" id="taskSection">
-    <h2>未完了タスク</h2>
-    <p class="followup-empty">読み込み中...</p>
-  </section>
-
-  <p class="section-title">機能一覧</p>
-  <div class="feature-grid">
-    <a href="/companies.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="building-2"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+<!-- ===== Scene 2: 自動検索 ===== -->
+<section class="feature-scene" id="scene2" data-scene="2">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">02</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="検索して、まとめて登録。"></span></h2>
+      <p class="scene-desc">業種・都道府県などの条件を指定するだけで候補企業を自動検索。気になる企業を選んでまとめて企業リストへ登録できます。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>9軸の詳細検索で企業を収集</li>
+        <li><span class="check">✓</span>検索結果からそのまま一括登録</li>
+        <li><span class="check">✓</span>バリアントを選んで直接送信も可能</li>
+      </ul>
+    </div>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene2">
+        <div class="mock-search-row">
+          <div class="mock-select-fake"><span id="mockPref" class="placeholder">都道府県を選択</span></div>
+          <div class="mock-select-fake"><span id="mockIndustry" class="placeholder">業種を選択</span></div>
+        </div>
+        <button class="mock-btn-search" id="mockSearchBtn">検索する</button>
+        <div style="margin-top:16px;" id="mockResultsList"></div>
+        <div class="mock-cursor" id="mockCursor2" style="top:14px; left:14px;"></div>
       </div>
-      <div class="feature-name">企業リスト</div>
-      <div class="feature-desc">企業を登録・リサーチ・一括送信</div>
-    </a>
-    <a href="/variants.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="mail"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">メッセージ管理</div>
-      <div class="feature-desc">送信文面のテンプレートを管理・A/Bテスト</div>
-    </a>
-    <a href="/send.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="send"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">送信管理</div>
-      <div class="feature-desc">フォーム自動送信・メール送信・スケジュール管理</div>
-    </a>
-    <a href="/crm.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="users"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">CRM</div>
-      <div class="feature-desc">商談・コンタクト・タスク・A/Bテストを管理</div>
-    </a>
-    <a href="/analytics.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="bar-chart-2"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">分析</div>
-      <div class="feature-desc">バリアント別・タグ別の反応率を分析</div>
-    </a>
-    <a href="/reports.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="trending-up"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">レポート</div>
-      <div class="feature-desc">月次推移・パイプライン価値・成約率を確認</div>
-    </a>
-    <a href="/help.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="help-circle"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">ヘルプ</div>
-      <div class="feature-desc">使い方・よくある質問を確認</div>
-    </a>
-    <a href="/analyzer.html" class="feature-card">
-      <div class="feature-card-header">
-        <div class="feature-icon"><i data-lucide="search"></i></div>
-        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
-      </div>
-      <div class="feature-name">フォーム解析テスト</div>
-      <div class="feature-desc">企業サイトのフォームを手動解析</div>
-    </a>
-  </div>
-
-  <p style="text-align:center; margin-top:12px; font-size:12px; color:var(--gray-400);">
-    <button onclick="startTour()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0;">ウェルカムツアーを再表示</button>
-    &nbsp;·&nbsp;<a href="/help.html" style="color:var(--gray-400);">ヘルプ</a>
-  </p>
-
-</div>
-
-<!-- Welcome Tour -->
-<div id="tourOverlay" class="tour-overlay" hidden>
-  <div class="tour-backdrop" onclick="skipTour()"></div>
-  <div class="tour-popup">
-    <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
-    <div class="tour-title" id="tourTitle"></div>
-    <div class="tour-body" id="tourBody"></div>
-    <div class="tour-actions">
-      <button class="tour-btn-skip" onclick="skipTour()">スキップ</button>
-      <button class="tour-btn-next" id="tourNextBtn" onclick="tourNext()">次へ</button>
     </div>
   </div>
-</div>
+</section>
 
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<!-- ===== Scene 3: 送信管理 ===== -->
+<section class="feature-scene" id="scene3" data-scene="3">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">03</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="文面を選んで、ワンクリック送信。"></span></h2>
+      <p class="scene-desc">作成した文面テンプレートを選ぶだけで、企業名が自動で差し込まれた下書きが生成されます。確認したらそのままフォームやメールに自動送信。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>文面スコアで品質チェック</li>
+        <li><span class="check">✓</span>フォーム自動送信・メール送信</li>
+        <li><span class="check">✓</span>送信履歴を自動記録</li>
+      </ul>
+    </div>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene3">
+        <div class="mock-search-row">
+          <div class="mock-select-fake"><span class="placeholder">企業を選択</span></div>
+          <div class="mock-select-fake"><span class="placeholder">バリアントを選択</span></div>
+        </div>
+        <button class="mock-btn-search" id="mockDraftBtn">下書き生成</button>
+        <div class="mock-textarea-box" id="mockTextarea"></div>
+        <button class="mock-btn-send" id="mockSendBtn">フォームに自動送信</button>
+        <div class="mock-toast" id="mockToast">✓ 送信完了</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Scene 4: CRM ===== -->
+<section class="feature-scene" id="scene4" data-scene="4">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">04</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="商談を、見える化する。"></span></h2>
+      <p class="scene-desc">営業活動の全体像をカンバンで管理。コンタクト・タスク・活動履歴を一元化して、フォローアップのモレをなくします。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>パイプラインで商談を可視化</li>
+        <li><span class="check">✓</span>タスク・フォローアップ管理</li>
+        <li><span class="check">✓</span>A/Bテストで文面を最適化</li>
+      </ul>
+    </div>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene4">
+        <div class="mock-kanban">
+          <div class="mock-kanban-col">
+            <div class="mock-kanban-col-title">リード</div>
+            <div id="mockKanbanLeadSlot"></div>
+          </div>
+          <div class="mock-kanban-col">
+            <div class="mock-kanban-col-title">提案中</div>
+            <div id="mockKanbanProposalSlot">
+              <div class="mock-kanban-card">株式会社ガンマ<span class="amt">¥350万円</span></div>
+            </div>
+          </div>
+          <div class="mock-kanban-col">
+            <div class="mock-kanban-col-title">成約</div>
+            <div class="mock-kanban-card">株式会社デルタ<span class="amt">¥180万円</span></div>
+          </div>
+        </div>
+        <div class="mock-pipeline-total">
+          <div class="val" id="mockPipelineTotal">¥0万円</div>
+          <div class="lbl">パイプライン総額</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Scene 5: 分析 ===== -->
+<section class="feature-scene" id="scene5" data-scene="5">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">05</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="データで、営業を改善する。"></span></h2>
+      <p class="scene-desc">バリアント別・タグ別の反応率を自動集計。月次推移・パイプライン価値・成約率をグラフで確認して、次の営業アクションに活かせます。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>バリアント別反応率を自動比較</li>
+        <li><span class="check">✓</span>月次推移グラフ</li>
+        <li><span class="check">✓</span>改善ヒントを自動生成</li>
+      </ul>
+    </div>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene5">
+        <div class="mock-chart" id="mockChart">
+          <div class="mock-bar" data-h="40"></div>
+          <div class="mock-bar" data-h="65"></div>
+          <div class="mock-bar" data-h="50"></div>
+          <div class="mock-bar" data-h="85"></div>
+          <div class="mock-bar" data-h="70"></div>
+          <div class="mock-bar" data-h="100"></div>
+        </div>
+        <div class="mock-rate-row">
+          <span class="mock-rate-value" id="mockRateValue">0%</span>
+          <span class="mock-rate-label">反応率</span>
+        </div>
+        <div class="mock-winner-badge" id="mockWinnerBadge">🏆 最も反応率が高いバリアント: 初回挨拶・短文</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="cta-section" id="ctaFinal">
+  <h2 class="cta-title">さあ、営業を自動化しよう。</h2>
+  <a href="/app.html" class="btn-cta-huge">今すぐ無料で使い始める →</a>
+  <ul class="feature-mini-list">
+    <li>企業リスト</li><li>メッセージ管理</li><li>送信管理</li><li>CRM</li><li>分析</li><li>レポート</li>
+  </ul>
+  <p class="cta-footer-note">&copy; 2026 LOCLE. All rights reserved.</p>
+</section>
+
 <script>
-  // ===== Toast notifications =====
-  function showToast(message, type = "info", duration = 4000) {
-    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
-    const container = document.getElementById("toastContainer") || (() => {
-      const el = document.createElement("div");
-      el.id = "toastContainer";
-      el.className = "toast-container";
-      document.body.appendChild(el);
-      return el;
-    })();
-    const toast = document.createElement("div");
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || "ℹ"}</span>
-      <span class="toast-body">${message}</span>
-      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
-    `;
-    container.appendChild(toast);
-    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  /* ===================== Particle background ===================== */
+  (function () {
+    const canvas = document.getElementById("particleCanvas");
+    const ctx = canvas.getContext("2d");
+    let particles = [];
+    let w, h;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = document.documentElement.scrollHeight;
+    }
+    function makeParticles() {
+      const count = Math.min(90, Math.floor((w * h) / 28000));
+      particles = Array.from({ length: count }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.8 + 0.6,
+        vy: -(Math.random() * 0.25 + 0.05),
+        vx: (Math.random() - 0.5) * 0.15,
+        o: Math.random() * 0.5 + 0.15,
+      }));
+    }
+    function tick() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = "#44B13F";
+      particles.forEach(p => {
+        p.y += p.vy;
+        p.x += p.vx;
+        if (p.y < -10) p.y = h + 10;
+        if (p.x < -10) p.x = w + 10;
+        if (p.x > w + 10) p.x = -10;
+        ctx.globalAlpha = p.o;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      requestAnimationFrame(tick);
+    }
+    resize();
+    makeParticles();
+    tick();
+    window.addEventListener("resize", () => { resize(); makeParticles(); });
+  })();
+
+  /* ===================== Header scroll state ===================== */
+  const siteHeader = document.getElementById("siteHeader");
+  window.addEventListener("scroll", () => {
+    siteHeader.classList.toggle("scrolled", window.scrollY > 40);
+  });
+
+  /* ===================== Scroll helper ===================== */
+  function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth" });
   }
 
-  // ===== Dark mode toggle =====
-  function toggleTheme() {
-    document.documentElement.classList.toggle("dark");
-    const isDark = document.documentElement.classList.contains("dark");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-    updateThemeIcon();
+  /* ===================== Side dot nav ===================== */
+  const sideDots = Array.from(document.querySelectorAll(".side-dot"));
+  sideDots.forEach(dot => {
+    dot.addEventListener("click", () => scrollToSection(dot.dataset.target));
+  });
+  const trackedSectionIds = ["hero", "scene1", "scene2", "scene3", "scene4", "scene5", "ctaFinal"];
+  const trackedSections = trackedSectionIds.map(id => document.getElementById(id));
+
+  const navObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const idx = trackedSectionIds.indexOf(entry.target.id);
+        sideDots.forEach((d, i) => d.classList.toggle("active", i === idx));
+      }
+    });
+  }, { rootMargin: "-45% 0px -45% 0px" });
+  trackedSections.forEach(s => navObserver.observe(s));
+
+  /* ===================== Typing effect ===================== */
+  function typeText(el, text, speed) {
+    return new Promise(resolve => {
+      let i = 0;
+      el.textContent = "";
+      const timer = setInterval(() => {
+        el.textContent += text[i];
+        i++;
+        if (i >= text.length) { clearInterval(timer); resolve(); }
+      }, speed);
+    });
   }
 
-  function updateThemeIcon() {
-    const btn = document.getElementById("themeToggleBtn");
-    if (!btn) return;
-    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
-  }
-
-  updateThemeIcon();
-
-  function animateCount(el, target, isFloat = false) {
-    const duration = 600;
+  /* ===================== Count-up effect ===================== */
+  function countUp(el, target, opts) {
+    opts = opts || {};
+    const duration = opts.duration || 1400;
+    const suffix = opts.suffix || "";
     const start = performance.now();
     function step(now) {
-      const t     = Math.min((now - start) / duration, 1);
+      const t = Math.min((now - start) / duration, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-      const cur   = target * eased;
-      el.textContent = isFloat ? cur.toFixed(1) : Math.round(cur);
+      el.textContent = Math.round(target * eased).toLocaleString() + suffix;
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
 
-  async function loadStats() {
-    try {
-      const [cRes, lRes, aRes, tRes] = await Promise.all([
-        fetch("/api/companies"),
-        fetch("/api/send-logs"),
-        fetch("/api/analytics"),
-        fetch("/api/crm?action=tasks"),
-      ]);
-      const rawCompanies = await cRes.json();
-      const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
-      const logs      = await lRes.json();
-      const analytics = await aRes.json();
-      const rawTasks  = tRes.ok ? await tRes.json() : [];
-      const tasks     = Array.isArray(rawTasks) ? rawTasks : [];
+  /* ===================== Hero sequence ===================== */
+  (async function heroSequence() {
+    await typeText(document.getElementById("heroTypingText"), "営業活動を、自動化する。", 90);
+    // stats
+    const statCompanies = document.getElementById("statCompanies");
+    const statAutomation = document.getElementById("statAutomation");
+    const statAnalysis = document.getElementById("statAnalysis");
+    setTimeout(() => { statCompanies.textContent = "∞社"; statCompanies.style.animation = "heroFadeIn 0.6s ease forwards"; }, 2300);
+    setTimeout(() => countUp(statAutomation, 100, { suffix: "%" }), 2300);
+    setTimeout(() => countUp(statAnalysis, 20, { suffix: "+" }), 2500);
+  })();
 
-      const totalCompanies = companies.length;
-      const sentCount = Array.isArray(logs)
-        ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
-        : 0;
+  /* ===================== Mock cursor helper ===================== */
+  function moveCursor(cursorEl, containerEl, targetEl, onArrive) {
+    const cRect = containerEl.getBoundingClientRect();
+    const tRect = targetEl.getBoundingClientRect();
+    const top = tRect.top - cRect.top + tRect.height / 2 - 10;
+    const left = tRect.left - cRect.left + tRect.width / 2 - 10;
+    cursorEl.style.top = top + "px";
+    cursorEl.style.left = left + "px";
+    setTimeout(() => {
+      cursorEl.classList.add("clicking");
+      setTimeout(() => {
+        cursorEl.classList.remove("clicking");
+        if (onArrive) onArrive();
+      }, 180);
+    }, 750);
+  }
 
-      const stats      = analytics.variants_stats || [];
-      const totalSends = stats.reduce((s, r) => s + Number(r.send_count), 0);
-      const totalResp  = stats.reduce((s, r) => s + Number(r.response_count), 0);
-      const rateValue  = totalSends > 0 ? totalResp / totalSends * 100 : null;
+  /* ===================== Scene animation sequences (run once) ===================== */
+  const sceneRunners = {
+    scene1: function () {
+      const box = document.getElementById("mockScene1");
+      const cursor = document.getElementById("mockCursor1");
+      const addBtn = document.getElementById("mockAddBtn");
+      const newRow = document.getElementById("mockNewRow");
+      const statusCell = document.getElementById("mockNewStatus");
+      const badgeCell = document.getElementById("mockNewBadgeCell");
 
-      const cEl = document.getElementById("statCompanies");
-      const sEl = document.getElementById("statSent");
-      const rEl = document.getElementById("statRate");
+      moveCursor(cursor, box, addBtn, () => {
+        addBtn.classList.add("glow");
+        setTimeout(() => addBtn.classList.remove("glow"), 400);
+        newRow.classList.add("show");
 
-      cEl.innerHTML = `<span id="cNum">0</span><span class="card-unit">社</span>`;
-      sEl.innerHTML = `<span id="sNum">0</span><span class="card-unit">件</span>`;
+        setTimeout(() => {
+          statusCell.innerHTML = '<span class="mock-status-researching"><span class="mock-spinner"></span>リサーチ中...</span>';
+        }, 500);
 
-      animateCount(document.getElementById("cNum"), totalCompanies);
-      animateCount(document.getElementById("sNum"), sentCount);
-
-      if (rateValue !== null) {
-        rEl.innerHTML = `<span id="rNum">0</span><span class="card-unit">%</span>`;
-        animateCount(document.getElementById("rNum"), rateValue, true);
-      } else {
-        rEl.innerHTML = `<span style="font-size:24px;color:var(--gray-300)">—</span>`;
-      }
-
-      renderFollowups(companies);
-      renderTasksSummary(tasks);
-    } catch {
-      ["statCompanies","statSent","statRate","statFollowUp","statOverdueTasks"].forEach(id => {
-        document.getElementById(id).innerHTML =
-          '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
+        setTimeout(() => {
+          statusCell.innerHTML = '<span class="mock-status-done">✓完了</span>';
+          badgeCell.innerHTML = '<span class="mock-badge-ok">OK</span>';
+          requestAnimationFrame(() => {
+            badgeCell.querySelector(".mock-badge-ok").classList.add("show");
+          });
+        }, 2000);
       });
-    }
-  }
+    },
 
-  function esc(s) {
-    return String(s || "")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
+    scene2: function () {
+      const box = document.getElementById("mockScene2");
+      const cursor = document.getElementById("mockCursor2");
+      const prefEl = document.getElementById("mockPref");
+      const industryEl = document.getElementById("mockIndustry");
+      const searchBtn = document.getElementById("mockSearchBtn");
+      const resultsList = document.getElementById("mockResultsList");
 
-  function todayDateStr() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
+      (async () => {
+        await typeText(prefEl, "群馬県", 130);
+        prefEl.classList.remove("placeholder");
+        await new Promise(r => setTimeout(r, 200));
+        await typeText(industryEl, "製造業", 130);
+        industryEl.classList.remove("placeholder");
 
-  function toDateStr(v) {
-    if (!v) return null;
-    if (typeof v === "string") return v.slice(0, 10);
-    try { return new Date(v).toISOString().slice(0, 10); } catch { return null; }
-  }
+        moveCursor(cursor, box, searchBtn, () => {
+          searchBtn.classList.add("glow");
+          setTimeout(() => searchBtn.classList.remove("glow"), 500);
 
-  function renderFollowups(companies) {
-    const todayStr = todayDateStr();
-    const followUps = companies.filter(c =>
-      c.action_status === "follow_up" &&
-      c.next_action_date &&
-      toDateStr(c.next_action_date) <= todayStr
-    );
+          const names = ["群馬製作所株式会社", "上州工業株式会社", "赤城精機株式会社", "利根川金属株式会社", "前橋テクノ株式会社"];
+          resultsList.innerHTML = names.map((n, i) =>
+            `<div class="mock-result-card" id="mockResult${i}"><span class="mock-checkbox" id="mockCheck${i}"></span><span>${n}</span></div>`
+          ).join("");
 
-    const section = document.getElementById("followupSection");
-    if (followUps.length === 0) {
-      section.innerHTML = `
-        <h2>今日のフォローアップ</h2>
-        <p class="followup-empty">今日のフォローアップはありません ✓</p>`;
-    } else {
-      const items = followUps.map(c => `
-        <li class="followup-item">
-          <div class="followup-item-info">
-            <span class="followup-item-company">${esc(c.name)}</span>
-            <span class="followup-item-meta">${esc(c.next_action || "（内容未設定）")} / 予定日: ${esc(toDateStr(c.next_action_date))}</span>
-          </div>
-          <a class="followup-item-link" href="/companies.html">企業リストへ</a>
-        </li>`).join("");
-      section.innerHTML = `
-        <h2>今日のフォローアップ</h2>
-        <p class="followup-alert">🔔 ${followUps.length}件のフォローアップがあります</p>
-        <ul class="followup-list">${items}</ul>`;
-    }
+          names.forEach((_, i) => {
+            setTimeout(() => {
+              document.getElementById("mockResult" + i).classList.add("show");
+            }, 200 * i);
+            setTimeout(() => {
+              document.getElementById("mockCheck" + i).classList.add("checked");
+              document.getElementById("mockCheck" + i).textContent = "✓";
+            }, 200 * i + 350);
+          });
+        });
+      })();
+    },
 
-    const followUpCardEl = document.getElementById("statFollowUp");
-    if (followUpCardEl) {
-      const color = followUps.length === 0 ? "var(--green-700)" : "#ea580c";
-      followUpCardEl.innerHTML = `<span style="color:${color}">${followUps.length}</span><span class="card-unit">件</span>`;
-    }
-  }
+    scene3: function () {
+      const box = document.getElementById("mockScene3");
+      const draftBtn = document.getElementById("mockDraftBtn");
+      const textarea = document.getElementById("mockTextarea");
+      const sendBtn = document.getElementById("mockSendBtn");
+      const toast = document.getElementById("mockToast");
 
-  function renderTasksSummary(tasks) {
-    const todayStr = todayDateStr();
-    const overdueTasks = tasks.filter(t =>
-      !t.done && t.due_date && toDateStr(t.due_date) <= todayStr
-    );
+      // find a cursor-less approach: reuse a temp cursor
+      const cursor = document.createElement("div");
+      cursor.className = "mock-cursor";
+      cursor.style.top = "14px"; cursor.style.left = "14px";
+      box.appendChild(cursor);
 
-    const section = document.getElementById("taskSection");
-    if (overdueTasks.length === 0) {
-      section.innerHTML = `
-        <h2>未完了タスク</h2>
-        <p class="followup-empty">期限切れのタスクはありません ✓</p>`;
-    } else {
-      const items = overdueTasks.map(t => `
-        <li class="followup-item">
-          <div class="followup-item-info">
-            <span class="followup-item-company">${esc(t.title)}</span>
-            <span class="followup-item-meta">${esc(t.company_name || "（企業未設定）")} / 期限: ${esc(toDateStr(t.due_date))}</span>
-          </div>
-          <a class="followup-item-link" href="/crm.html">CRMへ</a>
-        </li>`).join("");
-      section.innerHTML = `
-        <h2>未完了タスク</h2>
-        <p class="followup-alert">⏰ ${overdueTasks.length}件の期限切れタスクがあります</p>
-        <ul class="followup-list">${items}</ul>`;
-    }
+      moveCursor(cursor, box, draftBtn, async () => {
+        draftBtn.classList.add("glow");
+        setTimeout(() => draftBtn.classList.remove("glow"), 400);
+        const message = "株式会社サンプル商事 ご担当者様\n\nはじめてご連絡いたします。\n貴社の業務効率化に関するご提案がございます。";
+        await typeText(textarea, message, 28);
 
-    const overdueCardEl = document.getElementById("statOverdueTasks");
-    if (overdueCardEl) {
-      const color = overdueTasks.length === 0 ? "var(--green-700)" : "#dc2626";
-      overdueCardEl.innerHTML = `<span style="color:${color}">${overdueTasks.length}</span><span class="card-unit">件</span>`;
-    }
-  }
+        setTimeout(() => {
+          moveCursor(cursor, box, sendBtn, () => {
+            sendBtn.classList.add("glow");
+            setTimeout(() => {
+              toast.classList.add("show");
+            }, 300);
+          });
+        }, 400);
+      });
+    },
 
-  // Welcome Tour
-  const tourSteps = [
-    { title: "LOCLE営業ツールへようこそ！", body: "5ステップで主要機能をご紹介します。企業リサーチからフォーム送信・反応分析まで一気通貫で自動化できます。", highlight: null },
-    { title: "① 企業リストに登録", body: "営業先企業のURL・名前を登録するとフォームを自動解析します。CSVでの一括インポートも可能です。", highlight: "nav-companies" },
-    { title: "② メッセージテンプレートを作成", body: "送信する文面テンプレート（バリアント）を登録します。{{company_name}} で企業名を自動差し込みできます。", highlight: "nav-variants" },
-    { title: "③ フォーム/メールで送信", body: "企業とテンプレートを選んで送信管理ページから送信。フォーム自動入力かメール直送が選べます。", highlight: "nav-send" },
-    { title: "④ 反応率を分析して改善", body: "分析ページでバリアント別・タグ別の反応率を確認して、より効果的な文面に改善できます。", highlight: "nav-analytics" }
-  ];
-  let _tourStep = 0, _prevHL = null;
-  function startTour() { _tourStep = 0; document.getElementById("tourOverlay").hidden = false; _showTourStep(); }
-  function _showTourStep() {
-    const s = tourSteps[_tourStep];
-    document.getElementById("tourStepBadge").textContent = `${_tourStep + 1} / ${tourSteps.length}`;
-    document.getElementById("tourTitle").textContent = s.title;
-    document.getElementById("tourBody").textContent = s.body;
-    document.getElementById("tourNextBtn").textContent = _tourStep === tourSteps.length - 1 ? "完了" : "次へ";
-    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
-    if (s.highlight) { const e = document.getElementById(s.highlight); if (e) e.classList.add("tour-highlight"); _prevHL = s.highlight; } else { _prevHL = null; }
-  }
-  function tourNext() { if (_tourStep < tourSteps.length - 1) { _tourStep++; _showTourStep(); } else { skipTour(); } }
-  function skipTour() {
-    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
-    document.getElementById("tourOverlay").hidden = true;
-    localStorage.setItem("locle_tour_done", "1");
-  }
-  if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
+    scene4: function () {
+      const leadSlot = document.getElementById("mockKanbanLeadSlot");
+      const proposalSlot = document.getElementById("mockKanbanProposalSlot");
+      const totalEl = document.getElementById("mockPipelineTotal");
 
-  lucide.createIcons();
-  loadStats();
+      leadSlot.innerHTML = '<div class="mock-kanban-card" id="mockDragCard">株式会社イプシロン<span class="amt">¥220万円</span></div>';
+
+      setTimeout(() => {
+        const card = document.getElementById("mockDragCard");
+        card.style.opacity = "0.4";
+        setTimeout(() => {
+          card.remove();
+          const clone = document.createElement("div");
+          clone.className = "mock-kanban-card";
+          clone.innerHTML = '株式会社イプシロン<span class="amt">¥220万円</span>';
+          proposalSlot.appendChild(clone);
+        }, 350);
+      }, 1200);
+
+      setTimeout(() => countUp(totalEl, 2450, { suffix: "万円", duration: 1200 }), 500);
+      // fix prefix ¥ after countUp overwrites textContent
+      const fixPrefix = setInterval(() => {
+        if (!totalEl.textContent.startsWith("¥")) totalEl.textContent = "¥" + totalEl.textContent;
+      }, 100);
+      setTimeout(() => clearInterval(fixPrefix), 2000);
+    },
+
+    scene5: function () {
+      const bars = document.querySelectorAll("#mockChart .mock-bar");
+      bars.forEach((bar, i) => {
+        setTimeout(() => { bar.style.height = bar.dataset.h + "%"; }, i * 100);
+      });
+      const rateEl = document.getElementById("mockRateValue");
+      setTimeout(() => countUp(rateEl, 23, { suffix: "%", duration: 1200 }), 500);
+      setTimeout(() => {
+        document.getElementById("mockWinnerBadge").classList.add("show");
+      }, 1600);
+    },
+  };
+
+  /* ===================== Feature scene observer ===================== */
+  const featureScenes = document.querySelectorAll(".feature-scene");
+  const startedScenes = new Set();
+
+  const sceneObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("in-view");
+
+        // Title typing (once)
+        const titleSpan = entry.target.querySelector(".scene-title .typing-text");
+        if (titleSpan && !titleSpan.dataset.started) {
+          titleSpan.dataset.started = "1";
+          typeText(titleSpan, titleSpan.dataset.full, 55);
+        }
+
+        // Mock sequence (once)
+        if (!startedScenes.has(entry.target.id)) {
+          startedScenes.add(entry.target.id);
+          const runner = sceneRunners[entry.target.id];
+          if (runner) setTimeout(runner, 700);
+        }
+      }
+    });
+  }, { threshold: 0.35 });
+
+  featureScenes.forEach(s => sceneObserver.observe(s));
 </script>
 </body>
 </html>

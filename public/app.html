@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ホーム - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-300: #86efac; --green-500: #44B13F; --green-700: #2F8A2A;
+    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; }
+
+  /* Header */
+  .page-header {
+    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-header h1 svg { width: 18px; height: 18px; }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+
+  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
+
+  /* Hero */
+  .hero {
+    text-align: center; padding: 56px 24px 44px;
+    background: linear-gradient(135deg, #1a5c17 0%, #2F8A2A 40%, #44B13F 70%, #5BC952 100%);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 24px rgba(26,92,23,0.35);
+    margin-bottom: 32px;
+  }
+  .hero-logo {
+    font-size: 64px; font-weight: 700; color: var(--white);
+    letter-spacing: -1px; line-height: 1; margin-bottom: 10px;
+  }
+  .hero-subtitle {
+    font-size: 16px; font-weight: 600; color: var(--white);
+    opacity: 0.85; margin-bottom: 14px; letter-spacing: -0.01em;
+  }
+  .hero-copy {
+    font-size: 14px; color: rgba(255,255,255,0.72); line-height: 1.8;
+    max-width: 480px; margin: 0 auto 28px;
+  }
+  .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-hero-primary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 24px;
+    background: var(--white);
+    color: var(--green-700); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit;
+    text-decoration: none; transition: all 150ms ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .btn-hero-primary:hover {
+    background: var(--green-50);
+    transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+  }
+  .btn-hero-primary svg { width: 16px; height: 16px; }
+  .btn-hero-sub {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500;
+    text-decoration: none; border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.35);
+    background: rgba(255,255,255,0.12);
+    transition: all 150ms ease;
+  }
+  .btn-hero-sub:hover {
+    color: white; background: rgba(255,255,255,0.22);
+    border-color: rgba(255,255,255,0.55); transform: translateY(-1px);
+  }
+  .btn-hero-sub svg { width: 14px; height: 14px; }
+
+  /* Summary cards */
+  .summary-cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+  .summary-card {
+    flex: 1; min-width: 140px; background: var(--white);
+    border: 1px solid var(--gray-200); border-radius: var(--radius-lg);
+    padding: 20px 24px; box-shadow: var(--shadow-sm); text-align: center;
+    position: relative; overflow: hidden;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .summary-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--green-500);
+  }
+  .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .summary-card .card-label {
+    font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  }
+  .summary-card .card-value {
+    font-size: 36px; font-weight: 700; color: var(--green-700);
+    line-height: 1; letter-spacing: -0.03em;
+  }
+  .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+
+  /* Follow-up dashboard */
+  .followup-section {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 20px 24px;
+    margin-bottom: 32px; box-shadow: var(--shadow-sm);
+  }
+  .followup-section h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .followup-empty { font-size: 13px; color: var(--green-700); padding: 8px 0; margin: 0; }
+  .followup-alert { font-size: 13px; font-weight: 700; color: #ea580c; margin: 0 0 12px; }
+  .followup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .followup-item {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-md); font-size: 13px;
+  }
+  .followup-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .followup-item-company { font-weight: 600; color: var(--gray-900); }
+  .followup-item-meta { font-size: 12px; color: var(--gray-500); }
+  .followup-item-link {
+    padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); color: var(--green-700); background: var(--white);
+    text-decoration: none; white-space: nowrap; transition: all 150ms;
+  }
+  .followup-item-link:hover { background: var(--green-50); }
+
+  /* Section title */
+  .section-title {
+    font-size: 18px; font-weight: 700; color: var(--gray-900);
+    border-left: 3px solid var(--green-500); padding-left: 12px;
+    margin: 0 0 16px;
+  }
+
+  /* Feature cards */
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+  .feature-card {
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 24px;
+    box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
+    display: flex; flex-direction: column; gap: 12px;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    color: inherit;
+  }
+  .feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md); border-color: var(--green-300);
+  }
+  .feature-card-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+  }
+  .feature-icon {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--green-50); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .feature-icon svg { width: 22px; height: 22px; color: var(--green-700); }
+  .feature-arrow-icon {
+    width: 16px; height: 16px; color: var(--gray-300);
+    transition: color 200ms ease; flex-shrink: 0; margin-top: 4px;
+  }
+  .feature-card:hover .feature-arrow-icon { color: var(--green-500); }
+  .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
+  .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
+
+  /* Welcome Tour */
+  .tour-overlay { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+  .tour-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); pointer-events: all; }
+  .tour-popup {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--white); border-radius: var(--radius-lg);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    padding: 24px 28px; max-width: 400px; width: calc(100% - 32px);
+    pointer-events: all; z-index: 1; animation: fadeInUp 0.3s ease-out;
+  }
+  .tour-step-badge {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--green-500); margin-bottom: 8px;
+  }
+  .tour-title { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+  .tour-body  { font-size: 13px; color: var(--gray-500); line-height: 1.7; margin-bottom: 20px; }
+  .tour-actions { display: flex; justify-content: space-between; align-items: center; }
+  .tour-btn-skip {
+    font-size: 12px; color: var(--gray-400); background: none; border: none;
+    cursor: pointer; padding: 0; font-family: inherit; transition: color 150ms;
+  }
+  .tour-btn-skip:hover { color: var(--gray-700); }
+  .tour-btn-next {
+    padding: 8px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
+    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    color: white; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 150ms;
+    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+  }
+  .tour-btn-next:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
+  .tour-highlight {
+    outline: 3px solid var(--green-500) !important;
+    outline-offset: 4px !important;
+    border-radius: var(--radius-sm) !important;
+    position: relative; z-index: 999;
+  }
+
+  @media (max-width: 600px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
+    .container { padding: 20px 8px; }
+    .hero { padding: 36px 16px 32px; }
+    .hero-logo { font-size: 48px; }
+    .summary-cards { flex-direction: column; }
+    .summary-card { min-width: unset; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .btn-hero-primary { width: 100%; justify-content: center; }
+  }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-title { font-weight: 600; margin-bottom: 2px; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* Dark mode toggle */
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a;
+      --gray-100: #1e293b;
+      --gray-200: #334155;
+      --gray-300: #475569;
+      --gray-400: #64748b;
+      --gray-500: #94a3b8;
+      --gray-700: #cbd5e1;
+      --gray-900: #f1f5f9;
+      --white:    #1e293b;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    input, textarea, select {
+      background: #1e293b !important;
+      color: #f1f5f9 !important;
+      border-color: #334155 !important;
+    }
+    input::placeholder, textarea::placeholder { color: #475569 !important; }
+    table thead { background: #1e293b; }
+    .modal-box, .tour-bubble { background: #1e293b; color: #f1f5f9; }
+    .preview-subject, .preview-body-text { background: #0f172a; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+    .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
+    button[class*="btn-research"], #addBtn, #bulkBtn {
+      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
+      color: white !important;
+      opacity: 1 !important;
+    }
+  }
+  html.dark {
+    --gray-50:  #0f172a;
+    --gray-100: #1e293b;
+    --gray-200: #334155;
+    --gray-300: #475569;
+    --gray-400: #64748b;
+    --gray-500: #94a3b8;
+    --gray-700: #cbd5e1;
+    --gray-900: #f1f5f9;
+    --white:    #1e293b;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark input, html.dark textarea, html.dark select {
+    background: #1e293b !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+  }
+  html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
+  html.dark table thead { background: #1e293b; }
+  html.dark .modal-box, html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
+  html.dark .preview-subject, html.dark .preview-body-text { background: #0f172a; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .btn-primary,
+  html.dark button[class*="btn-"] { opacity: 1; }
+  html.dark .hero-actions .btn-hero-primary { color: white !important; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <nav class="page-nav">
+    <a href="/app.html" class="active">ホーム</a>
+    <a href="/companies.html" id="nav-companies">企業リスト</a>
+    <a href="/variants.html" id="nav-variants">メッセージ管理</a>
+    <a href="/send.html" id="nav-send">送信管理</a>
+    <a href="/analytics.html" id="nav-analytics">分析</a>
+    <a href="/crm.html" id="nav-crm">CRM</a>
+    <a href="/reports.html">レポート</a>
+    <a href="/help.html">ヘルプ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <section class="hero">
+    <h1 style="font-size:64px; font-weight:800; color:white; letter-spacing:-1px; margin:0 0 8px;">LOCLE</h1>
+    <div class="hero-subtitle">営業自動化ツール</div>
+    <p class="hero-copy">企業リサーチからフォーム送信・反応分析まで、営業活動を一気通貫で自動化します</p>
+    <div class="hero-actions">
+      <a href="/companies.html" class="btn-hero-primary">
+        <i data-lucide="plus-circle"></i>企業を追加
+      </a>
+      <a href="/analyzer.html" class="btn-hero-sub">
+        <i data-lucide="search"></i>フォーム解析テスト
+      </a>
+    </div>
+  </section>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="card-label">登録企業数</div>
+      <div class="card-value" id="statCompanies">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">送信済み</div>
+      <div class="card-value" id="statSent">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">全体反応率</div>
+      <div class="card-value" id="statRate">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">要フォローアップ</div>
+      <div class="card-value" id="statFollowUp">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="card-label">期限切れタスク</div>
+      <div class="card-value" id="statOverdueTasks">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
+  </div>
+
+  <section class="followup-section" id="followupSection">
+    <h2>今日のフォローアップ</h2>
+    <p class="followup-empty">読み込み中...</p>
+  </section>
+
+  <section class="followup-section" id="taskSection">
+    <h2>未完了タスク</h2>
+    <p class="followup-empty">読み込み中...</p>
+  </section>
+
+  <p class="section-title">機能一覧</p>
+  <div class="feature-grid">
+    <a href="/companies.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="building-2"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">企業リスト</div>
+      <div class="feature-desc">企業を登録・リサーチ・一括送信</div>
+    </a>
+    <a href="/variants.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="mail"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">メッセージ管理</div>
+      <div class="feature-desc">送信文面のテンプレートを管理・A/Bテスト</div>
+    </a>
+    <a href="/send.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="send"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">送信管理</div>
+      <div class="feature-desc">フォーム自動送信・メール送信・スケジュール管理</div>
+    </a>
+    <a href="/crm.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="users"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">CRM</div>
+      <div class="feature-desc">商談・コンタクト・タスク・A/Bテストを管理</div>
+    </a>
+    <a href="/analytics.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="bar-chart-2"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">分析</div>
+      <div class="feature-desc">バリアント別・タグ別の反応率を分析</div>
+    </a>
+    <a href="/reports.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="trending-up"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">レポート</div>
+      <div class="feature-desc">月次推移・パイプライン価値・成約率を確認</div>
+    </a>
+    <a href="/help.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="help-circle"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">ヘルプ</div>
+      <div class="feature-desc">使い方・よくある質問を確認</div>
+    </a>
+    <a href="/analyzer.html" class="feature-card">
+      <div class="feature-card-header">
+        <div class="feature-icon"><i data-lucide="search"></i></div>
+        <i data-lucide="arrow-right" class="feature-arrow-icon"></i>
+      </div>
+      <div class="feature-name">フォーム解析テスト</div>
+      <div class="feature-desc">企業サイトのフォームを手動解析</div>
+    </a>
+  </div>
+
+  <p style="text-align:center; margin-top:12px; font-size:12px; color:var(--gray-400);">
+    <button onclick="startTour()" style="background:none;border:none;color:var(--gray-400);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0;">ウェルカムツアーを再表示</button>
+    &nbsp;·&nbsp;<a href="/help.html" style="color:var(--gray-400);">ヘルプ</a>
+  </p>
+
+</div>
+
+<!-- Welcome Tour -->
+<div id="tourOverlay" class="tour-overlay" hidden>
+  <div class="tour-backdrop" onclick="skipTour()"></div>
+  <div class="tour-popup">
+    <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
+    <div class="tour-title" id="tourTitle"></div>
+    <div class="tour-body" id="tourBody"></div>
+    <div class="tour-actions">
+      <button class="tour-btn-skip" onclick="skipTour()">スキップ</button>
+      <button class="tour-btn-next" id="tourNextBtn" onclick="tourNext()">次へ</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+  }
+
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+
+  updateThemeIcon();
+
+  function animateCount(el, target, isFloat = false) {
+    const duration = 600;
+    const start = performance.now();
+    function step(now) {
+      const t     = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const cur   = target * eased;
+      el.textContent = isFloat ? cur.toFixed(1) : Math.round(cur);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  async function loadStats() {
+    try {
+      const [cRes, lRes, aRes, tRes] = await Promise.all([
+        fetch("/api/companies"),
+        fetch("/api/send-logs"),
+        fetch("/api/analytics"),
+        fetch("/api/crm?action=tasks"),
+      ]);
+      const rawCompanies = await cRes.json();
+      const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
+      const logs      = await lRes.json();
+      const analytics = await aRes.json();
+      const rawTasks  = tRes.ok ? await tRes.json() : [];
+      const tasks     = Array.isArray(rawTasks) ? rawTasks : [];
+
+      const totalCompanies = companies.length;
+      const sentCount = Array.isArray(logs)
+        ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
+        : 0;
+
+      const stats      = analytics.variants_stats || [];
+      const totalSends = stats.reduce((s, r) => s + Number(r.send_count), 0);
+      const totalResp  = stats.reduce((s, r) => s + Number(r.response_count), 0);
+      const rateValue  = totalSends > 0 ? totalResp / totalSends * 100 : null;
+
+      const cEl = document.getElementById("statCompanies");
+      const sEl = document.getElementById("statSent");
+      const rEl = document.getElementById("statRate");
+
+      cEl.innerHTML = `<span id="cNum">0</span><span class="card-unit">社</span>`;
+      sEl.innerHTML = `<span id="sNum">0</span><span class="card-unit">件</span>`;
+
+      animateCount(document.getElementById("cNum"), totalCompanies);
+      animateCount(document.getElementById("sNum"), sentCount);
+
+      if (rateValue !== null) {
+        rEl.innerHTML = `<span id="rNum">0</span><span class="card-unit">%</span>`;
+        animateCount(document.getElementById("rNum"), rateValue, true);
+      } else {
+        rEl.innerHTML = `<span style="font-size:24px;color:var(--gray-300)">—</span>`;
+      }
+
+      renderFollowups(companies);
+      renderTasksSummary(tasks);
+    } catch {
+      ["statCompanies","statSent","statRate","statFollowUp","statOverdueTasks"].forEach(id => {
+        document.getElementById(id).innerHTML =
+          '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
+      });
+    }
+  }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function todayDateStr() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function toDateStr(v) {
+    if (!v) return null;
+    if (typeof v === "string") return v.slice(0, 10);
+    try { return new Date(v).toISOString().slice(0, 10); } catch { return null; }
+  }
+
+  function renderFollowups(companies) {
+    const todayStr = todayDateStr();
+    const followUps = companies.filter(c =>
+      c.action_status === "follow_up" &&
+      c.next_action_date &&
+      toDateStr(c.next_action_date) <= todayStr
+    );
+
+    const section = document.getElementById("followupSection");
+    if (followUps.length === 0) {
+      section.innerHTML = `
+        <h2>今日のフォローアップ</h2>
+        <p class="followup-empty">今日のフォローアップはありません ✓</p>`;
+    } else {
+      const items = followUps.map(c => `
+        <li class="followup-item">
+          <div class="followup-item-info">
+            <span class="followup-item-company">${esc(c.name)}</span>
+            <span class="followup-item-meta">${esc(c.next_action || "（内容未設定）")} / 予定日: ${esc(toDateStr(c.next_action_date))}</span>
+          </div>
+          <a class="followup-item-link" href="/companies.html">企業リストへ</a>
+        </li>`).join("");
+      section.innerHTML = `
+        <h2>今日のフォローアップ</h2>
+        <p class="followup-alert">🔔 ${followUps.length}件のフォローアップがあります</p>
+        <ul class="followup-list">${items}</ul>`;
+    }
+
+    const followUpCardEl = document.getElementById("statFollowUp");
+    if (followUpCardEl) {
+      const color = followUps.length === 0 ? "var(--green-700)" : "#ea580c";
+      followUpCardEl.innerHTML = `<span style="color:${color}">${followUps.length}</span><span class="card-unit">件</span>`;
+    }
+  }
+
+  function renderTasksSummary(tasks) {
+    const todayStr = todayDateStr();
+    const overdueTasks = tasks.filter(t =>
+      !t.done && t.due_date && toDateStr(t.due_date) <= todayStr
+    );
+
+    const section = document.getElementById("taskSection");
+    if (overdueTasks.length === 0) {
+      section.innerHTML = `
+        <h2>未完了タスク</h2>
+        <p class="followup-empty">期限切れのタスクはありません ✓</p>`;
+    } else {
+      const items = overdueTasks.map(t => `
+        <li class="followup-item">
+          <div class="followup-item-info">
+            <span class="followup-item-company">${esc(t.title)}</span>
+            <span class="followup-item-meta">${esc(t.company_name || "（企業未設定）")} / 期限: ${esc(toDateStr(t.due_date))}</span>
+          </div>
+          <a class="followup-item-link" href="/crm.html">CRMへ</a>
+        </li>`).join("");
+      section.innerHTML = `
+        <h2>未完了タスク</h2>
+        <p class="followup-alert">⏰ ${overdueTasks.length}件の期限切れタスクがあります</p>
+        <ul class="followup-list">${items}</ul>`;
+    }
+
+    const overdueCardEl = document.getElementById("statOverdueTasks");
+    if (overdueCardEl) {
+      const color = overdueTasks.length === 0 ? "var(--green-700)" : "#dc2626";
+      overdueCardEl.innerHTML = `<span style="color:${color}">${overdueTasks.length}</span><span class="card-unit">件</span>`;
+    }
+  }
+
+  // Welcome Tour
+  const tourSteps = [
+    { title: "LOCLE営業ツールへようこそ！", body: "5ステップで主要機能をご紹介します。企業リサーチからフォーム送信・反応分析まで一気通貫で自動化できます。", highlight: null },
+    { title: "① 企業リストに登録", body: "営業先企業のURL・名前を登録するとフォームを自動解析します。CSVでの一括インポートも可能です。", highlight: "nav-companies" },
+    { title: "② メッセージテンプレートを作成", body: "送信する文面テンプレート（バリアント）を登録します。{{company_name}} で企業名を自動差し込みできます。", highlight: "nav-variants" },
+    { title: "③ フォーム/メールで送信", body: "企業とテンプレートを選んで送信管理ページから送信。フォーム自動入力かメール直送が選べます。", highlight: "nav-send" },
+    { title: "④ 反応率を分析して改善", body: "分析ページでバリアント別・タグ別の反応率を確認して、より効果的な文面に改善できます。", highlight: "nav-analytics" }
+  ];
+  let _tourStep = 0, _prevHL = null;
+  function startTour() { _tourStep = 0; document.getElementById("tourOverlay").hidden = false; _showTourStep(); }
+  function _showTourStep() {
+    const s = tourSteps[_tourStep];
+    document.getElementById("tourStepBadge").textContent = `${_tourStep + 1} / ${tourSteps.length}`;
+    document.getElementById("tourTitle").textContent = s.title;
+    document.getElementById("tourBody").textContent = s.body;
+    document.getElementById("tourNextBtn").textContent = _tourStep === tourSteps.length - 1 ? "完了" : "次へ";
+    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
+    if (s.highlight) { const e = document.getElementById(s.highlight); if (e) e.classList.add("tour-highlight"); _prevHL = s.highlight; } else { _prevHL = null; }
+  }
+  function tourNext() { if (_tourStep < tourSteps.length - 1) { _tourStep++; _showTourStep(); } else { skipTour(); } }
+  function skipTour() {
+    if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
+    document.getElementById("tourOverlay").hidden = true;
+    localStorage.setItem("locle_tour_done", "1");
+  }
+  if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
+
+  lucide.createIcons();
+  loadStats();
+</script>
+</body>
+</html>
