@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>お問い合わせ（テスト用フォーム）</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: #f4f5f7;
+    margin: 0;
+    padding: 40px 16px;
+    color: #222;
+  }
+  .form-box {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 32px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 8px;
+  }
+  .lead {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 24px;
+  }
+  .field {
+    margin-bottom: 18px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+  }
+  textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+  input:focus, textarea:focus {
+    outline: none;
+    border-color: #4a90d9;
+  }
+  .btn-submit {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    background: #4a90d9;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-submit:hover {
+    background: #3a7bc0;
+  }
+  .success-box {
+    display: none;
+    text-align: center;
+    padding: 24px 0;
+  }
+  .success-box.show {
+    display: block;
+  }
+  .success-box p {
+    font-size: 15px;
+    line-height: 1.8;
+  }
+  #contactForm.hide {
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="form-box">
+  <h1>お問い合わせ</h1>
+  <p class="lead">下記フォームに必要事項をご入力の上、送信してください。</p>
+
+  <form id="contactForm" onsubmit="return handleSubmit(event)">
+    <div class="field">
+      <label for="company_name">会社名</label>
+      <input type="text" id="company_name" name="company_name" required />
+    </div>
+    <div class="field">
+      <label for="contact_name">お名前</label>
+      <input type="text" id="contact_name" name="contact_name" required />
+    </div>
+    <div class="field">
+      <label for="email">メールアドレス</label>
+      <input type="email" id="email" name="email" required />
+    </div>
+    <div class="field">
+      <label for="tel">電話番号</label>
+      <input type="tel" id="tel" name="tel" />
+    </div>
+    <div class="field">
+      <label for="message">お問い合わせ内容</label>
+      <textarea id="message" name="message" required></textarea>
+    </div>
+    <button type="submit" class="btn-submit">送信する</button>
+  </form>
+
+  <div class="success-box" id="successBox">
+    <p>送信が完了しました。ありがとうございました。</p>
+  </div>
+</div>
+
+<script>
+  function handleSubmit(e) {
+    e.preventDefault();
+    document.getElementById("contactForm").classList.add("hide");
+    document.getElementById("successBox").classList.add("show");
+    return false;
+  }
+</script>
+</body>
+</html>
