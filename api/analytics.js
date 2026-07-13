@@ -18,7 +18,7 @@ module.exports = async function handler(req, res) {
 
   // --- 返信チェック ---
   if (req.query.action === "check-replies") {
-    return handleCheckReplies(res);
+    return handleCheckReplies(req, res);
   }
 
   // --- Gmail認証デバッグ ---
@@ -193,10 +193,12 @@ async function classifyEmail(subject, body) {
   }
 }
 
-async function handleCheckReplies(res) {
+async function handleCheckReplies(req, res) {
+  const debugAuthorized =
+    !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
+
   try {
     const emails = await fetchReplies();
-    console.log("fetchReplies result:", JSON.stringify(emails.map(e => ({from: e.from, subject: e.subject, date: e.date}))));
     const checked = emails.length;
 
     if (checked === 0) {
@@ -210,7 +212,6 @@ async function handleCheckReplies(res) {
       JOIN companies c ON c.id = sl.company_id
       WHERE sl.status = 'sent' AND c.email IS NOT NULL
     `;
-    console.log("sentLogs:", JSON.stringify(sentLogs.map(l => ({company_email: l.company_email, company_name: l.company_name}))));
 
     let matched  = 0;
     let recorded = 0;
@@ -252,7 +253,14 @@ async function handleCheckReplies(res) {
       recorded++;
     }
 
-    return res.status(200).json({ checked, matched, recorded });
+    const payload = { checked, matched, recorded };
+    if (debugAuthorized) {
+      payload.debug = {
+        emails_found: emails.map(e => ({ from: e.from, subject: e.subject })),
+        sent_logs: sentLogs.map(l => ({ company_email: l.company_email, company_name: l.company_name })),
+      };
+    }
+    return res.status(200).json(payload);
   } catch (err) {
     return res.status(500).json({ error: `返信チェックエラー: ${err.message}` });
   }
