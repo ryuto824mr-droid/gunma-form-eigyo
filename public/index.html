@@ -290,6 +290,7 @@
     opacity: 0; transform: translateX(30px); transition: all 0.4s ease;
   }
   .mock-toast.show { opacity: 1; transform: translateX(0); }
+  #mockToast { bottom: 54px; }
 
   /* Scene 4: CRM mock */
   .mock-kanban { display: flex; gap: 10px; }
@@ -305,12 +306,79 @@
   .mock-pipeline-total .val { font-size: 26px; font-weight: 800; color: var(--green-400); }
   .mock-pipeline-total .lbl { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; font-weight: 700; }
 
+  /* Scene 1 extras */
+  .mock-url { display:block; font-size:10px; color: rgba(255,255,255,0.35); margin-top:2px; }
+  .mock-automation-dash { color: rgba(255,255,255,0.25); }
+  .mock-op-btn { color: rgba(255,255,255,0.35); font-size:14px; }
+
+  /* Scene 2 extras */
+  .mock-search-row3 { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .mock-search-row3 .mock-select-fake { flex: 1 1 100px; }
+  .mock-loading-row {
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    color: rgba(255,255,255,0.5); font-size:12px; font-weight:600;
+    opacity:0; height:0; overflow:hidden; transition: opacity 0.3s ease;
+  }
+  .mock-loading-row.show { opacity:1; height:auto; padding: 22px 0; }
+  .mock-spinner-lg {
+    width:18px; height:18px; border-radius:50%;
+    border:3px solid rgba(255,255,255,0.15); border-top-color: var(--green-400);
+    animation: mockSpin 0.7s linear infinite;
+  }
+  .mock-result-info { flex:1; min-width:0; }
+  .mock-result-name { font-weight:700; }
+  .mock-btn-submit-selected {
+    width:100%; margin-top:10px; padding: 10px 0; font-size:12px; font-weight:800; border-radius:8px; border:none;
+    background: linear-gradient(135deg, var(--green-500), var(--green-400)); color:white; cursor:pointer; font-family:inherit;
+    opacity:0; transform: translateY(6px); transition: opacity .4s ease, transform .4s ease, box-shadow .3s ease;
+  }
+  .mock-btn-submit-selected.show { opacity:1; transform: translateY(0); }
+  .mock-btn-submit-selected.glow { box-shadow: 0 0 0 6px rgba(68,177,63,0.35); }
+
+  /* Scene 3 extras */
+  .mock-score-row {
+    display:flex; gap:18px; margin: 8px 0 4px; font-size:11px; color: rgba(255,255,255,0.5);
+    opacity:0; transition: opacity .4s ease;
+  }
+  .mock-score-row.show { opacity:1; }
+  .mock-score-row b { color: var(--green-400); font-size:12px; }
+  .mock-modal-overlay {
+    position:absolute; inset:0; border-radius:16px; z-index:60;
+    background: rgba(10,15,26,0.82); backdrop-filter: blur(2px);
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition: opacity .25s ease;
+  }
+  .mock-modal-overlay.show { opacity:1; pointer-events:auto; }
+  .mock-modal-box {
+    background: var(--navy-card); border:1px solid rgba(255,255,255,0.12); border-radius:12px;
+    padding: 22px 24px; text-align:center; max-width:250px; box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+  }
+  .mock-modal-box p { font-size:13px; line-height:1.6; margin-bottom:16px; }
+  .mock-progress-track {
+    width:100%; height:6px; background: rgba(255,255,255,0.08); border-radius:999px; overflow:hidden; margin:14px 0;
+  }
+  .mock-progress-fill {
+    height:100%; width:0%; border-radius:999px;
+    background: linear-gradient(90deg, var(--green-500), var(--green-400));
+    transition: width 1.1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* Scene 4 extras */
+  .mock-kanban-card.dragging { opacity:0.35; box-shadow: 0 0 0 2px var(--green-400); }
+
   /* Scene 5: analytics mock */
-  .mock-chart { display: flex; align-items: flex-end; gap: 10px; height: 140px; padding: 0 4px 8px; }
-  .mock-bar { flex: 1; background: linear-gradient(180deg, var(--green-400), var(--green-500)); border-radius: 4px 4px 0 0; height: 0; transition: height 0.9s cubic-bezier(0.4,0,0.2,1); }
-  .mock-rate-row { display: flex; align-items: baseline; gap: 8px; margin-top: 18px; justify-content: center; }
-  .mock-rate-value { font-size: 30px; font-weight: 800; color: var(--green-400); }
-  .mock-rate-label { font-size: 12px; color: rgba(255,255,255,0.5); font-weight: 600; }
+  .mock-bars-row { display: flex; align-items: flex-end; gap: 16px; height: 130px; padding: 20px 4px 0; }
+  .mock-bar-col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+  .mock-bar-value {
+    font-size:12px; font-weight:800; color: var(--green-400); margin-bottom:6px;
+    opacity:0; transition: opacity .4s ease;
+  }
+  .mock-bar-value.show { opacity:1; }
+  .mock-bar-fill {
+    width:100%; max-width:44px; background: linear-gradient(180deg, var(--green-400), var(--green-500));
+    border-radius: 4px 4px 0 0; height: 0; transition: height 0.9s cubic-bezier(0.4,0,0.2,1);
+  }
+  .mock-bar-label { font-size:9.5px; color: rgba(255,255,255,0.45); margin-top:8px; text-align:center; line-height:1.4; }
   .mock-winner-badge {
     display: block; margin: 16px auto 0; padding: 8px 16px; border-radius: 999px;
     background: rgba(68,177,63,0.12); border: 1px solid rgba(68,177,63,0.35);
@@ -319,6 +387,17 @@
     width: fit-content;
   }
   .mock-winner-badge.show { opacity: 1; transform: scale(1); }
+  .mock-hint {
+    font-size:11px; color: rgba(255,255,255,0.5); text-align:center; margin-top:12px;
+    opacity:0; transition: opacity .5s ease;
+  }
+  .mock-hint.show { opacity:1; }
+  .mock-line-chart-wrap { margin-top:16px; }
+  .mock-line-chart-title { font-size:10px; color: rgba(255,255,255,0.35); font-weight:700; letter-spacing:.04em; margin-bottom:6px; }
+  .mock-line-chart { width:100%; height:70px; display:block; }
+  .mock-line-path { fill:none; stroke: var(--green-400); stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+  .mock-line-dot { fill: var(--green-400); opacity:0; transition: opacity .3s ease; }
+  .mock-line-dot.show { opacity:1; }
 
   /* ===== CTA section ===== */
   .cta-section {
@@ -404,18 +483,40 @@
       <div class="mock-box" id="mockScene1">
         <button class="mock-btn-add" id="mockAddBtn">＋ 追加</button>
         <table class="mock-table">
-          <thead><tr><th>企業名</th><th>ステータス</th><th>自動化</th></tr></thead>
+          <thead><tr><th>企業名</th><th>URL</th><th>ステータス</th><th>自動化</th><th>操作</th></tr></thead>
           <tbody id="mockCompaniesBody">
-            <tr><td>株式会社アルファ</td><td class="mock-status-done">✓完了</td><td><span class="mock-badge-ok show">OK</span></td></tr>
-            <tr><td>株式会社ベータ</td><td class="mock-status-done">✓完了</td><td><span class="mock-badge-ok show">OK</span></td></tr>
+            <tr>
+              <td>株式会社赤城商会</td>
+              <td class="mock-url">akagi-shokai.co.jp</td>
+              <td class="mock-status-done">✓完了</td>
+              <td><span class="mock-badge-ok show">OK</span></td>
+              <td class="mock-op-btn">⋯</td>
+            </tr>
+            <tr>
+              <td>株式会社山田製作所</td>
+              <td class="mock-url">yamada-seisakusho.co.jp</td>
+              <td class="mock-status-done">✓完了</td>
+              <td><span class="mock-badge-ok show">OK</span></td>
+              <td class="mock-op-btn">⋯</td>
+            </tr>
+            <tr>
+              <td>合同会社グリーン</td>
+              <td class="mock-url">green-llc.co.jp</td>
+              <td class="mock-status-researching"><span class="mock-spinner"></span>リサーチ中...</td>
+              <td class="mock-automation-dash">-</td>
+              <td class="mock-op-btn">⋯</td>
+            </tr>
             <tr class="mock-row-new" id="mockNewRow">
-              <td>株式会社サンプル商事</td>
+              <td>株式会社テスト商事</td>
+              <td class="mock-url">test-shoji.co.jp</td>
               <td class="mock-status-pending" id="mockNewStatus">未リサーチ</td>
               <td id="mockNewBadgeCell"></td>
+              <td class="mock-op-btn">⋯</td>
             </tr>
           </tbody>
         </table>
         <div class="mock-cursor" id="mockCursor1" style="top:14px; left:14px;"></div>
+        <div class="mock-toast" id="mockToast1">✓ リサーチ完了: フォームを発見しました</div>
       </div>
     </div>
   </div>
@@ -436,12 +537,17 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene2">
-        <div class="mock-search-row">
-          <div class="mock-select-fake"><span id="mockPref" class="placeholder">都道府県を選択</span></div>
+        <div class="mock-search-row3">
           <div class="mock-select-fake"><span id="mockIndustry" class="placeholder">業種を選択</span></div>
+          <div class="mock-select-fake"><span id="mockPref" class="placeholder">都道府県を選択</span></div>
+        </div>
+        <div class="mock-search-row3">
+          <div class="mock-select-fake"><span class="placeholder">キーワード（任意）</span></div>
         </div>
         <button class="mock-btn-search" id="mockSearchBtn">検索する</button>
-        <div style="margin-top:16px;" id="mockResultsList"></div>
+        <div class="mock-loading-row" id="mockLoadingRow"><span class="mock-spinner-lg"></span>検索中...</div>
+        <div style="margin-top:10px;" id="mockResultsList"></div>
+        <button class="mock-btn-submit-selected" id="mockSubmitSelectedBtn">選んだ企業を自動送信</button>
         <div class="mock-cursor" id="mockCursor2" style="top:14px; left:14px;"></div>
       </div>
     </div>
@@ -464,12 +570,22 @@
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene3">
         <div class="mock-search-row">
-          <div class="mock-select-fake"><span class="placeholder">企業を選択</span></div>
-          <div class="mock-select-fake"><span class="placeholder">バリアントを選択</span></div>
+          <div class="mock-select-fake"><span id="mockCompanySelect" class="placeholder">企業を選択</span></div>
+          <div class="mock-select-fake"><span id="mockVariantSelect" class="placeholder">バリアントを選択</span></div>
         </div>
         <button class="mock-btn-search" id="mockDraftBtn">下書き生成</button>
         <div class="mock-textarea-box" id="mockTextarea"></div>
+        <div class="mock-score-row" id="mockScoreRow">文字数: <b id="mockScoreChars">0</b> / 読みやすさ: <b id="mockScoreReadability">0</b>/100</div>
         <button class="mock-btn-send" id="mockSendBtn">フォームに自動送信</button>
+        <div class="mock-modal-overlay" id="mockModalOverlay">
+          <div class="mock-modal-box">
+            <p>株式会社山田鉄工所のフォームに<br />送信しますか？</p>
+            <button class="mock-btn-send" id="mockModalConfirmBtn">送信する</button>
+          </div>
+        </div>
+        <div class="mock-progress-track" id="mockProgressTrack" style="display:none;">
+          <div class="mock-progress-fill" id="mockProgressFill"></div>
+        </div>
         <div class="mock-toast" id="mockToast">✓ 送信完了</div>
       </div>
     </div>
@@ -493,22 +609,28 @@
       <div class="mock-box" id="mockScene4">
         <div class="mock-kanban">
           <div class="mock-kanban-col">
-            <div class="mock-kanban-col-title">リード</div>
-            <div id="mockKanbanLeadSlot"></div>
-          </div>
-          <div class="mock-kanban-col">
-            <div class="mock-kanban-col-title">提案中</div>
-            <div id="mockKanbanProposalSlot">
-              <div class="mock-kanban-card">株式会社ガンマ<span class="amt">¥350万円</span></div>
+            <div class="mock-kanban-col-title">リード(<span id="mockLeadCount">2</span>)</div>
+            <div id="mockKanbanLeadSlot">
+              <div class="mock-kanban-card" id="mockDragCard">株式会社山田鉄工所<span class="amt">¥150,000</span></div>
+              <div class="mock-kanban-card">群馬精密工業<span class="amt">¥200,000</span></div>
             </div>
           </div>
           <div class="mock-kanban-col">
-            <div class="mock-kanban-col-title">成約</div>
-            <div class="mock-kanban-card">株式会社デルタ<span class="amt">¥180万円</span></div>
+            <div class="mock-kanban-col-title">提案中(<span id="mockProposalCount">1</span>)</div>
+            <div id="mockKanbanProposalSlot">
+              <div class="mock-kanban-card">有限会社田中製作所<span class="amt">¥80,000</span></div>
+            </div>
+          </div>
+          <div class="mock-kanban-col">
+            <div class="mock-kanban-col-title">成約(<span id="mockWonCount">1</span>)</div>
+            <div id="mockKanbanWonSlot">
+              <div class="mock-kanban-card">株式会社テスト商事 🏆<span class="amt">¥300,000</span></div>
+            </div>
           </div>
         </div>
+        <div class="mock-cursor" id="mockCursor4" style="top:14px; left:14px;"></div>
         <div class="mock-pipeline-total">
-          <div class="val" id="mockPipelineTotal">¥0万円</div>
+          <div class="val" id="mockPipelineTotal">¥0</div>
           <div class="lbl">パイプライン総額</div>
         </div>
       </div>
@@ -531,19 +653,37 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene5">
-        <div class="mock-chart" id="mockChart">
-          <div class="mock-bar" data-h="40"></div>
-          <div class="mock-bar" data-h="65"></div>
-          <div class="mock-bar" data-h="50"></div>
-          <div class="mock-bar" data-h="85"></div>
-          <div class="mock-bar" data-h="70"></div>
-          <div class="mock-bar" data-h="100"></div>
+        <div class="mock-bars-row" id="mockChart">
+          <div class="mock-bar-col">
+            <span class="mock-bar-value" id="mockBarValue0">0%</span>
+            <div class="mock-bar-fill" data-h="65" id="mockBar0"></div>
+            <div class="mock-bar-label">初回挨拶・短文</div>
+          </div>
+          <div class="mock-bar-col">
+            <span class="mock-bar-value" id="mockBarValue1">0%</span>
+            <div class="mock-bar-fill" data-h="40" id="mockBar1"></div>
+            <div class="mock-bar-label">詳細版</div>
+          </div>
+          <div class="mock-bar-col">
+            <span class="mock-bar-value" id="mockBarValue2">0%</span>
+            <div class="mock-bar-fill" data-h="25" id="mockBar2"></div>
+            <div class="mock-bar-label">カジュアル版</div>
+          </div>
         </div>
-        <div class="mock-rate-row">
-          <span class="mock-rate-value" id="mockRateValue">0%</span>
-          <span class="mock-rate-label">反応率</span>
+        <div class="mock-winner-badge" id="mockWinnerBadge">🏆 最も反応率が高い: 初回挨拶・短文 (23%)</div>
+        <div class="mock-hint" id="mockHint">💡 ヒント: 短文・丁寧なトーンが効果的です</div>
+        <div class="mock-line-chart-wrap">
+          <div class="mock-line-chart-title">月次推移</div>
+          <svg class="mock-line-chart" id="mockLineChart" viewBox="0 0 280 70" preserveAspectRatio="none">
+            <path class="mock-line-path" id="mockLinePath" d="M4,58 L60,46 L116,50 L172,30 L228,22 L276,10" />
+            <circle class="mock-line-dot" cx="4" cy="58" r="3"></circle>
+            <circle class="mock-line-dot" cx="60" cy="46" r="3"></circle>
+            <circle class="mock-line-dot" cx="116" cy="50" r="3"></circle>
+            <circle class="mock-line-dot" cx="172" cy="30" r="3"></circle>
+            <circle class="mock-line-dot" cx="228" cy="22" r="3"></circle>
+            <circle class="mock-line-dot" cx="276" cy="10" r="3"></circle>
+          </svg>
         </div>
-        <div class="mock-winner-badge" id="mockWinnerBadge">🏆 最も反応率が高いバリアント: 初回挨拶・短文</div>
       </div>
     </div>
   </div>
@@ -738,6 +878,7 @@
       const newRow = document.getElementById("mockNewRow");
       const statusCell = document.getElementById("mockNewStatus");
       const badgeCell = document.getElementById("mockNewBadgeCell");
+      const toast = document.getElementById("mockToast1");
 
       moveCursor(cursor, box, addBtn, () => {
         addBtn.classList.add("glow");
@@ -757,6 +898,7 @@
             if (myGen !== demoGeneration) return;
             badgeCell.querySelector(".mock-badge-ok").classList.add("show");
           });
+          toast.classList.add("show");
         }, 2000);
       }, myGen);
     },
@@ -765,42 +907,72 @@
       const myGen = demoGeneration;
       const box = document.getElementById("mockScene2");
       const cursor = document.getElementById("mockCursor2");
-      const prefEl = document.getElementById("mockPref");
       const industryEl = document.getElementById("mockIndustry");
+      const prefEl = document.getElementById("mockPref");
       const searchBtn = document.getElementById("mockSearchBtn");
+      const loadingRow = document.getElementById("mockLoadingRow");
       const resultsList = document.getElementById("mockResultsList");
+      const submitBtn = document.getElementById("mockSubmitSelectedBtn");
 
       (async () => {
-        await typeText(prefEl, "群馬県", 130);
-        if (myGen !== demoGeneration) return;
-        prefEl.classList.remove("placeholder");
-        await new Promise(r => setTimeout(r, 200));
-        if (myGen !== demoGeneration) return;
         await typeText(industryEl, "製造業", 130);
         if (myGen !== demoGeneration) return;
         industryEl.classList.remove("placeholder");
+        await new Promise(r => setTimeout(r, 200));
+        if (myGen !== demoGeneration) return;
+        await typeText(prefEl, "群馬県", 130);
+        if (myGen !== demoGeneration) return;
+        prefEl.classList.remove("placeholder");
 
         moveCursor(cursor, box, searchBtn, () => {
           searchBtn.classList.add("glow");
-          setTimeout(() => { if (myGen === demoGeneration) searchBtn.classList.remove("glow"); }, 500);
+          setTimeout(() => { if (myGen === demoGeneration) searchBtn.classList.remove("glow"); }, 400);
+          loadingRow.classList.add("show");
 
-          const names = ["群馬製作所株式会社", "上州工業株式会社", "赤城精機株式会社", "利根川金属株式会社", "前橋テクノ株式会社"];
-          resultsList.innerHTML = names.map((n, i) =>
-            `<div class="mock-result-card" id="mockResult${i}"><span class="mock-checkbox" id="mockCheck${i}"></span><span>${n}</span></div>`
-          ).join("");
+          setTimeout(() => {
+            if (myGen !== demoGeneration) return;
+            loadingRow.classList.remove("show");
 
-          names.forEach((_, i) => {
+            const companies = [
+              { name: "株式会社山田鉄工所", url: "yamada-tekko.co.jp" },
+              { name: "群馬精密工業株式会社", url: "gunma-seimitsu.co.jp" },
+              { name: "有限会社田中製作所", url: "tanaka-seisakusho.co.jp" },
+              { name: "株式会社上州メタル", url: "joshu-metal.co.jp" },
+              { name: "群馬自動車部品株式会社", url: "gunma-auto.co.jp" },
+            ];
+            resultsList.innerHTML = companies.map((c, i) =>
+              `<div class="mock-result-card" id="mockResult${i}">` +
+                `<span class="mock-checkbox" id="mockCheck${i}"></span>` +
+                `<div class="mock-result-info">` +
+                  `<span class="mock-result-name">${c.name}</span>` +
+                  `<span class="mock-url">${c.url}</span>` +
+                `</div>` +
+              `</div>`
+            ).join("");
+
+            companies.forEach((_, i) => {
+              setTimeout(() => {
+                if (myGen !== demoGeneration) return;
+                const el = document.getElementById("mockResult" + i);
+                if (el) el.classList.add("show");
+              }, 150 * i);
+              setTimeout(() => {
+                if (myGen !== demoGeneration) return;
+                const el = document.getElementById("mockCheck" + i);
+                if (el) { el.classList.add("checked"); el.textContent = "✓"; }
+              }, 150 * i + 300);
+            });
+
             setTimeout(() => {
               if (myGen !== demoGeneration) return;
-              const el = document.getElementById("mockResult" + i);
-              if (el) el.classList.add("show");
-            }, 200 * i);
-            setTimeout(() => {
-              if (myGen !== demoGeneration) return;
-              const el = document.getElementById("mockCheck" + i);
-              if (el) { el.classList.add("checked"); el.textContent = "✓"; }
-            }, 200 * i + 350);
-          });
+              submitBtn.classList.add("show");
+              setTimeout(() => {
+                if (myGen !== demoGeneration) return;
+                submitBtn.classList.add("glow");
+                setTimeout(() => { if (myGen === demoGeneration) submitBtn.classList.remove("glow"); }, 900);
+              }, 400);
+            }, 150 * companies.length + 500);
+          }, 500);
         }, myGen);
       })();
     },
@@ -808,81 +980,163 @@
     scene3: function () {
       const myGen = demoGeneration;
       const box = document.getElementById("mockScene3");
+      const companySelect = document.getElementById("mockCompanySelect");
+      const variantSelect = document.getElementById("mockVariantSelect");
       const draftBtn = document.getElementById("mockDraftBtn");
       const textarea = document.getElementById("mockTextarea");
+      const scoreRow = document.getElementById("mockScoreRow");
+      const scoreChars = document.getElementById("mockScoreChars");
+      const scoreReadability = document.getElementById("mockScoreReadability");
       const sendBtn = document.getElementById("mockSendBtn");
+      const modalOverlay = document.getElementById("mockModalOverlay");
+      const modalConfirmBtn = document.getElementById("mockModalConfirmBtn");
+      const progressTrack = document.getElementById("mockProgressTrack");
+      const progressFill = document.getElementById("mockProgressFill");
       const toast = document.getElementById("mockToast");
 
-      // find a cursor-less approach: reuse a temp cursor
       const cursor = document.createElement("div");
       cursor.className = "mock-cursor";
       cursor.style.top = "14px"; cursor.style.left = "14px";
       box.appendChild(cursor);
 
-      moveCursor(cursor, box, draftBtn, async () => {
-        draftBtn.classList.add("glow");
-        setTimeout(() => { if (myGen === demoGeneration) draftBtn.classList.remove("glow"); }, 400);
-        const message = "株式会社サンプル商事 ご担当者様\n\nはじめてご連絡いたします。\n貴社の業務効率化に関するご提案がございます。";
-        await typeText(textarea, message, 28);
+      (async () => {
+        await typeText(companySelect, "株式会社山田鉄工所", 90);
         if (myGen !== demoGeneration) return;
+        companySelect.classList.remove("placeholder");
+        await new Promise(r => setTimeout(r, 250));
+        if (myGen !== demoGeneration) return;
+        variantSelect.textContent = "初回挨拶・短文";
+        variantSelect.classList.remove("placeholder");
 
         setTimeout(() => {
           if (myGen !== demoGeneration) return;
-          moveCursor(cursor, box, sendBtn, () => {
-            sendBtn.classList.add("glow");
+          moveCursor(cursor, box, draftBtn, async () => {
+            draftBtn.classList.add("glow");
+            setTimeout(() => { if (myGen === demoGeneration) draftBtn.classList.remove("glow"); }, 400);
+            const message = "株式会社山田鉄工所 ご担当者様\n\nはじめてご連絡いたします。\n群馬県を中心に採用・広報支援を行っているLOCLEと申します。\n\n貴社の事業発展のお役に立てるサービスをご提案させていただきたく、\nご連絡いたしました。\n\nどうぞよろしくお願いいたします。";
+            await typeText(textarea, message, 16);
+            if (myGen !== demoGeneration) return;
+
+            scoreRow.classList.add("show");
+            countUp(scoreChars, 87, { duration: 700 });
+            setTimeout(() => { if (myGen === demoGeneration) countUp(scoreReadability, 85, { duration: 700 }); }, 150);
+
             setTimeout(() => {
               if (myGen !== demoGeneration) return;
-              toast.classList.add("show");
-            }, 300);
+              moveCursor(cursor, box, sendBtn, () => {
+                sendBtn.classList.add("glow");
+                setTimeout(() => { if (myGen === demoGeneration) sendBtn.classList.remove("glow"); }, 400);
+                modalOverlay.classList.add("show");
+
+                setTimeout(() => {
+                  if (myGen !== demoGeneration) return;
+                  moveCursor(cursor, box, modalConfirmBtn, () => {
+                    modalOverlay.classList.remove("show");
+                    progressTrack.style.display = "block";
+                    requestAnimationFrame(() => {
+                      if (myGen !== demoGeneration) return;
+                      progressFill.style.width = "100%";
+                    });
+                    setTimeout(() => {
+                      if (myGen !== demoGeneration) return;
+                      toast.classList.add("show");
+                    }, 1300);
+                  }, myGen);
+                }, 900);
+              }, myGen);
+            }, 900);
           }, myGen);
-        }, 400);
-      }, myGen);
+        }, 300);
+      })();
     },
 
     scene4: function () {
       const myGen = demoGeneration;
-      const leadSlot = document.getElementById("mockKanbanLeadSlot");
+      const box = document.getElementById("mockScene4");
+      const cursor = document.getElementById("mockCursor4");
+      const dragCard = document.getElementById("mockDragCard");
       const proposalSlot = document.getElementById("mockKanbanProposalSlot");
+      const leadCount = document.getElementById("mockLeadCount");
+      const proposalCount = document.getElementById("mockProposalCount");
       const totalEl = document.getElementById("mockPipelineTotal");
 
-      leadSlot.innerHTML = '<div class="mock-kanban-card" id="mockDragCard">株式会社イプシロン<span class="amt">¥220万円</span></div>';
-
-      setTimeout(() => {
-        if (myGen !== demoGeneration) return;
-        const card = document.getElementById("mockDragCard");
-        if (!card) return;
-        card.style.opacity = "0.4";
-        setTimeout(() => {
-          if (myGen !== demoGeneration) return;
-          card.remove();
-          const clone = document.createElement("div");
-          clone.className = "mock-kanban-card";
-          clone.innerHTML = '株式会社イプシロン<span class="amt">¥220万円</span>';
-          proposalSlot.appendChild(clone);
-        }, 350);
-      }, 1200);
-
-      setTimeout(() => { if (myGen === demoGeneration) countUp(totalEl, 2450, { suffix: "万円", duration: 1200 }); }, 500);
+      setTimeout(() => { if (myGen === demoGeneration) countUp(totalEl, 730000, { duration: 1300 }); }, 400);
       // fix prefix ¥ after countUp overwrites textContent
       const fixPrefix = setInterval(() => {
         if (myGen !== demoGeneration) { clearInterval(fixPrefix); return; }
         if (!totalEl.textContent.startsWith("¥")) totalEl.textContent = "¥" + totalEl.textContent;
       }, 100);
-      setTimeout(() => clearInterval(fixPrefix), 2000);
+      setTimeout(() => clearInterval(fixPrefix), 2200);
+
+      setTimeout(() => {
+        if (myGen !== demoGeneration || !dragCard) return;
+        moveCursor(cursor, box, dragCard, () => {
+          dragCard.classList.add("dragging");
+          setTimeout(() => {
+            if (myGen !== demoGeneration) return;
+            const cRect = box.getBoundingClientRect();
+            const tRect = proposalSlot.getBoundingClientRect();
+            cursor.style.top = (tRect.top - cRect.top + 16) + "px";
+            cursor.style.left = (tRect.left - cRect.left + tRect.width / 2 - 10) + "px";
+            setTimeout(() => {
+              if (myGen !== demoGeneration) return;
+              dragCard.remove();
+              const clone = document.createElement("div");
+              clone.className = "mock-kanban-card";
+              clone.innerHTML = '株式会社山田鉄工所<span class="amt">¥150,000</span>';
+              proposalSlot.appendChild(clone);
+              leadCount.textContent = "1";
+              proposalCount.textContent = "2";
+            }, 700);
+          }, 300);
+        }, myGen);
+      }, 1000);
     },
 
     scene5: function () {
       const myGen = demoGeneration;
-      const bars = document.querySelectorAll("#mockChart .mock-bar");
-      bars.forEach((bar, i) => {
-        setTimeout(() => { if (myGen === demoGeneration) bar.style.height = bar.dataset.h + "%"; }, i * 100);
+      const bars = [
+        { fill: document.getElementById("mockBar0"), value: document.getElementById("mockBarValue0"), rate: 23 },
+        { fill: document.getElementById("mockBar1"), value: document.getElementById("mockBarValue1"), rate: 14 },
+        { fill: document.getElementById("mockBar2"), value: document.getElementById("mockBarValue2"), rate: 9 },
+      ];
+      bars.forEach((b, i) => {
+        setTimeout(() => {
+          if (myGen !== demoGeneration) return;
+          b.fill.style.height = b.fill.dataset.h + "%";
+        }, i * 150);
+        setTimeout(() => {
+          if (myGen !== demoGeneration) return;
+          b.value.textContent = b.rate + "%";
+          b.value.classList.add("show");
+        }, i * 150 + 700);
       });
-      const rateEl = document.getElementById("mockRateValue");
-      setTimeout(() => { if (myGen === demoGeneration) countUp(rateEl, 23, { suffix: "%", duration: 1200 }); }, 500);
+
       setTimeout(() => {
         if (myGen !== demoGeneration) return;
         document.getElementById("mockWinnerBadge").classList.add("show");
-      }, 1600);
+      }, 1500);
+      setTimeout(() => {
+        if (myGen !== demoGeneration) return;
+        document.getElementById("mockHint").classList.add("show");
+      }, 1900);
+
+      const path = document.getElementById("mockLinePath");
+      if (path) {
+        const len = path.getTotalLength();
+        path.style.strokeDasharray = len;
+        path.style.strokeDashoffset = len;
+        path.style.transition = "none";
+        void path.getBoundingClientRect();
+        setTimeout(() => {
+          if (myGen !== demoGeneration) return;
+          path.style.transition = "stroke-dashoffset 1.6s cubic-bezier(0.4,0,0.2,1)";
+          path.style.strokeDashoffset = "0";
+        }, 200);
+      }
+      document.querySelectorAll("#mockLineChart .mock-line-dot").forEach((dot, i) => {
+        setTimeout(() => { if (myGen === demoGeneration) dot.classList.add("show"); }, 400 + i * 260);
+      });
     },
   };
 
