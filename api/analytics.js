@@ -196,6 +196,7 @@ async function classifyEmail(subject, body) {
 async function handleCheckReplies(res) {
   try {
     const emails = await fetchReplies();
+    console.log("fetchReplies result:", JSON.stringify(emails.map(e => ({from: e.from, subject: e.subject, date: e.date}))));
     const checked = emails.length;
 
     if (checked === 0) {
@@ -209,6 +210,7 @@ async function handleCheckReplies(res) {
       JOIN companies c ON c.id = sl.company_id
       WHERE sl.status = 'sent' AND c.email IS NOT NULL
     `;
+    console.log("sentLogs:", JSON.stringify(sentLogs.map(l => ({company_email: l.company_email, company_name: l.company_name}))));
 
     let matched  = 0;
     let recorded = 0;
