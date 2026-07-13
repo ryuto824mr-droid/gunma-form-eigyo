@@ -1,5 +1,5 @@
 const { sql }          = require("../lib/db");
-const { fetchReplies } = require("../lib/gmail-receiver");
+const { fetchReplies, testGmailAuth } = require("../lib/gmail-receiver");
 
 module.exports = async function handler(req, res) {
   // --- 送信スケジュール（GET/POST/DELETE） ---
@@ -19,6 +19,11 @@ module.exports = async function handler(req, res) {
   // --- 返信チェック ---
   if (req.query.action === "check-replies") {
     return handleCheckReplies(res);
+  }
+
+  // --- Gmail認証デバッグ ---
+  if (req.query.action === "debug-gmail") {
+    return handleDebugGmail(res);
   }
 
   // --- 通常の集計 ---
@@ -249,4 +254,16 @@ async function handleCheckReplies(res) {
   } catch (err) {
     return res.status(500).json({ error: `返信チェックエラー: ${err.message}` });
   }
+}
+
+async function handleDebugGmail(res) {
+  const authTest = await testGmailAuth();
+
+  return res.status(200).json({
+    has_client_id:       !!process.env.GMAIL_CLIENT_ID,
+    has_client_secret:   !!process.env.GMAIL_CLIENT_SECRET,
+    has_refresh_token:   !!process.env.GMAIL_REFRESH_TOKEN,
+    token_refresh_ok:    authTest.ok,
+    token_refresh_error: authTest.error || null,
+  });
 }
