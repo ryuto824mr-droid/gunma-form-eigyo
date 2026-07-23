@@ -14,6 +14,7 @@ const EXCLUDE_DOMAINS = [
   "careercross.com", "type.jp", "nikkei.com", "nikkan.co.jp",
   "en-japan.com", "employment.en-japan.com", "04510.jp", "g-boss.my.salesforce-sites.com",
   "jobhouse.jp", "randstad.co.jp", "salesforce-sites.com",
+  "xn--pckua2a7gp15o89zb.com", // 求人ボックス
 ];
 
 // URLのパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
@@ -83,9 +84,26 @@ function getHostname(url) {
   }
 }
 
+// Punycode(xn--…)ドメインをデコードし、「求人ボックス」のような日本語の
+// 求人系キーワードを含むホスト名を汎用的に検出する
+function isJobSiteDomain(hostname) {
+  let decoded;
+  try {
+    decoded = require("url").domainToUnicode(hostname);
+  } catch {
+    try {
+      decoded = require("punycode").toUnicode(hostname);
+    } catch {
+      return false;
+    }
+  }
+  return /求人|転職|アルバイト|派遣/.test(decoded);
+}
+
 function isExcluded(url) {
   const host = getHostname(url);
   if (EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return true;
+  if (isJobSiteDomain(host)) return true;
 
   let pathname = "";
   try {
