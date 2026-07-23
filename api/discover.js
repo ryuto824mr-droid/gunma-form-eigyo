@@ -7,6 +7,11 @@ const EXCLUDE_DOMAINS = [
   "indeed.com", "mynavi.jp", "rikunabi.com", "doda.jp", "en-gage.net",
   "townpage.ntt.co.jp", "itp.ne.jp", "facebook.com", "twitter.com",
   "x.com", "instagram.com", "wikipedia.org", "prtimes.jp", "baitoru.com",
+  "hellowork.careers", "hakenlist.com", "job-j.net", "baseconnect.in",
+  "salesnow.jp", "compalyze.co.jp", "citydo.com", "hurex.jp", "data-max.co.jp",
+  "aceweb.jp", "pref.gunma.jp", "froma.jp", "jobhopper.jp", "townwork.net",
+  "shigotoaruwa.com", "hatarako.net", "workin.jp", "indeedjapan.com",
+  "careercross.com", "type.jp", "nikkei.com", "nikkan.co.jp",
 ];
 
 module.exports = async function handler(req, res) {
@@ -92,7 +97,7 @@ function buildQuery(params) {
   parts.push("公式サイト");
   // 除外ワード
   const excludes = EXCLUDE_DOMAINS.map(d => `-site:${d}`);
-  excludes.push("-求人", "-採用", "-転職");
+  excludes.push("-求人", "-採用", "-転職", "-バイト", "-アルバイト", "-派遣", "-ハローワーク", "-まとめ", "-一覧", "-ランキング");
   return parts.join(" ") + " " + excludes.join(" ");
 }
 
