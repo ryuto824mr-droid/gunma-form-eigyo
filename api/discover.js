@@ -15,6 +15,7 @@ const EXCLUDE_DOMAINS = [
   "en-japan.com", "employment.en-japan.com", "04510.jp", "g-boss.my.salesforce-sites.com",
   "jobhouse.jp", "randstad.co.jp", "salesforce-sites.com",
   "xn--pckua2a7gp15o89zb.com", // 求人ボックス
+  "stanby.com",
 ];
 
 // URLのパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
