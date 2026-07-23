@@ -57,9 +57,12 @@ module.exports = async function handler(req, res) {
   const descStr = [params.industry, params.size, params.listing, params.founding_age, params.revenue, params.hiring, params.keyword]
     .filter(Boolean).join(" ");
 
+  const debugAuthorized =
+    !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
+
   try {
     // 1. Brave検索 → ブラックリスト除外 → ホスト名重複除去
-    const webResults = await searchViaBrave(params, braveKey);
+    const { results: webResults, stats: braveStats } = await searchViaBrave(params, braveKey);
 
     // 2. AI判定フィルタ (ANTHROPIC_API_KEY未設定なら素通り)
     const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
@@ -70,7 +73,19 @@ module.exports = async function handler(req, res) {
     // 4. マージ・ホスト名重複除去 (web優先、Placesが後ろ)
     const merged = mergeAndDedup([...filteredResults, ...placesResults]);
 
-    return res.status(200).json({ configured: true, results: merged });
+    const payload = { configured: true, results: merged };
+    if (debugAuthorized) {
+      payload.debug = {
+        raw_count: braveStats.raw_count,
+        filtered_count: braveStats.filtered_count,
+        excluded_reasons: braveStats.excluded_reasons,
+        ai_filtered_count: filteredResults.length,
+        places_count: placesResults.length,
+        merged_count: merged.length,
+        query: braveStats.query,
+      };
+    }
+    return res.status(200).json(payload);
   } catch (err) {
     return res.status(500).json({ error: `検索エラー: ${err.message}` });
   }
@@ -100,10 +115,11 @@ function isJobSiteDomain(hostname) {
   return /求人|転職|アルバイト|派遣/.test(decoded);
 }
 
-function isExcluded(url) {
+// 除外理由を判定する。除外しない場合はnullを返す
+function getExclusionReason(url) {
   const host = getHostname(url);
-  if (EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return true;
-  if (isJobSiteDomain(host)) return true;
+  if (EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return "domain_match";
+  if (isJobSiteDomain(host)) return "punycode_job";
 
   let pathname = "";
   try {
@@ -111,7 +127,13 @@ function isExcluded(url) {
   } catch {
     pathname = url.toLowerCase();
   }
-  return EXCLUDE_PATH_KEYWORDS.some(k => pathname.includes(k));
+  if (EXCLUDE_PATH_KEYWORDS.some(k => pathname.includes(k))) return "path_match";
+
+  return null;
+}
+
+function isExcluded(url) {
+  return getExclusionReason(url) !== null;
 }
 
 // Brave Search APIのクエリ文字数制限(400文字程度)対策。
@@ -170,16 +192,33 @@ async function searchViaBrave(params, apiKey) {
   const webResults = data.web?.results || [];
 
   // ブラックリスト除外 + ホスト名重複除去
+  const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, other: 0 };
   const seen = new Set();
   const results = [];
   for (const r of webResults) {
-    if (isExcluded(r.url)) continue;
+    const reason = getExclusionReason(r.url);
+    if (reason) {
+      excludedReasons[reason]++;
+      continue;
+    }
     const host = getHostname(r.url);
-    if (seen.has(host)) continue;
+    if (seen.has(host)) {
+      excludedReasons.other++;
+      continue;
+    }
     seen.add(host);
     results.push({ name: r.title || r.url, url: r.url, source: "web" });
   }
-  return results;
+
+  return {
+    results,
+    stats: {
+      query,
+      raw_count: webResults.length,
+      filtered_count: results.length,
+      excluded_reasons: excludedReasons,
+    },
+  };
 }
 
 function mergeAndDedup(results) {
