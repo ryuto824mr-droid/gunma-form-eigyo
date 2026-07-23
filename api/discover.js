@@ -83,6 +83,13 @@ function isExcluded(url) {
   return EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`));
 }
 
+// Brave Search APIのクエリ文字数制限(400文字程度)対策。
+// クエリには最小限の除外のみ含め、EXCLUDE_DOMAINS全体でのフィルタリングは
+// isExcluded()によるコード側の後処理(searchViaBrave内)で行う。
+const QUERY_MAX_LENGTH = 200;
+const QUERY_EXCLUDE_WORDS = ["-求人", "-採用", "-転職", "-一覧", "-ランキング"];
+const QUERY_EXCLUDE_DOMAINS = EXCLUDE_DOMAINS.slice(0, 15);
+
 function buildQuery(params) {
   const parts = [];
   if (params.prefecture) parts.push(params.prefecture);
@@ -95,10 +102,19 @@ function buildQuery(params) {
   if (params.hiring) parts.push(params.hiring);
   if (params.keyword) parts.push(params.keyword);
   parts.push("公式サイト");
-  // 除外ワード
-  const excludes = EXCLUDE_DOMAINS.map(d => `-site:${d}`);
-  excludes.push("-求人", "-採用", "-転職", "-バイト", "-アルバイト", "-派遣", "-ハローワーク", "-まとめ", "-一覧", "-ランキング");
-  return parts.join(" ") + " " + excludes.join(" ");
+
+  const base = parts.join(" ");
+  const wordExcludes = QUERY_EXCLUDE_WORDS.join(" ");
+
+  // 200文字に収まる範囲でsite:除外を追加。収まりきらない分はコード側フィルタに任せる
+  const siteExcludes = [];
+  for (const d of QUERY_EXCLUDE_DOMAINS) {
+    const candidate = [base, wordExcludes, ...siteExcludes, `-site:${d}`].join(" ");
+    if (candidate.length > QUERY_MAX_LENGTH) break;
+    siteExcludes.push(`-site:${d}`);
+  }
+
+  return [base, wordExcludes, ...siteExcludes].join(" ");
 }
 
 async function searchViaBrave(params, apiKey) {
