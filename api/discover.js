@@ -83,6 +83,7 @@ module.exports = async function handler(req, res) {
         places_count: placesResults.length,
         merged_count: merged.length,
         query: braveStats.query,
+        places_debug: placesResults.debug,
       };
     }
     return res.status(200).json(payload);
