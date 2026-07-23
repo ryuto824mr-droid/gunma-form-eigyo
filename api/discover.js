@@ -12,7 +12,12 @@ const EXCLUDE_DOMAINS = [
   "aceweb.jp", "pref.gunma.jp", "froma.jp", "jobhopper.jp", "townwork.net",
   "shigotoaruwa.com", "hatarako.net", "workin.jp", "indeedjapan.com",
   "careercross.com", "type.jp", "nikkei.com", "nikkan.co.jp",
+  "en-japan.com", "employment.en-japan.com", "04510.jp", "g-boss.my.salesforce-sites.com",
+  "jobhouse.jp", "randstad.co.jp", "salesforce-sites.com",
 ];
+
+// URLのパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
+const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou"];
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -80,7 +85,15 @@ function getHostname(url) {
 
 function isExcluded(url) {
   const host = getHostname(url);
-  return EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`));
+  if (EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return true;
+
+  let pathname = "";
+  try {
+    pathname = new URL(url).pathname.toLowerCase();
+  } catch {
+    pathname = url.toLowerCase();
+  }
+  return EXCLUDE_PATH_KEYWORDS.some(k => pathname.includes(k));
 }
 
 // Brave Search APIのクエリ文字数制限(400文字程度)対策。
@@ -102,6 +115,7 @@ function buildQuery(params) {
   if (params.hiring) parts.push(params.hiring);
   if (params.keyword) parts.push(params.keyword);
   parts.push("公式サイト");
+  parts.push("会社概要");
 
   const base = parts.join(" ");
   const wordExcludes = QUERY_EXCLUDE_WORDS.join(" ");
