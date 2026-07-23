@@ -23,8 +23,9 @@ module.exports = async function handler(req, res) {
     case "settings":          return handleSettings(req, res);
     case "ab-tests":          return handleAbTests(req, res);
     case "ab-test-stats":    return handleAbTestStats(req, res);
+    case "api-usage":         return handleApiUsage(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage）を指定してください" });
   }
 };
 
@@ -125,6 +126,16 @@ async function handleDbSetup(req, res) {
         variant_b_id INTEGER NOT NULL REFERENCES message_variants(id),
         status       TEXT NOT NULL DEFAULT 'running',
         created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // api_usage_logsテーブル追加（API利用量トラッキング用）
+    // provider: 'brave_search' / 'google_places' / 'anthropic'
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS api_usage_logs (
+        id         SERIAL PRIMARY KEY,
+        provider   TEXT NOT NULL,
+        endpoint   TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
@@ -794,6 +805,62 @@ async function handleAbTestStats(req, res) {
     else if (diff >= 2) confidence = "中";
 
     return res.status(200).json({ variant_a, variant_b, winner, confidence });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== api-usage ====================
+
+const BRAVE_FREE_LIMIT = 1000;
+const BRAVE_COST_PER_1000_JPY = 750;
+
+// Text Search (New) 1回あたり約$0.032 ≒ 5円として概算
+const GOOGLE_PLACES_COST_PER_CALL_JPY = 5;
+const GOOGLE_PLACES_COST_PER_CALL_USD = 0.032;
+const GOOGLE_PLACES_FREE_CREDIT_USD = 200;
+const GOOGLE_PLACES_FREE_CALLS = Math.floor(GOOGLE_PLACES_FREE_CREDIT_USD / GOOGLE_PLACES_COST_PER_CALL_USD);
+
+function braveEstimatedCostJpy(count) {
+  if (count <= BRAVE_FREE_LIMIT) return 0;
+  return Math.round(((count - BRAVE_FREE_LIMIT) / 1000) * BRAVE_COST_PER_1000_JPY);
+}
+
+function placesEstimatedCostJpy(count) {
+  if (count <= GOOGLE_PLACES_FREE_CALLS) return 0;
+  return Math.round((count - GOOGLE_PLACES_FREE_CALLS) * GOOGLE_PLACES_COST_PER_CALL_JPY);
+}
+
+async function handleApiUsage(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    const rows = await sql`
+      SELECT provider, COUNT(*)::int AS count
+      FROM api_usage_logs
+      WHERE created_at >= date_trunc('month', NOW())
+        AND created_at <  date_trunc('month', NOW()) + INTERVAL '1 month'
+      GROUP BY provider
+    `;
+    const counts = {};
+    rows.forEach(r => { counts[r.provider] = r.count; });
+
+    const braveCount  = counts.brave_search  || 0;
+    const placesCount = counts.google_places || 0;
+
+    return res.status(200).json({
+      brave_search: {
+        count: braveCount,
+        free_limit: BRAVE_FREE_LIMIT,
+        estimated_cost_jpy: braveEstimatedCostJpy(braveCount),
+      },
+      google_places: {
+        count: placesCount,
+        free_limit: null,
+        estimated_cost_jpy: placesEstimatedCostJpy(placesCount),
+      },
+    });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }

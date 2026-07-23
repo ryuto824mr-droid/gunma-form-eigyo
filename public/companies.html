@@ -87,6 +87,14 @@
   .summary-item strong { color: var(--green-700); font-size: 18px; font-weight: 700; display: block; }
   .summary-item span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--gray-400); }
 
+  .api-usage-bar {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    font-size: 11px; color: var(--gray-400);
+    margin-bottom: 8px; padding: 0 4px;
+  }
+  .api-usage-item { display: inline-flex; align-items: center; gap: 4px; }
+  .api-usage-item.warn { color: #c2410c; font-weight: 600; }
+
   /* Sections */
   .add-section, .import-section, .discover-section {
     background: var(--white); border: 1px solid var(--gray-200);
@@ -842,6 +850,8 @@
 
   <div class="summary-bar" id="summaryBar" hidden></div>
 
+  <div class="api-usage-bar" id="apiUsageBar" hidden></div>
+
   <section class="discover-section">
     <h2>企業を自動検索</h2>
     <div class="search-form-grid">
@@ -1179,6 +1189,38 @@
 
   loadCompanies();
   loadVariantsList();
+  loadApiUsage();
+
+  async function loadApiUsage() {
+    const bar = document.getElementById("apiUsageBar");
+    if (!bar) return;
+    try {
+      const res = await fetch("/api/crm?action=api-usage");
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const brave  = data.brave_search  || { count: 0, free_limit: 1000, estimated_cost_jpy: 0 };
+      const places = data.google_places || { count: 0, free_limit: null, estimated_cost_jpy: 0 };
+
+      const braveWarn = brave.free_limit ? (brave.count / brave.free_limit) >= 0.8 : false;
+      const braveStatusText = brave.count > brave.free_limit
+        ? `有料（推定¥${brave.estimated_cost_jpy.toLocaleString()}）`
+        : "無料枠内";
+
+      const placesWarn = places.estimated_cost_jpy > 0;
+      const placesStatusText = placesWarn
+        ? `推定¥${places.estimated_cost_jpy.toLocaleString()}`
+        : "無料クレジット内";
+
+      bar.innerHTML = `
+        <span class="api-usage-item${braveWarn ? " warn" : ""}">Brave Search: ${brave.count}回 / ${brave.free_limit}回（${braveStatusText}）</span>
+        <span class="api-usage-item${placesWarn ? " warn" : ""}">Google Places: ${places.count}回（${placesStatusText}）</span>
+      `;
+      bar.hidden = false;
+    } catch {
+      // 利用量表示の失敗は本体機能に影響させない
+    }
+  }
 
   async function loadCompanies() {
     try {

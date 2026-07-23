@@ -1,5 +1,6 @@
 const { filterResultsWithAI } = require("../lib/discover-ai-filter");
 const { searchPlacesAPI } = require("../lib/places-search");
+const { sql } = require("../lib/db");
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 
@@ -64,12 +65,16 @@ module.exports = async function handler(req, res) {
   try {
     // 1. Brave検索 → ブラックリスト除外 → ホスト名重複除去
     const { results: webResults, stats: braveStats } = await searchViaBrave(params, braveKey);
+    await logApiUsage("brave_search", "web_search");
 
     // 2. AI判定フィルタ (ANTHROPIC_API_KEY未設定なら素通り)
     const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
     const placesResults = await searchPlacesAPI(locationStr, descStr);
+    if (placesResults.debug?.has_key) {
+      await logApiUsage("google_places", "text_search");
+    }
 
     // 4. マージ・ホスト名重複除去 (web優先、Placesが後ろ)
     const merged = mergeAndDedup([...filteredResults, ...placesResults]);
@@ -92,6 +97,14 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: `検索エラー: ${err.message}` });
   }
 };
+
+async function logApiUsage(provider, endpoint) {
+  try {
+    await sql`INSERT INTO api_usage_logs (provider, endpoint) VALUES (${provider}, ${endpoint})`;
+  } catch {
+    // 利用量ログの記録失敗は検索処理に影響させない
+  }
+}
 
 function getHostname(url) {
   try {
