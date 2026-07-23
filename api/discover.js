@@ -83,6 +83,7 @@ module.exports = async function handler(req, res) {
         places_count: placesResults.length,
         merged_count: merged.length,
         query: braveStats.query,
+        raw_entries: braveStats.raw_entries,
       };
     }
     return res.status(200).json(payload);
@@ -193,20 +194,24 @@ async function searchViaBrave(params, apiKey) {
 
   // ブラックリスト除外 + ホスト名重複除去
   const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, other: 0 };
+  const rawEntries = [];
   const seen = new Set();
   const results = [];
   for (const r of webResults) {
+    const host = getHostname(r.url);
     const reason = getExclusionReason(r.url);
     if (reason) {
       excludedReasons[reason]++;
+      rawEntries.push({ title: r.title, host, reason });
       continue;
     }
-    const host = getHostname(r.url);
     if (seen.has(host)) {
       excludedReasons.other++;
+      rawEntries.push({ title: r.title, host, reason: "duplicate_host" });
       continue;
     }
     seen.add(host);
+    rawEntries.push({ title: r.title, host, reason: null });
     results.push({ name: r.title || r.url, url: r.url, source: "web" });
   }
 
@@ -217,6 +222,7 @@ async function searchViaBrave(params, apiKey) {
       raw_count: webResults.length,
       filtered_count: results.length,
       excluded_reasons: excludedReasons,
+      raw_entries: rawEntries,
     },
   };
 }
