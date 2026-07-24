@@ -110,6 +110,7 @@
   .rate-lo { color: var(--gray-300); }
   .dash    { color: var(--gray-300); }
   .empty   { font-size: 13px; color: var(--gray-400); padding: 16px 0; margin: 0; text-align: center; }
+  .subsection-title { font-size: 13px; font-weight: 600; color: var(--gray-700); margin: 24px 0 10px; }
 
   .link-to-analytics {
     display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
@@ -374,6 +375,40 @@
     </div>
   </section>
 
+  <!-- セクション6: 反応の詳細分析 -->
+  <section class="stat-section" id="section-response-detail">
+    <h2>反応の詳細分析</h2>
+    <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向</p>
+
+    <div class="report-row">
+      <div class="report-chart-col" style="flex: 1 1 220px;">
+        <div class="chart-wrap donut">
+          <canvas id="classificationChart"></canvas>
+          <p class="empty" id="classificationEmpty" hidden>まだデータが不足しています</p>
+        </div>
+      </div>
+      <div class="report-summary-col">
+        <div id="classificationLegend"></div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">平均返信日数</div>
+          <div class="mini-stat-value accent" id="statAvgResponseDays">—</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="subsection-title">曜日別の反応率</h3>
+    <div class="chart-wrap">
+      <canvas id="weekdayChart"></canvas>
+      <p class="empty" id="weekdayEmpty" hidden>まだデータが不足しています</p>
+    </div>
+
+    <h3 class="subsection-title">時間帯別の反応率</h3>
+    <div class="chart-wrap">
+      <canvas id="hourChart"></canvas>
+      <p class="empty" id="hourEmpty" hidden>まだデータが不足しています</p>
+    </div>
+  </section>
+
 </div>
 
 <button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
@@ -387,6 +422,9 @@
   let variantChartInstance = null;
   let pipelineChartInstance = null;
   let trendChartInstance = null;
+  let classificationChartInstance = null;
+  let weekdayChartInstance = null;
+  let hourChartInstance = null;
   let lastReportData = null;
 
   function isDarkMode() {
@@ -424,6 +462,9 @@
     renderVariantSection(data.variant_performance);
     renderPipelineSection(data.pipeline_value);
     renderTrendSection(data.won_lost_trend);
+    renderClassificationSection(data.classification_breakdown, data.response_time_avg_days);
+    renderWeekdaySection(data.weekday_response_rate);
+    renderHourSection(data.hour_response_rate);
     lucide.createIcons();
   }
 
@@ -623,6 +664,140 @@
         scales: {
           x: { grid: { display: false }, ticks: { color: textColor } },
           y: { beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  // ===== セクション6: 反応の詳細分析 =====
+  function renderClassificationSection(breakdown, avgResponseDays) {
+    const stats = breakdown || { interested: 0, question: 0, declined: 0, other: 0 };
+    const total = stats.interested + stats.question + stats.declined + stats.other;
+
+    const canvas  = document.getElementById("classificationChart");
+    const emptyEl = document.getElementById("classificationEmpty");
+    const legend  = document.getElementById("classificationLegend");
+    const avgEl   = document.getElementById("statAvgResponseDays");
+
+    if (classificationChartInstance) { classificationChartInstance.destroy(); classificationChartInstance = null; }
+
+    if (total === 0) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      legend.innerHTML = "";
+      avgEl.textContent = "—";
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+    avgEl.textContent = `${Number(avgResponseDays || 0).toFixed(1)}日`;
+
+    const labels = ["興味あり", "質問", "お断り", "その他"];
+    const values = [stats.interested, stats.question, stats.declined, stats.other];
+    const colors = ["#44B13F", "#3b82f6", "#dc2626", "#94a3b8"];
+
+    classificationChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    const pct = n => total > 0 ? Math.round(n / total * 100) : 0;
+    legend.innerHTML = `
+      <div class="donut-legend">
+        ${labels.map((label, i) => `
+          <div class="donut-legend-item">
+            <span class="donut-legend-dot" style="background:${colors[i]}"></span>
+            <span>${label}</span>
+            <span class="donut-legend-count">${values[i]}件<span class="donut-legend-pct">(${pct(values[i])}%)</span></span>
+          </div>`).join("")}
+      </div>`;
+  }
+
+  function renderWeekdaySection(weekdayData) {
+    const stats = weekdayData || [];
+    const totalSends = stats.reduce((s, r) => s + r.send_count, 0);
+    const canvas  = document.getElementById("weekdayChart");
+    const emptyEl = document.getElementById("weekdayEmpty");
+
+    if (weekdayChartInstance) { weekdayChartInstance.destroy(); weekdayChartInstance = null; }
+
+    if (totalSends === 0) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    weekdayChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => r.weekday),
+        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: "#44B13F", borderRadius: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => {
+            const r = stats[ctx.dataIndex];
+            return `反応率 ${r.rate}%（送信${r.send_count}件中${r.response_count}件）`;
+          } } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: v => v + "%" }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  function renderHourSection(hourData) {
+    const stats = hourData || [];
+    const totalSends = stats.reduce((s, r) => s + r.send_count, 0);
+    const canvas  = document.getElementById("hourChart");
+    const emptyEl = document.getElementById("hourEmpty");
+
+    if (hourChartInstance) { hourChartInstance.destroy(); hourChartInstance = null; }
+
+    if (totalSends === 0) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    hourChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => r.hour_range),
+        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: "#44B13F", borderRadius: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => {
+            const r = stats[ctx.dataIndex];
+            return `反応率 ${r.rate}%（送信${r.send_count}件中${r.response_count}件）`;
+          } } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: v => v + "%" }, grid: { color: gridColor } },
         },
       },
     });

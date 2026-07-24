@@ -588,6 +588,16 @@ function last6Months() {
   return months;
 }
 
+// 月曜始まり・日曜終わりの日本語曜日ラベル(PostgresのEXTRACT(DOW)は日曜=0〜土曜=6)
+const WEEKDAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
+
+const HOUR_BUCKETS = [
+  { label: "午前(6-12時)",  start: 6,  end: 12 },
+  { label: "午後(12-18時)", start: 12, end: 18 },
+  { label: "夜(18-24時)",   start: 18, end: 24 },
+  { label: "深夜(0-6時)",   start: 0,  end: 6 },
+];
+
 async function handleReports(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETのみ対応しています" });
@@ -665,6 +675,69 @@ async function handleReports(req, res) {
       lost: trendMap[month]?.lost || 0,
     }));
 
+    // 分類別内訳
+    const classificationRows = await sql`
+      SELECT classification, COUNT(*)::int AS count
+      FROM responses
+      GROUP BY classification
+    `;
+    const classification_breakdown = { interested: 0, question: 0, declined: 0, other: 0 };
+    classificationRows.forEach(r => {
+      const key = ["interested", "question", "declined"].includes(r.classification) ? r.classification : "other";
+      classification_breakdown[key] += r.count;
+    });
+
+    // 送信〜返信までの平均日数
+    const [{ avg_days }] = await sql`
+      SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+      FROM responses r
+      JOIN send_logs sl ON sl.id = r.send_log_id
+    `;
+    const response_time_avg_days = avg_days != null ? Math.round(Number(avg_days) * 10) / 10 : 0;
+
+    // 曜日別反応率(送信日時基準、日本時間)
+    const weekdayRows = await sql`
+      SELECT
+        EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
+        COUNT(DISTINCT sl.id)::int                                    AS send_count,
+        COUNT(DISTINCT r.id)::int                                     AS response_count
+      FROM send_logs sl
+      LEFT JOIN responses r ON r.send_log_id = sl.id
+      GROUP BY 1
+    `;
+    const weekdayMap = {};
+    weekdayRows.forEach(r => { weekdayMap[r.dow] = r; });
+    const weekday_response_rate = WEEKDAY_LABELS.map((label, i) => {
+      const dow = (i + 1) % 7; // index0(月)→dow1 … index6(日)→dow0
+      const row = weekdayMap[dow];
+      const send_count = row?.send_count || 0;
+      const response_count = row?.response_count || 0;
+      const rate = send_count > 0 ? Math.round((response_count / send_count) * 1000) / 10 : 0;
+      return { weekday: label, send_count, response_count, rate };
+    });
+
+    // 時間帯別反応率(送信日時基準、日本時間)
+    const hourRows = await sql`
+      SELECT
+        EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
+        COUNT(DISTINCT sl.id)::int                                     AS send_count,
+        COUNT(DISTINCT r.id)::int                                      AS response_count
+      FROM send_logs sl
+      LEFT JOIN responses r ON r.send_log_id = sl.id
+      GROUP BY 1
+    `;
+    const hour_response_rate = HOUR_BUCKETS.map(b => {
+      let send_count = 0, response_count = 0;
+      hourRows.forEach(r => {
+        if (r.hour >= b.start && r.hour < b.end) {
+          send_count += r.send_count;
+          response_count += r.response_count;
+        }
+      });
+      const rate = send_count > 0 ? Math.round((response_count / send_count) * 1000) / 10 : 0;
+      return { hour_range: b.label, send_count, response_count, rate };
+    });
+
     return res.status(200).json({
       monthly_sends,
       monthly_responses,
@@ -672,6 +745,10 @@ async function handleReports(req, res) {
       variant_performance,
       pipeline_value,
       won_lost_trend,
+      classification_breakdown,
+      response_time_avg_days,
+      weekday_response_rate,
+      hour_response_rate,
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
