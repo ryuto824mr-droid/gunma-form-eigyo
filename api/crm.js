@@ -138,6 +138,14 @@ async function handleDbSetup(req, res) {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // discovered_urlsテーブル追加（企業自動検索の重複除外用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS discovered_urls (
+        id            SERIAL PRIMARY KEY,
+        url_hostname  TEXT NOT NULL UNIQUE,
+        discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });

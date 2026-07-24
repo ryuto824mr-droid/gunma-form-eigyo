@@ -46,6 +46,8 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "industry, prefecture, city, keyword, size, listing, founding_age, revenue, hiring のいずれかが必要です" });
   }
 
+  const resultCount = resolveResultCount(body.result_count);
+
   const braveKey = process.env.BRAVE_SEARCH_API_KEY;
   if (!braveKey) {
     return res.status(200).json({
@@ -64,22 +66,31 @@ module.exports = async function handler(req, res) {
 
   try {
     // 1. Brave検索 → ブラックリスト除外 → ホスト名重複除去
-    const { results: webResults, stats: braveStats } = await searchViaBrave(params, braveKey);
+    const { results: webResults, stats: braveStats } = await searchViaBrave(params, braveKey, resultCount);
     await logApiUsage("brave_search", "web_search");
 
     // 2. AI判定フィルタ (ANTHROPIC_API_KEY未設定なら素通り)
     const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
-    const placesResults = await searchPlacesAPI(locationStr, descStr);
+    const placesResults = await searchPlacesAPI(locationStr, descStr, resultCount);
     if (placesResults.debug?.has_key) {
       await logApiUsage("google_places", "text_search");
     }
 
     // 4. マージ・ホスト名重複除去 (web優先、Placesが後ろ)
-    const merged = mergeAndDedup([...filteredResults, ...placesResults]);
+    let merged = mergeAndDedup([...filteredResults, ...placesResults]);
 
-    const payload = { configured: true, results: merged };
+    // 5. 既存企業(companies)・過去に検索結果として出したことがある企業(discovered_urls)を除外
+    const knownHostnames = await getKnownHostnames();
+    const beforeDuplicateFilterCount = merged.length;
+    merged = merged.filter(r => !knownHostnames.has(getHostname(r.url)));
+    const excludedDuplicateCount = beforeDuplicateFilterCount - merged.length;
+
+    // 6. 今回返す結果のホスト名をdiscovered_urlsに記録(次回以降の重複除外に使う)
+    await recordDiscoveredHostnames(merged.map(r => getHostname(r.url)).filter(Boolean));
+
+    const payload = { configured: true, results: merged, excluded_duplicate_count: excludedDuplicateCount };
     if (debugAuthorized) {
       payload.debug = {
         raw_count: braveStats.raw_count,
@@ -90,6 +101,7 @@ module.exports = async function handler(req, res) {
         merged_count: merged.length,
         query: braveStats.query,
         places_debug: placesResults.debug,
+        result_count_requested: resultCount,
       };
     }
     return res.status(200).json(payload);
@@ -97,6 +109,41 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ error: `検索エラー: ${err.message}` });
   }
 };
+
+// Brave/Places (Text Search New) は共に1リクエストあたりの上限が20件
+const MAX_RESULT_COUNT = 20;
+const DEFAULT_RESULT_COUNT = 20;
+
+function resolveResultCount(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_RESULT_COUNT;
+  return Math.min(n, MAX_RESULT_COUNT);
+}
+
+async function getKnownHostnames() {
+  const [companyRows, discoveredRows] = await Promise.all([
+    sql`SELECT url FROM companies`,
+    sql`SELECT url_hostname FROM discovered_urls`,
+  ]);
+  const known = new Set();
+  companyRows.forEach(r => {
+    const host = getHostname(r.url);
+    if (host) known.add(host);
+  });
+  discoveredRows.forEach(r => known.add(r.url_hostname));
+  return known;
+}
+
+async function recordDiscoveredHostnames(hostnames) {
+  if (hostnames.length === 0) return;
+  try {
+    await Promise.all(
+      hostnames.map(h => sql`INSERT INTO discovered_urls (url_hostname) VALUES (${h}) ON CONFLICT (url_hostname) DO NOTHING`)
+    );
+  } catch {
+    // 記録失敗は検索結果自体には影響させない
+  }
+}
 
 async function logApiUsage(provider, endpoint) {
   try {
@@ -186,9 +233,9 @@ function buildQuery(params) {
   return [base, wordExcludes, ...siteExcludes].join(" ");
 }
 
-async function searchViaBrave(params, apiKey) {
+async function searchViaBrave(params, apiKey, resultCount = DEFAULT_RESULT_COUNT) {
   const query = buildQuery(params);
-  const url = `${BRAVE_SEARCH_URL}?q=${encodeURIComponent(query)}&count=20`;
+  const url = `${BRAVE_SEARCH_URL}?q=${encodeURIComponent(query)}&count=${resultCount}`;
 
   const res = await fetch(url, {
     headers: {

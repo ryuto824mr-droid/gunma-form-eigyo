@@ -591,6 +591,12 @@
   .search-form-field input[type="text"]:focus {
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
+  .search-form-field select:disabled {
+    background: var(--gray-50); color: var(--gray-400); cursor: not-allowed;
+  }
+  .search-form-hint {
+    margin: 4px 0 0; font-size: 11px; color: var(--gray-400);
+  }
   .search-query-preview {
     font-size: 12px; color: var(--gray-400);
     background: var(--gray-50); border-radius: 6px;
@@ -628,6 +634,7 @@
   .discover-status { margin-top: 12px; font-size: 13px; color: var(--gray-400); }
   .discover-error  { margin-top: 12px; font-size: 13px; color: #dc2626; }
   .discover-count  { margin: 12px 0 8px; font-size: 13px; color: var(--gray-700); font-weight: 500; }
+  .discover-dup-note { font-size: 11px; color: var(--gray-400); font-weight: 400; margin-left: 6px; }
   .discover-list { list-style: none; margin: 0 0 14px; padding: 0; border: 1px solid var(--gray-200); border-radius: var(--radius-md); overflow: hidden; }
   .discover-list li { border-bottom: 1px solid var(--gray-100); }
   .discover-list li:last-child { border-bottom: none; }
@@ -921,7 +928,7 @@
       </div>
       <div class="search-form-field">
         <label for="searchPrefecture">都道府県</label>
-        <select id="searchPrefecture" onchange="updateSearchQueryPreview()">
+        <select id="searchPrefecture" onchange="updateCityOptions()">
           <option value="">都道府県を選択</option>
           <option value="北海道">北海道</option>
           <option value="青森県">青森県</option>
@@ -974,7 +981,10 @@
       </div>
       <div class="search-form-field">
         <label for="searchCity">市区町村</label>
-        <input type="text" id="searchCity" placeholder="例: 前橋市、高崎市" oninput="updateSearchQueryPreview()" />
+        <select id="searchCity" onchange="onCityChange()" disabled>
+          <option value="">都道府県を選択してください</option>
+        </select>
+        <input type="text" id="searchCityOther" placeholder="市区町村名を入力" oninput="updateSearchQueryPreview()" hidden style="margin-top:6px;" />
       </div>
       <div class="search-form-field">
         <label for="searchKeyword">キーワード</label>
@@ -1025,6 +1035,16 @@
           <option value="中途採用中">中途採用中</option>
           <option value="新卒採用中">新卒採用中</option>
         </select>
+      </div>
+      <div class="search-form-field">
+        <label for="searchResultCount">取得件数</label>
+        <select id="searchResultCount">
+          <option value="10">10社</option>
+          <option value="20" selected>20社</option>
+          <option value="30">30社</option>
+          <option value="50">50社</option>
+        </select>
+        <p class="search-form-hint">※現在は最大20件までの取得となります</p>
       </div>
     </div>
     <div class="search-query-preview" id="searchQueryPreview">検索条件を選択するとクエリプレビューが表示されます</div>
@@ -2331,19 +2351,122 @@
     "x.com", "instagram.com", "wikipedia.org", "prtimes.jp", "baitoru.com",
   ];
 
+  // 都道府県ごとの主要市区町村(関東・中部・近畿は人口上位10〜15市区町村、
+  // それ以外の地方は県庁所在地+人口上位市を簡略掲載)
+  const CITIES_BY_PREFECTURE = {
+    "北海道": ["札幌市", "旭川市", "函館市", "苫小牧市", "帯広市", "釧路市"],
+    "青森県": ["青森市", "八戸市", "弘前市", "十和田市", "五所川原市", "むつ市"],
+    "岩手県": ["盛岡市", "一関市", "奥州市", "花巻市", "北上市", "宮古市"],
+    "宮城県": ["仙台市", "石巻市", "大崎市", "名取市", "登米市", "気仙沼市"],
+    "秋田県": ["秋田市", "横手市", "大仙市", "由利本荘市", "能代市", "湯沢市"],
+    "山形県": ["山形市", "鶴岡市", "酒田市", "米沢市", "天童市", "東根市"],
+    "福島県": ["福島市", "いわき市", "郡山市", "会津若松市", "須賀川市", "二本松市"],
+    "茨城県": ["水戸市", "つくば市", "日立市", "ひたちなか市", "土浦市", "古河市", "取手市", "筑西市", "神栖市", "龍ケ崎市"],
+    "栃木県": ["宇都宮市", "小山市", "足利市", "栃木市", "佐野市", "那須塩原市", "鹿沼市", "日光市", "真岡市", "大田原市"],
+    "群馬県": ["前橋市", "高崎市", "太田市", "伊勢崎市", "桐生市", "館林市", "渋川市", "藤岡市", "富岡市", "安中市"],
+    "埼玉県": ["さいたま市", "川口市", "川越市", "越谷市", "所沢市", "春日部市", "草加市", "熊谷市", "上尾市", "新座市", "久喜市", "深谷市"],
+    "千葉県": ["千葉市", "船橋市", "松戸市", "市川市", "柏市", "市原市", "八千代市", "流山市", "習志野市", "佐倉市", "浦安市", "我孫子市"],
+    "東京都": ["新宿区", "渋谷区", "港区", "千代田区", "中央区", "世田谷区", "杉並区", "練馬区", "大田区", "江戸川区", "八王子市", "町田市"],
+    "神奈川県": ["横浜市", "川崎市", "相模原市", "藤沢市", "横須賀市", "平塚市", "厚木市", "大和市", "小田原市"],
+    "新潟県": ["新潟市", "長岡市", "上越市", "三条市", "柏崎市", "新発田市", "燕市", "村上市", "十日町市", "五泉市"],
+    "富山県": ["富山市", "高岡市", "射水市", "砺波市", "氷見市", "魚津市", "黒部市", "南砺市", "滑川市", "小矢部市"],
+    "石川県": ["金沢市", "白山市", "小松市", "加賀市", "能美市", "野々市市", "七尾市", "かほく市", "輪島市", "珠洲市"],
+    "福井県": ["福井市", "敦賀市", "越前市", "坂井市", "鯖江市", "小浜市", "大野市", "あわら市", "勝山市"],
+    "山梨県": ["甲府市", "甲斐市", "南アルプス市", "富士吉田市", "山梨市", "韮崎市", "都留市", "笛吹市", "大月市"],
+    "長野県": ["長野市", "松本市", "上田市", "佐久市", "飯田市", "伊那市", "諏訪市", "塩尻市", "安曇野市", "岡谷市"],
+    "岐阜県": ["岐阜市", "大垣市", "各務原市", "多治見市", "可児市", "関市", "中津川市", "高山市", "瑞穂市", "土岐市"],
+    "静岡県": ["浜松市", "静岡市", "富士市", "沼津市", "磐田市", "藤枝市", "焼津市", "富士宮市", "三島市", "掛川市"],
+    "愛知県": ["名古屋市", "豊田市", "岡崎市", "一宮市", "豊橋市", "春日井市", "安城市", "豊川市", "小牧市", "刈谷市", "西尾市", "江南市"],
+    "三重県": ["四日市市", "津市", "鈴鹿市", "松阪市", "桑名市", "伊勢市", "名張市", "亀山市", "志摩市"],
+    "滋賀県": ["大津市", "草津市", "長浜市", "東近江市", "彦根市", "守山市", "甲賀市", "近江八幡市", "栗東市"],
+    "京都府": ["京都市", "宇治市", "亀岡市", "城陽市", "長岡京市", "舞鶴市", "京田辺市", "福知山市", "八幡市"],
+    "大阪府": ["大阪市", "堺市", "東大阪市", "枚方市", "豊中市", "吹田市", "高槻市", "茨木市", "八尾市", "寝屋川市", "岸和田市", "富田林市"],
+    "兵庫県": ["神戸市", "姫路市", "西宮市", "尼崎市", "明石市", "加古川市", "宝塚市", "伊丹市", "川西市", "三田市", "芦屋市"],
+    "奈良県": ["奈良市", "橿原市", "生駒市", "大和郡山市", "香芝市", "天理市", "桜井市", "五條市"],
+    "和歌山県": ["和歌山市", "田辺市", "橋本市", "有田市", "御坊市", "新宮市"],
+    "鳥取県": ["鳥取市", "米子市", "倉吉市", "境港市"],
+    "島根県": ["松江市", "出雲市", "浜田市", "益田市", "大田市"],
+    "岡山県": ["岡山市", "倉敷市", "津山市", "総社市", "玉野市"],
+    "広島県": ["広島市", "福山市", "呉市", "東広島市", "尾道市", "三原市"],
+    "山口県": ["山口市", "下関市", "宇部市", "周南市", "岩国市", "防府市"],
+    "徳島県": ["徳島市", "阿南市", "鳴門市", "吉野川市", "小松島市"],
+    "香川県": ["高松市", "丸亀市", "坂出市", "善通寺市", "観音寺市"],
+    "愛媛県": ["松山市", "今治市", "新居浜市", "西条市", "宇和島市"],
+    "高知県": ["高知市", "南国市", "四万十市", "香南市", "土佐市"],
+    "福岡県": ["福岡市", "北九州市", "久留米市", "飯塚市", "大牟田市", "春日市"],
+    "佐賀県": ["佐賀市", "唐津市", "鳥栖市", "伊万里市", "武雄市"],
+    "長崎県": ["長崎市", "佐世保市", "諫早市", "大村市", "島原市"],
+    "熊本県": ["熊本市", "八代市", "天草市", "玉名市", "荒尾市"],
+    "大分県": ["大分市", "別府市", "中津市", "日田市", "佐伯市"],
+    "宮崎県": ["宮崎市", "都城市", "延岡市", "日向市", "小林市"],
+    "鹿児島県": ["鹿児島市", "霧島市", "鹿屋市", "薩摩川内市", "姶良市"],
+    "沖縄県": ["那覇市", "沖縄市", "うるま市", "浦添市", "宜野湾市"],
+  };
+
+  const CITY_OTHER_VALUE = "__other__";
+
+  function updateCityOptions() {
+    const prefecture = document.getElementById("searchPrefecture").value;
+    const citySelect = document.getElementById("searchCity");
+    const cityOther  = document.getElementById("searchCityOther");
+    if (!citySelect) return;
+
+    if (!prefecture) {
+      citySelect.innerHTML = '<option value="">都道府県を選択してください</option>';
+      citySelect.disabled = true;
+      cityOther.hidden = true;
+      cityOther.value = "";
+      updateSearchQueryPreview();
+      return;
+    }
+
+    const cities = CITIES_BY_PREFECTURE[prefecture] || [];
+    const options = ['<option value="">市区町村を選択</option>']
+      .concat(cities.map(c => `<option value="${esc(c)}">${esc(c)}</option>`))
+      .concat([`<option value="${CITY_OTHER_VALUE}">その他（手入力）</option>`]);
+    citySelect.innerHTML = options.join("");
+    citySelect.disabled = false;
+    cityOther.hidden = true;
+    cityOther.value = "";
+    updateSearchQueryPreview();
+  }
+
+  function onCityChange() {
+    const citySelect = document.getElementById("searchCity");
+    const cityOther  = document.getElementById("searchCityOther");
+    if (citySelect.value === CITY_OTHER_VALUE) {
+      cityOther.hidden = false;
+      cityOther.focus();
+    } else {
+      cityOther.hidden = true;
+      cityOther.value = "";
+    }
+    updateSearchQueryPreview();
+  }
+
+  function getSelectedCity() {
+    const citySelect = document.getElementById("searchCity");
+    if (!citySelect) return "";
+    if (citySelect.value === CITY_OTHER_VALUE) {
+      return document.getElementById("searchCityOther").value.trim();
+    }
+    return citySelect.value;
+  }
+
   let lastSearchAutoTags = [];
 
   function getSearchParams() {
     return {
       industry:     document.getElementById("searchIndustry").value,
       prefecture:   document.getElementById("searchPrefecture").value,
-      city:         document.getElementById("searchCity").value.trim(),
+      city:         getSelectedCity(),
       keyword:      document.getElementById("searchKeyword").value.trim(),
       size:         document.getElementById("searchSize").value,
       listing:      document.getElementById("searchListing").value,
       founding_age: document.getElementById("searchFoundingAge").value,
       revenue:      document.getElementById("searchRevenue").value,
       hiring:       document.getElementById("searchHiring").value,
+      result_count: parseInt(document.getElementById("searchResultCount")?.value, 10) || 20,
     };
   }
 
@@ -2396,13 +2519,15 @@
   function clearSearchForm() {
     document.getElementById("searchIndustry").value = "";
     document.getElementById("searchPrefecture").value = "";
-    document.getElementById("searchCity").value = "";
+    updateCityOptions();
     document.getElementById("searchKeyword").value = "";
     document.getElementById("searchSize").value = "";
     document.getElementById("searchListing").value = "";
     document.getElementById("searchFoundingAge").value = "";
     document.getElementById("searchRevenue").value = "";
     document.getElementById("searchHiring").value = "";
+    const resultCountEl = document.getElementById("searchResultCount");
+    if (resultCountEl) resultCountEl.value = "20";
     updateSearchQueryPreview();
   }
 
@@ -2426,7 +2551,13 @@
       const data = await res.json();
       if (!res.ok) { resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`; return; }
       if (!data.configured) { resultEl.innerHTML = `<p class="discover-unconfigured">Brave Search APIキーの設定が必要です。</p>`; return; }
-      if (!data.results || data.results.length === 0) { resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。</p>`; return; }
+      if (!data.results || data.results.length === 0) {
+        const dupMsg = data.excluded_duplicate_count > 0
+          ? `（候補${data.excluded_duplicate_count}件は既存企業または過去の検索結果と重複のため除外されました）`
+          : "";
+        resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。${esc(dupMsg)}</p>`;
+        return;
+      }
 
       const tagsPreviewHtml = lastSearchAutoTags.length > 0
         ? `<div class="auto-tags-preview"><span style="font-size:12px;color:var(--gray-400)">検索条件タグ:</span>${lastSearchAutoTags.map(t => `<span class="company-tag-pill">${esc(t)}</span>`).join("")}</div>`
@@ -2436,8 +2567,12 @@
         ? variants.map(v => `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`).join("")
         : '<option value="">バリアントがありません</option>';
 
+      const dupNoteHtml = data.excluded_duplicate_count > 0
+        ? `<span class="discover-dup-note">(${data.excluded_duplicate_count}件が重複のため除外されました)</span>`
+        : "";
+
       resultEl.innerHTML = `
-        <p class="discover-count">${data.results.length}件見つかりました</p>
+        <p class="discover-count">${data.results.length}件見つかりました${dupNoteHtml}</p>
         ${tagsPreviewHtml}
         <div class="search-send-controls">
           <div class="search-form-field">
