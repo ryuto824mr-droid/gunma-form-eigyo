@@ -83,14 +83,11 @@ module.exports = async function handler(req, res) {
     // 4. マージ・ホスト名重複除去 (web優先、Placesが後ろ)
     let merged = mergeAndDedup([...filteredResults, ...placesResults]);
 
-    // 5. 既存企業(companies)・過去に検索結果として出したことがある企業(discovered_urls)を除外
+    // 5. 既に登録済みの企業(companies)を除外
     const knownHostnames = await getKnownHostnames();
     const beforeDuplicateFilterCount = merged.length;
     merged = merged.filter(r => !knownHostnames.has(getHostname(r.url)));
     const excludedDuplicateCount = beforeDuplicateFilterCount - merged.length;
-
-    // 6. 今回返す結果のホスト名をdiscovered_urlsに記録(次回以降の重複除外に使う)
-    await recordDiscoveredHostnames(merged.map(r => getHostname(r.url)).filter(Boolean));
 
     const payload = { configured: true, results: merged, excluded_duplicate_count: excludedDuplicateCount };
     if (debugAuthorized) {
@@ -123,28 +120,13 @@ function resolveResultCount(value) {
 }
 
 async function getKnownHostnames() {
-  const [companyRows, discoveredRows] = await Promise.all([
-    sql`SELECT url FROM companies`,
-    sql`SELECT url_hostname FROM discovered_urls`,
-  ]);
+  const companyRows = await sql`SELECT url FROM companies`;
   const known = new Set();
   companyRows.forEach(r => {
     const host = getHostname(r.url);
     if (host) known.add(host);
   });
-  discoveredRows.forEach(r => known.add(r.url_hostname));
   return known;
-}
-
-async function recordDiscoveredHostnames(hostnames) {
-  if (hostnames.length === 0) return;
-  try {
-    await Promise.all(
-      hostnames.map(h => sql`INSERT INTO discovered_urls (url_hostname) VALUES (${h}) ON CONFLICT (url_hostname) DO NOTHING`)
-    );
-  } catch {
-    // 記録失敗は検索結果自体には影響させない
-  }
 }
 
 async function logApiUsage(provider, endpoint) {
