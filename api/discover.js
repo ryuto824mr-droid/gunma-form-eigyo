@@ -17,10 +17,12 @@ const EXCLUDE_DOMAINS = [
   "jobhouse.jp", "randstad.co.jp", "salesforce-sites.com",
   "xn--pckua2a7gp15o89zb.com", // 求人ボックス
   "stanby.com",
+  "map.yahoo.co.jp", "fudosan-career.net",
+  "maps.google.com", "map.baidu.com", "mapfan.com", "mapion.co.jp",
 ];
 
-// URLのパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
-const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou"];
+// URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
+const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -185,11 +187,18 @@ function getExclusionReason(url) {
 
   let pathname = "";
   try {
-    pathname = new URL(url).pathname.toLowerCase();
+    pathname = new URL(url).pathname;
   } catch {
-    pathname = url.toLowerCase();
+    pathname = url;
   }
-  if (EXCLUDE_PATH_KEYWORDS.some(k => pathname.includes(k))) return "path_match";
+  try {
+    // 日本語パス等はパーセントエンコードされているためデコードしてから比較する
+    pathname = decodeURIComponent(pathname);
+  } catch {
+    // 不正なパーセントエンコーディングはデコードせずそのまま使う
+  }
+  const hostAndPath = `${host.toLowerCase()}${pathname.toLowerCase()}`;
+  if (EXCLUDE_PATH_KEYWORDS.some(k => hostAndPath.includes(k))) return "path_match";
 
   return null;
 }
