@@ -24,13 +24,13 @@
     --gray-400: #94a3b8;  --gray-500: #64748b;
     --gray-700: #334155;  --gray-900: #0f172a;
     --white: #ffffff;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -1px rgba(0,0,0,0.04);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
-  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
 
   @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(16px); }
@@ -45,7 +45,7 @@
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
   .page-header h1 {
-    margin: 0; font-size: 15px; font-weight: 700; color: var(--white);
+    margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
   }
   .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
@@ -63,14 +63,14 @@
 
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
-  .reports-header { margin-bottom: 20px; }
-  .reports-header h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px; color: var(--gray-900); }
+  .reports-header { margin-bottom: 26px; }
+  .reports-header h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; color: var(--gray-900); }
   .reports-header p { font-size: 13px; color: var(--gray-500); margin: 0; }
 
   .stat-section {
-    background: var(--white); border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg); padding: 24px;
-    margin-bottom: 20px; box-shadow: var(--shadow-sm);
+    background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 28px;
+    margin-bottom: 26px; box-shadow: var(--shadow-sm);
   }
   .stat-section h2 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
   .stat-section .section-sub { font-size: 12px; color: var(--gray-400); margin: 0 0 18px; }
@@ -101,9 +101,9 @@
     background: var(--gray-50); text-align: left; padding: 10px 14px;
     font-size: 11px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.05em; color: var(--gray-500);
-    border-bottom: 2px solid var(--gray-200); white-space: nowrap;
+    border-bottom: 1px solid var(--gray-200); white-space: nowrap;
   }
-  td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  td { padding: 14px 14px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
   th.r, td.r { text-align: right; }
   tr:hover td { background: var(--green-50); transition: background 100ms ease; }
   .rate-hi { color: var(--green-700); font-weight: 600; }
@@ -208,13 +208,13 @@
   .toast {
     display: flex; align-items: flex-start; gap: 10px;
     padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
-    font-size: 13px; line-height: 1.5; animation: slideInRight 0.3s ease;
+    font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
     pointer-events: auto;
   }
   .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
   .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
   .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
-  .toast.info    { background: #eff6ff; border: 1px solid #93c5fd; color: #1d4ed8; }
+  .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
   .toast-icon { flex-shrink: 0; font-size: 15px; }
   .toast-body { flex: 1; }
   .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
@@ -238,8 +238,8 @@
       --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
       --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
       --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-      --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
       --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
     }
     body { background: #0f172a; }
@@ -253,8 +253,8 @@
     --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
     --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
     --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
     --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
   }
   html.dark body { background: #0f172a; }
@@ -517,7 +517,7 @@
       type: "doughnut",
       data: {
         labels: ["フォーム", "メール"],
-        datasets: [{ data: [stats.form, stats.email], backgroundColor: ["#44B13F", "#3b82f6"], borderWidth: 0 }],
+        datasets: [{ data: [stats.form, stats.email], backgroundColor: ["#44B13F", "#94a3b8"], borderWidth: 0 }],
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -535,7 +535,7 @@
           <span class="donut-legend-count">${stats.form}件<span class="donut-legend-pct">(${pct(stats.form)}%)</span></span>
         </div>
         <div class="donut-legend-item">
-          <span class="donut-legend-dot" style="background:#3b82f6"></span>
+          <span class="donut-legend-dot" style="background:#94a3b8"></span>
           <span>メール</span>
           <span class="donut-legend-count">${stats.email}件<span class="donut-legend-pct">(${pct(stats.email)}%)</span></span>
         </div>
@@ -694,7 +694,7 @@
 
     const labels = ["興味あり", "質問", "お断り", "その他"];
     const values = [stats.interested, stats.question, stats.declined, stats.other];
-    const colors = ["#44B13F", "#3b82f6", "#dc2626", "#94a3b8"];
+    const colors = ["#44B13F", "#64748b", "#dc2626", "#94a3b8"];
 
     classificationChartInstance = new Chart(canvas.getContext("2d"), {
       type: "doughnut",
