@@ -138,6 +138,17 @@
   }
   .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
 
+  .usage-reminder {
+    background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);
+    padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #92400e;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .usage-reminder a { color: #92400e; font-weight: 600; text-decoration: underline; }
+  .usage-reminder button {
+    margin-left: auto; padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;
+  }
+
   /* Follow-up dashboard */
   .followup-section {
     background: var(--white); border: 1px solid var(--gray-200);
@@ -388,6 +399,14 @@
       </a>
     </div>
   </section>
+
+  <div class="usage-reminder" id="usageReminder" hidden>
+    📅 月末が近づいています。Brave/Google Cloudの公式ダッシュボードで
+    実際の利用回数を確認して、アプリ内の表示と一致しているか確認しましょう。
+    <a href="https://api.search.brave.com" target="_blank">Brave確認</a> /
+    <a href="https://console.cloud.google.com/apis/dashboard?project=gunma-saas" target="_blank">Google Places確認</a>
+    <button onclick="dismissUsageReminder()">今月は確認済み ✓</button>
+  </div>
 
   <div class="summary-cards">
     <div class="summary-card">
@@ -742,6 +761,35 @@
 
   lucide.createIcons();
   loadStats();
+  checkUsageReminder();
+
+  function usageConfirmedKey() {
+    const now = new Date();
+    return `usage_confirmed_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function checkUsageReminder() {
+    const banner = document.getElementById("usageReminder");
+    if (!banner) return;
+    const now = new Date();
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysRemaining = lastDayOfMonth - now.getDate();
+    if (daysRemaining > 3) return;
+
+    try {
+      if (localStorage.getItem(usageConfirmedKey())) return;
+    } catch {}
+
+    banner.hidden = false;
+  }
+
+  function dismissUsageReminder() {
+    try {
+      localStorage.setItem(usageConfirmedKey(), "1");
+    } catch {}
+    const banner = document.getElementById("usageReminder");
+    if (banner) banner.hidden = true;
+  }
 </script>
 </body>
 </html>
