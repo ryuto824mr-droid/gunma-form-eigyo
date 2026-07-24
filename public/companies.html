@@ -87,13 +87,40 @@
   .summary-item strong { color: var(--green-700); font-size: 18px; font-weight: 700; display: block; }
   .summary-item span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--gray-400); }
 
-  .api-usage-bar {
-    display: flex; gap: 16px; flex-wrap: wrap;
-    font-size: 11px; color: var(--gray-400);
-    margin-bottom: 8px; padding: 0 4px;
+  .usage-cards {
+    display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
   }
-  .api-usage-item { display: inline-flex; align-items: center; gap: 4px; }
-  .api-usage-item.warn { color: #c2410c; font-weight: 600; }
+  .usage-card {
+    flex: 1; min-width: 200px;
+    background: var(--white); border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .usage-card-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    font-size: 13px; font-weight: 600; color: var(--gray-700);
+  }
+  .usage-card-count {
+    font-size: 28px; font-weight: 700; color: var(--gray-900);
+    margin-bottom: 8px;
+  }
+  .usage-card-count .unit { font-size: 13px; font-weight: 400; color: var(--gray-400); margin-left: 4px; }
+  .usage-bar-track {
+    width: 100%; height: 8px; background: var(--gray-100);
+    border-radius: 999px; overflow: hidden; margin-bottom: 8px;
+  }
+  .usage-bar-fill {
+    height: 100%; border-radius: 999px; transition: width 300ms ease, background 300ms ease;
+  }
+  .usage-bar-fill.green  { background: #22c55e; }
+  .usage-bar-fill.yellow { background: #eab308; }
+  .usage-bar-fill.orange { background: #f97316; }
+  .usage-bar-fill.red    { background: #dc2626; }
+  .usage-card-meta {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--gray-400);
+  }
+  .usage-card-cost { color: #dc2626; font-weight: 600; }
 
   /* Sections */
   .add-section, .import-section, .discover-section {
@@ -850,7 +877,7 @@
 
   <div class="summary-bar" id="summaryBar" hidden></div>
 
-  <div class="api-usage-bar" id="apiUsageBar" hidden></div>
+  <div class="usage-cards" id="apiUsageCards" hidden></div>
 
   <section class="discover-section">
     <h2>企業を自動検索</h2>
@@ -1191,32 +1218,68 @@
   loadVariantsList();
   loadApiUsage();
 
+  // バックエンド(api/crm.js)のGOOGLE_PLACES_FREE_CALLSと同じ概算値(表示用の「あとN回」計算にのみ使用)
+  const GOOGLE_PLACES_FREE_CALLS_APPROX = 6250;
+
+  function usageBarClass(pct) {
+    if (pct > 100) return "red";
+    if (pct >= 80) return "orange";
+    if (pct >= 60) return "yellow";
+    return "green";
+  }
+
+  function usageCardHtml({ icon, label, count, freeLimit, percentage, estimatedCostJpy, daysUntilReset }) {
+    const pct = Math.max(0, percentage || 0);
+    const barClass = usageBarClass(pct);
+    const barWidth = Math.min(pct, 100);
+    const remainingText = freeLimit != null
+      ? (freeLimit - count > 0 ? `あと${freeLimit - count}回まで無料` : "無料枠を超えています")
+      : "";
+    const costHtml = estimatedCostJpy > 0
+      ? `<div class="usage-card-cost">推定 ¥${estimatedCostJpy.toLocaleString()}</div>`
+      : "";
+    return `
+      <div class="usage-card">
+        <div class="usage-card-header">${icon} ${label}</div>
+        <div class="usage-card-count">${count}<span class="unit">回</span></div>
+        <div class="usage-bar-track">
+          <div class="usage-bar-fill ${barClass}" style="width:${barWidth}%"></div>
+        </div>
+        <div class="usage-card-meta">
+          <span>${esc(remainingText)}</span>
+          <span>リセットまであと${daysUntilReset}日</span>
+        </div>
+        ${costHtml}
+      </div>
+    `;
+  }
+
   async function loadApiUsage() {
-    const bar = document.getElementById("apiUsageBar");
-    if (!bar) return;
+    const container = document.getElementById("apiUsageCards");
+    if (!container) return;
     try {
       const res = await fetch("/api/crm?action=api-usage");
       if (!res.ok) return;
       const data = await res.json();
 
-      const brave  = data.brave_search  || { count: 0, free_limit: 1000, estimated_cost_jpy: 0 };
-      const places = data.google_places || { count: 0, free_limit: null, estimated_cost_jpy: 0 };
+      const brave  = data.brave_search  || { count: 0, free_limit: 1000, estimated_cost_jpy: 0, percentage: 0 };
+      const places = data.google_places || { count: 0, free_limit: null, estimated_cost_jpy: 0, percentage: 0 };
+      const daysUntilReset = data.days_until_reset ?? 0;
 
-      const braveWarn = brave.free_limit ? (brave.count / brave.free_limit) >= 0.8 : false;
-      const braveStatusText = brave.count > brave.free_limit
-        ? `有料（推定¥${brave.estimated_cost_jpy.toLocaleString()}）`
-        : "無料枠内";
-
-      const placesWarn = places.estimated_cost_jpy > 0;
-      const placesStatusText = placesWarn
-        ? `推定¥${places.estimated_cost_jpy.toLocaleString()}`
-        : "無料クレジット内";
-
-      bar.innerHTML = `
-        <span class="api-usage-item${braveWarn ? " warn" : ""}">Brave Search: ${brave.count}回 / ${brave.free_limit}回（${braveStatusText}）</span>
-        <span class="api-usage-item${placesWarn ? " warn" : ""}">Google Places: ${places.count}回（${placesStatusText}）</span>
-      `;
-      bar.hidden = false;
+      container.innerHTML =
+        usageCardHtml({
+          icon: "🦁", label: "Brave Search",
+          count: brave.count, freeLimit: brave.free_limit,
+          percentage: brave.percentage, estimatedCostJpy: brave.estimated_cost_jpy,
+          daysUntilReset,
+        }) +
+        usageCardHtml({
+          icon: "📍", label: "Google Places",
+          count: places.count, freeLimit: GOOGLE_PLACES_FREE_CALLS_APPROX,
+          percentage: places.percentage, estimatedCostJpy: places.estimated_cost_jpy,
+          daysUntilReset,
+        });
+      container.hidden = false;
     } catch {
       // 利用量表示の失敗は本体機能に影響させない
     }

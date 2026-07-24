@@ -831,6 +831,17 @@ function placesEstimatedCostJpy(count) {
   return Math.round((count - GOOGLE_PLACES_FREE_CALLS) * GOOGLE_PLACES_COST_PER_CALL_JPY);
 }
 
+function percentageOf(count, limit) {
+  if (!limit) return 0;
+  return Math.round((count / limit) * 100);
+}
+
+function daysUntilMonthEnd() {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return Math.ceil((nextMonth - now) / (1000 * 60 * 60 * 24));
+}
+
 async function handleApiUsage(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETのみ対応しています" });
@@ -854,12 +865,15 @@ async function handleApiUsage(req, res) {
         count: braveCount,
         free_limit: BRAVE_FREE_LIMIT,
         estimated_cost_jpy: braveEstimatedCostJpy(braveCount),
+        percentage: percentageOf(braveCount, BRAVE_FREE_LIMIT),
       },
       google_places: {
         count: placesCount,
         free_limit: null,
         estimated_cost_jpy: placesEstimatedCostJpy(placesCount),
+        percentage: percentageOf(placesCount, GOOGLE_PLACES_FREE_CALLS),
       },
+      days_until_reset: daysUntilMonthEnd(),
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
