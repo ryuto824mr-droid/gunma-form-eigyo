@@ -21,7 +21,23 @@ const EXCLUDE_DOMAINS = [
   "maps.google.com", "map.baidu.com", "mapfan.com", "mapion.co.jp",
   "staffservice.co.jp", "carrikatu-it.com", "o-hara.ac.jp", "chuo.ac.jp",
   "yamada-denki.jp", "biccamera.com", "u-phone.net", "asuka-hu.co.jp", "81100.jp",
+  "aboutnet.biz", "lifeservice-gunma.jp", "central-s.co.jp", "hatarakunavi.net",
+  "ws-gp.com", "sss-gp.com", "sougo-career.jp", "gunso-staff.co.jp",
+  "hirayamastaff.co.jp", "jsite.mhlw.go.jp", "lafio.jp",
 ];
+
+// 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
+const NOISE_NAME_KEYWORDS = [
+  "スタッフサービス", "スタッフ株式会社", "人材", "派遣", "キャリアオプション",
+  "ハローワーク", "hellowork", "job", "求人", "採用サポート", "就労移行支援",
+  "ワークス", "はたらく", "hatarakunavi", "求人ワーク",
+];
+
+function isNoisyName(rawName) {
+  if (!rawName) return false;
+  const name = rawName.toLowerCase();
+  return NOISE_NAME_KEYWORDS.some(k => name.includes(k.toLowerCase()));
+}
 
 // URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
 const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
@@ -247,13 +263,17 @@ async function searchViaBrave(params, apiKey, resultCount = DEFAULT_RESULT_COUNT
   const webResults = data.web?.results || [];
 
   // ブラックリスト除外 + ホスト名重複除去
-  const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, other: 0 };
+  const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, name_match: 0, other: 0 };
   const seen = new Set();
   const results = [];
   for (const r of webResults) {
     const reason = getExclusionReason(r.url);
     if (reason) {
       excludedReasons[reason]++;
+      continue;
+    }
+    if (isNoisyName(r.title)) {
+      excludedReasons.name_match++;
       continue;
     }
     const host = getHostname(r.url);
