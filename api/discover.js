@@ -24,6 +24,10 @@ const EXCLUDE_DOMAINS = [
   "aboutnet.biz", "lifeservice-gunma.jp", "central-s.co.jp", "hatarakunavi.net",
   "ws-gp.com", "sss-gp.com", "sougo-career.jp", "gunso-staff.co.jp",
   "hirayamastaff.co.jp", "jsite.mhlw.go.jp", "lafio.jp",
+  "gsn.ed.jp", "ed.jp", // ed.jp: 日本の学校・教育委員会専用ドメイン
+  "city.takasaki.gunma.jp", "city.fujioka.gunma.jp", "city.tomioka.lg.jp",
+  "sites.google.com",
+  "lg.jp", // 地方公共団体専用ドメイン
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -31,6 +35,8 @@ const NOISE_NAME_KEYWORDS = [
   "スタッフサービス", "スタッフ株式会社", "人材", "派遣", "キャリアオプション",
   "ハローワーク", "hellowork", "job", "求人", "採用サポート", "就労移行支援",
   "ワークス", "はたらく", "hatarakunavi", "求人ワーク",
+  "教育センター", "教育委員会", "特別支援学校", "生涯学習センター",
+  "市役所", "県庁", "保健所", "児童相談所",
 ];
 
 function isNoisyName(rawName) {
