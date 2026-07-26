@@ -19,6 +19,8 @@ const EXCLUDE_DOMAINS = [
   "stanby.com",
   "map.yahoo.co.jp", "fudosan-career.net",
   "maps.google.com", "map.baidu.com", "mapfan.com", "mapion.co.jp",
+  "staffservice.co.jp", "carrikatu-it.com", "o-hara.ac.jp", "chuo.ac.jp",
+  "yamada-denki.jp", "biccamera.com", "u-phone.net", "asuka-hu.co.jp", "81100.jp",
 ];
 
 // URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
@@ -75,7 +77,7 @@ module.exports = async function handler(req, res) {
     const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
-    const placesResults = await searchPlacesAPI(locationStr, descStr, resultCount);
+    const placesResults = await searchPlacesAPI(locationStr, descStr, resultCount, params.industry);
     if (placesResults.debug?.has_key) {
       await logApiUsage("google_places", "text_search");
     }
