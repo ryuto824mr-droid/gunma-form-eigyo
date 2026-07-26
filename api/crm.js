@@ -25,8 +25,9 @@ module.exports = async function handler(req, res) {
     case "ab-test-stats":    return handleAbTestStats(req, res);
     case "api-usage":         return handleApiUsage(req, res);
     case "attachments":       return handleAttachments(req, res);
+    case "company-clusters": return handleCompanyClusters(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters）を指定してください" });
   }
 };
 
@@ -1057,4 +1058,69 @@ async function handleAttachments(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / DELETE のみ対応しています" });
+}
+
+// ==================== company-clusters ====================
+
+// company_tagsの中から "prefix:値" 形式のタグの値を取り出す(最初に見つかったもの)
+function extractTagValue(tags, prefix) {
+  const target = `${prefix}:`;
+  const tag = tags.find(t => typeof t === "string" && t.startsWith(target));
+  return tag ? tag.slice(target.length).trim() : null;
+}
+
+async function handleCompanyClusters(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    const companies = await sql`
+      SELECT id, company_tags, priority, email, research_result
+      FROM companies
+      WHERE archived = FALSE
+        AND company_tags IS NOT NULL
+        AND jsonb_array_length(company_tags) > 0
+    `;
+
+    const groups = {};
+    for (const c of companies) {
+      const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
+      const industry = extractTagValue(tags, "業種");
+      const region   = extractTagValue(tags, "地域");
+      if (!industry || !region) continue;
+
+      const key = `${industry} ${region}`;
+      if (!groups[key]) {
+        groups[key] = {
+          industry, region,
+          company_ids: [],
+          automatable_count: 0,
+          email_count: 0,
+          priority_sum: 0,
+        };
+      }
+      const g = groups[key];
+      g.company_ids.push(c.id);
+      if (c.research_result?.automatable === true) g.automatable_count++;
+      if (c.email) g.email_count++;
+      g.priority_sum += (c.priority || 0);
+    }
+
+    const clusters = Object.values(groups)
+      .filter(g => g.company_ids.length >= 2)
+      .map(g => ({
+        industry: g.industry,
+        region: g.region,
+        company_count: g.company_ids.length,
+        automatable_count: g.automatable_count,
+        email_count: g.email_count,
+        avg_priority: Math.round((g.priority_sum / g.company_ids.length) * 10) / 10,
+        company_ids: g.company_ids,
+      }))
+      .sort((a, b) => b.company_count - a.company_count);
+
+    return res.status(200).json({ clusters });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
 }

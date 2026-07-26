@@ -290,6 +290,35 @@
   }
   .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
 
+  .companyids-filter-notice {
+    font-size: 12px; color: var(--gray-500);
+    background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+    padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .companyids-filter-notice strong { color: var(--gray-900); }
+
+  /* グループ表示 */
+  .cluster-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px; margin: 20px; margin-top: 16px;
+  }
+  .cluster-card {
+    background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .cluster-card-title { font-size: 15px; font-weight: 600; color: var(--gray-900); margin-bottom: 12px; }
+  .cluster-card-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cluster-stat-badge {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px;
+    background: var(--gray-50); color: var(--gray-500);
+  }
+  .cluster-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cluster-empty {
+    margin: 20px; padding: 40px 20px; text-align: center;
+    color: var(--gray-400); font-size: 13px;
+  }
+
   /* Priority column */
   th.th-priority { cursor: pointer; user-select: none; }
   th.th-priority:hover { color: var(--gray-700); }
@@ -1106,6 +1135,10 @@
         <button class="btn-bulk-send-open" id="bulkSendOpenBtn" onclick="openBulkSendModal()">一括送信</button>
         <span class="tooltip-text">複数企業へまとめて送信・予約登録します</span>
       </span>
+      <span class="tooltip-wrap">
+        <button class="btn-bulk-send-open" id="groupViewToggleBtn" onclick="toggleGroupView()">グループで見る</button>
+        <span class="tooltip-text">業種×地域タグでグループ化して表示します</span>
+      </span>
       <span class="bulk-progress" id="bulkProgress"></span>
     </div>
     <div class="bulk-progress-panel" id="bulkProgressPanel" hidden>
@@ -1113,6 +1146,15 @@
       <ul class="bulk-result-list" id="bulkResultList"></ul>
       <p class="bulk-summary" id="bulkSummary" hidden></p>
     </div>
+    <div class="companyids-filter-notice" id="companyIdsFilterNotice" hidden>
+      <span id="companyIdsFilterText"></span>
+      <button class="btn-filter-clear" onclick="clearCompanyIdsFilter()">絞り込み解除</button>
+    </div>
+    <div id="clusterView" hidden>
+      <div class="cluster-grid" id="clusterGrid"></div>
+      <p class="cluster-empty" id="clusterEmptyMsg" hidden>タグを付けた企業が増えるとグループが表示されます</p>
+    </div>
+    <div id="normalTableView">
     <div class="filter-bar">
       <input type="text" id="filterSearch" placeholder="企業名・URLで検索" oninput="onFilterChange()" />
       <select id="filterStatus" onchange="onFilterChange()">
@@ -1154,6 +1196,7 @@
       </table>
     </div>
     <div class="pagination" id="pagination"></div>
+    </div>
   </section>
 
 </div>
@@ -1178,6 +1221,7 @@
     </div>
     <div class="modal-body">
       <div class="bulk-send-form">
+        <p class="search-query-preview" id="bulkSendScopeNote" hidden></p>
         <div class="bulk-send-field">
           <label for="bulkSendVariant">バリアント</label>
           <select id="bulkSendVariant" onchange="updateBulkSendPreview()">
@@ -1247,9 +1291,11 @@
 <script>
   let companies = [];
   let variants = [];
+  let clusters = [];
+  let showingGroupView = false;
   let isBulkResearching = false;
   let isBulkSending = false;
-  let filters = { search: "", status: "all", automation: "all", tag: "all" };
+  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
@@ -1418,6 +1464,7 @@
         const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
         if (!tags.includes(filters.tag)) return false;
       }
+      if (filters.companyIds && !filters.companyIds.has(c.id)) return false;
       return true;
     });
   }
@@ -1470,7 +1517,27 @@
     document.getElementById("filterStatus").value = "all";
     document.getElementById("filterAutomation").value = "all";
     document.getElementById("filterTag").value = "all";
-    filters = { search: "", status: "all", automation: "all", tag: "all" };
+    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null };
+    document.getElementById("companyIdsFilterNotice").hidden = true;
+    currentPage = 1;
+    renderTable();
+  }
+
+  function filterByCompanyIds(ids, label) {
+    filters.companyIds = new Set(ids);
+    const notice = document.getElementById("companyIdsFilterNotice");
+    document.getElementById("companyIdsFilterText").innerHTML =
+      `<strong>${esc(label)}</strong> の${ids.length}社に絞り込み中`;
+    notice.hidden = false;
+    currentPage = 1;
+    setGroupView(false);
+    renderTable();
+    document.querySelector(".table-section").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function clearCompanyIdsFilter() {
+    filters.companyIds = null;
+    document.getElementById("companyIdsFilterNotice").hidden = true;
     currentPage = 1;
     renderTable();
   }
@@ -1478,8 +1545,80 @@
   function updateFilterCount(filteredCount) {
     const el = document.getElementById("filterCount");
     if (!el) return;
-    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all";
+    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all" || filters.companyIds;
     el.textContent = isFiltering ? `${companies.length}社中${filteredCount}社を表示中` : "";
+  }
+
+  // ==================== グループ表示 ====================
+
+  async function loadClusters() {
+    try {
+      const res = await fetch("/api/crm?action=company-clusters");
+      if (!res.ok) throw new Error("取得失敗");
+      const data = await res.json();
+      clusters = Array.isArray(data.clusters) ? data.clusters : [];
+    } catch (err) {
+      clusters = [];
+      showToast("グループの取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  async function toggleGroupView() {
+    await setGroupView(!showingGroupView);
+  }
+
+  // タグ付け・優先度変更等で内容が変わりうるため、グループ表示に切り替えるたびに再取得する
+  async function setGroupView(show) {
+    showingGroupView = show;
+    const btn = document.getElementById("groupViewToggleBtn");
+    if (btn) btn.textContent = showingGroupView ? "企業一覧で見る" : "グループで見る";
+    document.getElementById("clusterView").hidden = !showingGroupView;
+    document.getElementById("normalTableView").hidden = showingGroupView;
+
+    if (showingGroupView) {
+      document.getElementById("clusterGrid").innerHTML = '<p class="cluster-empty">読み込み中...</p>';
+      await loadClusters();
+      renderClusters();
+    }
+  }
+
+  function renderClusters() {
+    const grid = document.getElementById("clusterGrid");
+    const emptyMsg = document.getElementById("clusterEmptyMsg");
+
+    if (!clusters.length) {
+      grid.innerHTML = "";
+      emptyMsg.hidden = false;
+      return;
+    }
+    emptyMsg.hidden = true;
+    grid.innerHTML = clusters.map((c, i) => {
+      const label = `${c.industry} × ${c.region}`;
+      return `
+        <div class="cluster-card">
+          <div class="cluster-card-title">${esc(label)}</div>
+          <div class="cluster-card-stats">
+            <span class="cluster-stat-badge">${c.company_count}社</span>
+            <span class="cluster-stat-badge">自動化OK ${c.automatable_count}社</span>
+            <span class="cluster-stat-badge">メアド設定済み ${c.email_count}社</span>
+            <span class="cluster-stat-badge">平均優先度 ${c.avg_priority}</span>
+          </div>
+          <div class="cluster-card-actions">
+            <button class="btn-bulk-send-open" data-ids="${esc(JSON.stringify(c.company_ids))}" data-label="${esc(label)}" onclick="openBulkSendModalFromCluster(this)">このグループに一括送信</button>
+            <button class="btn-filter-clear" data-ids="${esc(JSON.stringify(c.company_ids))}" data-label="${esc(label)}" onclick="filterByCompanyIdsFromCluster(this)">企業一覧で見る</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function openBulkSendModalFromCluster(btn) {
+    const ids = JSON.parse(btn.dataset.ids);
+    openBulkSendModal(ids, btn.dataset.label);
+  }
+
+  function filterByCompanyIdsFromCluster(btn) {
+    const ids = JSON.parse(btn.dataset.ids);
+    filterByCompanyIds(ids, btn.dataset.label);
   }
 
   function toggleSortPriority() {
@@ -2168,9 +2307,16 @@
     renderTable();
   }
 
+  let bulkSendCompanyIdsFilter = null; // グループから絞り込んで開いた場合のcompany_id配列
+
   function getBulkSendTargets() {
     const targetType = document.getElementById("bulkSendTarget")?.value || "automatable";
-    return companies.filter(c => {
+    let pool = companies;
+    if (bulkSendCompanyIdsFilter) {
+      const idSet = new Set(bulkSendCompanyIdsFilter);
+      pool = pool.filter(c => idSet.has(c.id));
+    }
+    return pool.filter(c => {
       const isAutomatable = c.research_result?.automatable === true;
       const hasEmail = !!c.email;
       if (targetType === "automatable") return isAutomatable;
@@ -2196,7 +2342,15 @@
       .filter(t => t.channel !== null);
   }
 
-  function openBulkSendModal() {
+  function openBulkSendModal(companyIds, label) {
+    bulkSendCompanyIdsFilter = Array.isArray(companyIds) ? companyIds : null;
+    const scopeNote = document.getElementById("bulkSendScopeNote");
+    if (bulkSendCompanyIdsFilter) {
+      scopeNote.innerHTML = `<strong>${esc(label)}</strong> の${bulkSendCompanyIdsFilter.length}社に絞り込んでいます`;
+      scopeNote.hidden = false;
+    } else {
+      scopeNote.hidden = true;
+    }
     document.getElementById("bulkSendTarget").value = "automatable";
     document.getElementById("bulkSendChannel").value = "auto";
     document.getElementById("bulkSendForce").checked = false;
