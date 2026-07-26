@@ -284,6 +284,10 @@
   #excludedDomainInput { flex: 1 1 200px; }
   #excludedReasonInput { flex: 1 1 200px; }
 
+  .form-msg { font-size: 13px; }
+  .form-msg.ok    { color: var(--green-700); }
+  .form-msg.error { color: #dc2626; }
+
   /* Forms / modals (shared) */
   .form-group { display: flex; flex-direction: column; gap: 5px; }
   .form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
@@ -525,6 +529,7 @@
     <button class="crm-tab-btn" data-tab="tasks" onclick="switchTab('tasks')">✅ タスク</button>
     <button class="crm-tab-btn" data-tab="excluded" onclick="switchTab('excluded')">🚫 除外ドメイン</button>
     <button class="crm-tab-btn" data-tab="abtests" onclick="switchTab('abtests')">🧪 A/Bテスト</button>
+    <button class="crm-tab-btn" data-tab="attachments" onclick="switchTab('attachments')">📎 添付ファイル</button>
     <button class="crm-tab-btn" data-tab="settings" onclick="switchTab('settings')">⚙️ 設定</button>
   </div>
 
@@ -645,6 +650,27 @@
       <table class="crm-table">
         <thead><tr><th>テスト名</th><th>バリアントA</th><th>バリアントB</th><th>ステータス</th><th></th></tr></thead>
         <tbody id="abTestsBody"><tr class="empty-row"><td colspan="5">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 添付ファイル -->
+  <section class="crm-panel" id="panel-attachments">
+    <div class="panel-toolbar">
+      <div>
+        <h2>添付ファイル</h2>
+        <p class="panel-desc">メッセージ管理でバリアントに紐付けると、送信時に自動で添付されます（3MB以下）</p>
+      </div>
+    </div>
+    <div class="excluded-add-row">
+      <input type="file" id="attachmentFileInput" />
+      <button class="btn-add" onclick="uploadAttachment()"><i data-lucide="upload"></i>アップロード</button>
+    </div>
+    <span class="form-msg" id="attachmentMsg"></span>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead><tr><th>ファイル名</th><th>サイズ</th><th>登録日</th><th></th></tr></thead>
+        <tbody id="attachmentsBody"><tr class="empty-row"><td colspan="4">読み込み中...</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -904,6 +930,7 @@
   let variants = [];
   let abTests = [];
   let settings = {};
+  let attachments = [];
 
   const STAGE_ORDER  = ["lead", "contacted", "proposal", "negotiation", "won", "lost"];
   const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
@@ -919,7 +946,7 @@
     await loadCompanies();
     await Promise.all([
       loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
-      loadVariants(), loadAbTests(), loadSettings(),
+      loadVariants(), loadAbTests(), loadSettings(), loadAttachments(),
     ]);
     lucide.createIcons();
   }
@@ -1562,6 +1589,118 @@
       excludedDomains = excludedDomains.filter(d => d.id !== id);
       renderExcludedDomains();
       showToast("除外ドメインを削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
+    }
+  }
+
+  // ==================== 添付ファイル ====================
+
+  // Vercelのリクエストボディ上限(既定約4.5MB)に収まるよう、Base64膨張を踏まえて3MBに設定
+  const ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes < 1024) return `${bytes || 0}B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  async function loadAttachments() {
+    try {
+      const res = await fetch("/api/crm?action=attachments");
+      const raw = await res.json();
+      attachments = Array.isArray(raw) ? raw : [];
+      renderAttachments();
+    } catch (err) {
+      document.getElementById("attachmentsBody").innerHTML =
+        `<tr class="empty-row"><td colspan="4">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderAttachments() {
+    const body = document.getElementById("attachmentsBody");
+    if (!attachments.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="4">添付ファイルが登録されていません</td></tr>';
+      return;
+    }
+    body.innerHTML = attachments.map(a => {
+      const created = a.created_at ? new Date(a.created_at).toLocaleDateString("ja-JP") : "—";
+      return `
+        <tr>
+          <td>${esc(a.filename)}</td>
+          <td style="white-space:nowrap;color:var(--gray-400);font-size:12px">${formatFileSize(a.size_bytes)}</td>
+          <td style="white-space:nowrap;color:var(--gray-400);font-size:12px">${created}</td>
+          <td><button class="btn-row-delete" onclick="deleteAttachment(${a.id})">削除</button></td>
+        </tr>`;
+    }).join("");
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result || "";
+        const base64 = String(result).split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadAttachment() {
+    const input = document.getElementById("attachmentFileInput");
+    const msgEl = document.getElementById("attachmentMsg");
+    const file = input.files?.[0];
+    if (!file) { msgEl.textContent = "ファイルを選択してください"; msgEl.className = "form-msg error"; return; }
+    if (file.size > ATTACHMENT_MAX_BYTES) {
+      msgEl.textContent = "ファイルサイズは3MB以下にしてください";
+      msgEl.className = "form-msg error";
+      return;
+    }
+
+    msgEl.textContent = "アップロード中...";
+    msgEl.className = "form-msg";
+
+    try {
+      const file_data = await fileToBase64(file);
+      const res = await fetch("/api/crm?action=attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type || "application/octet-stream",
+          file_data,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { msgEl.textContent = data.error || "登録エラー"; msgEl.className = "form-msg error"; return; }
+
+      attachments.unshift(data);
+      renderAttachments();
+      input.value = "";
+      msgEl.textContent = "アップロードしました";
+      msgEl.className = "form-msg ok";
+      showToast("添付ファイルをアップロードしました", "success");
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = "form-msg error";
+    }
+  }
+
+  async function deleteAttachment(id) {
+    if (!confirm("この添付ファイルを削除しますか？（バリアントに紐付けている場合は解除されます）")) return;
+    try {
+      const res = await fetch("/api/crm?action=attachments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      attachments = attachments.filter(a => a.id !== id);
+      renderAttachments();
+      showToast("添付ファイルを削除しました", "info");
     } catch (err) {
       showToast("削除エラー: " + esc(err.message), "error");
     }

@@ -1,12 +1,14 @@
 const { sql, isExcludedDomain, getSettings } = require("../lib/db");
-const { sendEmail } = require("../lib/gmail-sender");
+const { sendEmail, ensureLabel, addLabelToMessage } = require("../lib/gmail-sender");
+
+const SENT_LABEL_NAME = "LOCLE営業/送信済み";
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force, tags } = req.body || {};
+  const { company_id, variant_id, force, tags, attachment_id } = req.body || {};
   const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
@@ -80,10 +82,20 @@ module.exports = async function handler(req, res) {
   const subject = replace(variant.subject_template);
   const body    = replace(variant.body_template);
 
+  // 添付ファイル取得(指定があれば)
+  let attachment = null;
+  if (attachment_id) {
+    const attachmentId = parseInt(attachment_id, 10);
+    if (attachmentId) {
+      const [row] = await sql`SELECT filename, content_type, file_data FROM attachments WHERE id = ${attachmentId}`;
+      if (row) attachment = row;
+    }
+  }
+
   // メール送信
   let result;
   try {
-    result = await sendEmail({ to: toEmail, subject, body });
+    result = await sendEmail({ to: toEmail, subject, body, attachment });
   } catch (err) {
     await sql`
       INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
@@ -96,6 +108,16 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({
       error: "Gmail APIが設定されていません。Vercel環境変数にGMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKENを設定してください。",
     });
+  }
+
+  // 送信済みラベルを付与(失敗しても送信自体は成功として扱う)
+  try {
+    const labelId = await ensureLabel(SENT_LABEL_NAME);
+    if (labelId && result.messageId) {
+      await addLabelToMessage(result.messageId, labelId);
+    }
+  } catch (err) {
+    console.error("送信済みラベル付与に失敗しました:", err.message);
   }
 
   const [logEntry] = await sql`

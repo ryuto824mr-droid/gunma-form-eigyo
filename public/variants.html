@@ -470,6 +470,14 @@
       </div>
 
       <div class="form-group full">
+        <label for="inputAttachment">添付ファイル（メールの場合・任意）</label>
+        <select id="inputAttachment">
+          <option value="">添付なし</option>
+        </select>
+        <p class="form-hint">crm.htmlの「添付ファイル」タブから事前にアップロードしたファイルを選べます</p>
+      </div>
+
+      <div class="form-group full">
         <label>タグ（key: value 形式で任意追加）</label>
         <div class="tag-rows" id="tagRows"></div>
         <button type="button" class="btn-tag-add" onclick="addTagRow()">＋ タグを追加</button>
@@ -522,6 +530,29 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let variants = [];
+  let attachments = [];
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes < 1024) return `${bytes || 0}B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  async function loadAttachmentsForSelect() {
+    const sel = document.getElementById("inputAttachment");
+    if (!sel) return;
+    try {
+      const res = await fetch("/api/crm?action=attachments");
+      if (!res.ok) throw new Error("取得失敗");
+      attachments = await res.json();
+      const options = attachments
+        .map(a => `<option value="${a.id}">${esc(a.filename)}（${formatFileSize(a.size_bytes)}）</option>`)
+        .join("");
+      sel.innerHTML = '<option value="">添付なし</option>' + options;
+    } catch (err) {
+      // 添付ファイル一覧の取得失敗はバリアント作成自体には影響させない
+    }
+  }
 
   async function loadVariants() {
     try {
@@ -566,6 +597,7 @@
           <span class="channel-icon">${channelIcon}</span>
           <span class="card-name">${esc(v.name)}</span>
           <span class="channel-badge ${esc(v.channel)}">${channelLabel}</span>
+          ${v.attachment_id ? '<span class="tag-badge">📎 添付あり</span>' : ""}
           <button class="btn-preview" onclick="openPreview(${v.id})">
             <i data-lucide="eye"></i>プレビュー
           </button>
@@ -586,6 +618,7 @@
     const channel          = document.getElementById("inputChannel").value;
     const subject_template = document.getElementById("inputSubject").value.trim();
     const body_template    = document.getElementById("inputBody").value.trim();
+    const attachment_id    = document.getElementById("inputAttachment").value || null;
     const btn              = document.getElementById("createBtn");
 
     if (!name)          { showMsg("名前を入力してください", "error"); return; }
@@ -599,18 +632,19 @@
       const res = await fetch("/api/variants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags }),
+        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id }),
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || "作成エラー", "error"); showToast(esc(data.error || "作成エラー"), "error"); return; }
 
       variants.unshift(data);
       renderVariants();
-      document.getElementById("inputName").value    = "";
-      document.getElementById("inputChannel").value = "email";
-      document.getElementById("inputSubject").value = "";
-      document.getElementById("inputBody").value    = "";
-      document.getElementById("tagRows").innerHTML  = "";
+      document.getElementById("inputName").value       = "";
+      document.getElementById("inputChannel").value    = "email";
+      document.getElementById("inputSubject").value    = "";
+      document.getElementById("inputBody").value       = "";
+      document.getElementById("inputAttachment").value = "";
+      document.getElementById("tagRows").innerHTML     = "";
       showMsg("作成しました", "ok");
       showToast("バリアントを作成しました", "success");
     } catch (err) {
@@ -866,6 +900,7 @@
 
   lucide.createIcons();
   loadVariants();
+  loadAttachmentsForSelect();
   startTour([
     { targetSelector: ".create-section", title: "バリアントを作成する", description: "名前・チャネル・件名・本文を入力して作成します。本文に{{company_name}}と書くと送信時に企業名が自動で入ります。", position: "bottom" },
     { targetSelector: "#tagRows",        title: "タグで分類する",       description: "「トーン:カジュアル」「長さ:短文」など自由にタグを付けられます。分析ページでタグ別の反応率を比較できます。",        position: "top" },

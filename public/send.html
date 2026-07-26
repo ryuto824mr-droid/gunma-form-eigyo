@@ -634,6 +634,7 @@
       <div class="preview-meta">
         <div>チャネル: <span id="draftChannelVal"></span></div>
         <div id="draftSubjectRow" hidden>件名: <span id="draftSubjectVal"></span></div>
+        <div id="draftAttachmentRow" hidden>添付ファイル: <span id="draftAttachmentVal"></span></div>
       </div>
       <pre id="draftBodyText"></pre>
       <div class="draft-score-card" id="draftScoreCard">
@@ -786,6 +787,7 @@
 <script>
   let companies = [];
   let variants  = [];
+  let attachments = [];
   let logs      = [];
   let scheduledSends = [];
   let currentDraft = null;
@@ -800,17 +802,19 @@
 
   async function init() {
     try {
-      const [cRes, vRes, lRes, sRes] = await Promise.all([
+      const [cRes, vRes, lRes, sRes, aRes] = await Promise.all([
         fetch("/api/companies"),
         fetch("/api/variants"),
         fetch("/api/send-logs"),
         fetch("/api/analytics?action=scheduled-sends"),
+        fetch("/api/crm?action=attachments"),
       ]);
       const rawCompanies = await cRes.json();
       companies      = Array.isArray(rawCompanies) ? rawCompanies : [];
       variants       = await vRes.json();
       logs           = await lRes.json();
       scheduledSends = sRes.ok ? await sRes.json() : [];
+      attachments    = aRes.ok ? await aRes.json() : [];
 
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
@@ -867,6 +871,15 @@
       subjectRow.hidden = false;
     } else {
       subjectRow.hidden = true;
+    }
+
+    const attachmentRow = document.getElementById("draftAttachmentRow");
+    const attachment = variant.attachment_id ? attachments.find(a => a.id === variant.attachment_id) : null;
+    if (attachment) {
+      document.getElementById("draftAttachmentVal").textContent = attachment.filename;
+      attachmentRow.hidden = false;
+    } else {
+      attachmentRow.hidden = true;
     }
 
     document.getElementById("draftBodyText").textContent = body;
@@ -970,7 +983,7 @@
 
   async function performSendEmail() {
     if (!currentDraft) return;
-    const { companyId, variantId, company } = currentDraft;
+    const { companyId, variantId, company, variant } = currentDraft;
     if (!company.email) {
       showDraftMsg("この企業にメールアドレスが登録されていません", "error");
       return;
@@ -983,7 +996,11 @@
       const res = await fetch("/api/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked }),
+        body: JSON.stringify({
+          company_id: companyId, variant_id: variantId,
+          force: document.getElementById("forceCheck").checked,
+          attachment_id: variant?.attachment_id || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

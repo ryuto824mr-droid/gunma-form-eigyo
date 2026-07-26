@@ -32,7 +32,7 @@ module.exports = async function handler(req, res) {
       return res.status(201).json(copied);
     }
 
-    const { name, channel, subject_template, body_template, tags } = req.body || {};
+    const { name, channel, subject_template, body_template, tags, attachment_id } = req.body || {};
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "nameは必須です" });
@@ -45,15 +45,17 @@ module.exports = async function handler(req, res) {
     }
 
     const tagsJson = (tags && typeof tags === "object") ? JSON.stringify(tags) : "{}";
+    const attachmentId = attachment_id ? parseInt(attachment_id, 10) || null : null;
 
     const [created] = await sql`
-      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, created_at)
+      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, attachment_id, created_at)
       VALUES (
         ${name.trim()},
         ${channel},
         ${subject_template?.trim() || null},
         ${body_template.trim()},
         ${tagsJson},
+        ${attachmentId},
         NOW()
       )
       RETURNING *

@@ -24,8 +24,9 @@ module.exports = async function handler(req, res) {
     case "ab-tests":          return handleAbTests(req, res);
     case "ab-test-stats":    return handleAbTestStats(req, res);
     case "api-usage":         return handleApiUsage(req, res);
+    case "attachments":       return handleAttachments(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments）を指定してください" });
   }
 };
 
@@ -146,6 +147,20 @@ async function handleDbSetup(req, res) {
         discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // attachmentsテーブル追加（メール添付ファイル用）
+    // file_dataはBase64エンコードされたファイル内容
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS attachments (
+        id           SERIAL PRIMARY KEY,
+        filename     TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        file_data    TEXT NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // message_variants.attachment_id追加（バリアントに添付ファイルを紐付ける用）
+    // 添付ファイル削除時は参照を自動でNULLに(ON DELETE SET NULL)
+    await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS attachment_id INTEGER REFERENCES attachments(id) ON DELETE SET NULL");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -963,4 +978,80 @@ async function handleApiUsage(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }
+}
+
+// ==================== attachments ====================
+
+// Vercel Serverless Functionsのリクエストボディ上限(既定約4.5MB)を踏まえた実効値。
+// Base64化すると元ファイルの約4/3に膨張するため、5MBの実ファイルはペイロードが
+// 上限を超えてプラットフォーム側で拒否されてしまう。実際にアップロード可能な
+// 範囲に収まるよう3MBに設定。
+const ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024; // 3MB
+
+async function handleAttachments(req, res) {
+  if (req.method === "GET") {
+    try {
+      const rows = await sql`
+        SELECT id, filename, content_type, created_at, LENGTH(file_data) AS b64_length
+        FROM attachments
+        ORDER BY created_at DESC
+      `;
+      const attachments = rows.map(r => ({
+        id: r.id,
+        filename: r.filename,
+        content_type: r.content_type,
+        created_at: r.created_at,
+        size_bytes: Math.floor((r.b64_length || 0) * 3 / 4),
+      }));
+      return res.status(200).json(attachments);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { filename, content_type, file_data } = req.body || {};
+    if (!filename || typeof filename !== "string" || !filename.trim()) {
+      return res.status(400).json({ error: "filename（文字列）が必要です" });
+    }
+    if (!content_type || typeof content_type !== "string" || !content_type.trim()) {
+      return res.status(400).json({ error: "content_type（文字列）が必要です" });
+    }
+    if (!file_data || typeof file_data !== "string") {
+      return res.status(400).json({ error: "file_data（Base64文字列）が必要です" });
+    }
+    // Buffer.byteLengthはBase64のパディングを考慮した正確なデコード後サイズを返す
+    // (文字数からの概算 length*3/4 はパディング境界で最大3バイトずれることがある)
+    const sizeBytes = Buffer.byteLength(file_data, "base64");
+    if (sizeBytes > ATTACHMENT_MAX_BYTES) {
+      return res.status(400).json({ error: "ファイルサイズは3MB以下にしてください" });
+    }
+    try {
+      const [created] = await sql`
+        INSERT INTO attachments (filename, content_type, file_data)
+        VALUES (${filename.trim()}, ${content_type.trim()}, ${file_data})
+        RETURNING id, filename, content_type, created_at
+      `;
+      return res.status(201).json({ ...created, size_bytes: sizeBytes });
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const attachmentId = parseInt(id, 10);
+    if (!attachmentId || isNaN(attachmentId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM attachments WHERE id = ${attachmentId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "添付ファイルが見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / DELETE のみ対応しています" });
 }
