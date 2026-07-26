@@ -161,6 +161,9 @@ async function handleDbSetup(req, res) {
     // message_variants.attachment_id追加（バリアントに添付ファイルを紐付ける用）
     // 添付ファイル削除時は参照を自動でNULLに(ON DELETE SET NULL)
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS attachment_id INTEGER REFERENCES attachments(id) ON DELETE SET NULL");
+    // companies.company_info追加（企業サイトから自動抽出した会社概要情報用）
+    // { representative, founded_year, employee_count_text, business_description, capital, hiring_status }
+    await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_info JSONB");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });

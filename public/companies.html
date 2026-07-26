@@ -484,6 +484,7 @@
   .badge-rejected   { background: #fff5f5; color: #dc2626; border: 1px solid #fca5a5; }
   .badge-ok         { background: var(--green-50); color: var(--green-700); }
   .badge-ng         { background: #fff5f5; color: #dc2626; }
+  .hiring-badge     { background: var(--green-50); color: var(--green-700); margin-left: 6px; vertical-align: middle; }
 
   /* Action buttons */
   .btn-research {
@@ -1687,6 +1688,9 @@
       const actionClass  = actionStatus !== "none" ? ` status-${actionStatus}` : "";
       const actionLabel  = (actionStatus === "none" ? "📌 " : "") + actionStatusLabel(actionStatus);
       const archivedBadge = c.archived ? '<span class="archived-badge">アーカイブ済み</span>' : "";
+      const hiringBadge = c.company_info?.hiring_status?.hasHiringPage
+        ? '<span class="badge hiring-badge" title="採用ページが見つかりました">🎯採用中</span>'
+        : "";
       const archiveBtn = !c.archived
         ? `<button class="btn-archive-company" onclick="archiveCompany(${c.id})" title="アーカイブ">📦</button>`
         : "";
@@ -1695,7 +1699,7 @@
         : `<button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>`;
       return `
         <tr id="row-${c.id}">
-          <td class="name">${esc(c.name)}${archivedBadge}${companyTagsHtml(c)}</td>
+          <td class="name">${esc(c.name)}${hiringBadge}${archivedBadge}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}</td>
@@ -3004,6 +3008,26 @@
         </div>
         <button class="btn-tag-save" onclick="saveTags(${id})">保存</button>
       </div>`;
+
+    const info = company.company_info;
+    if (info && (info.representative || info.founded_year || info.employee_count_text || info.capital || info.business_description || info.hiring_status?.hasHiringPage)) {
+      const infoRows = [];
+      if (info.representative) infoRows.push(`<dt>代表者</dt><dd>${esc(info.representative)}</dd>`);
+      if (info.founded_year) infoRows.push(`<dt>設立年</dt><dd>${esc(info.founded_year)}年</dd>`);
+      if (info.employee_count_text) infoRows.push(`<dt>従業員数</dt><dd>${esc(info.employee_count_text)}</dd>`);
+      if (info.capital) infoRows.push(`<dt>資本金</dt><dd>${esc(info.capital)}</dd>`);
+      if (info.hiring_status?.hasHiringPage) {
+        const hiringLink = info.hiring_status.url
+          ? ` <a href="${esc(info.hiring_status.url)}" target="_blank" rel="noopener">採用ページ</a>`
+          : "";
+        infoRows.push(`<dt>採用状況</dt><dd><span class="badge hiring-badge">🎯 採用中</span>${hiringLink}</dd>`);
+      }
+      if (info.business_description) infoRows.push(`<dt>事業内容</dt><dd style="white-space:pre-wrap">${esc(info.business_description)}</dd>`);
+
+      html += `
+        <p class="fields-title">企業情報</p>
+        <dl class="info-grid">${infoRows.join("")}</dl>`;
+    }
 
     const r = company.research_result;
     if (r) {

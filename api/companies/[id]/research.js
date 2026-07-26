@@ -39,6 +39,11 @@ module.exports = async function handler(req, res) {
   const shouldUpdateEmail = !!(result.extractedEmail && !company.email);
   const emailToSet = shouldUpdateEmail ? result.extractedEmail : company.email;
 
+  // 会社概要情報が今回取得できた場合のみ更新し、取得できなかった場合は既存の値を維持する
+  const companyInfoToSet = result.companyInfo
+    ? JSON.stringify(result.companyInfo)
+    : (company.company_info ? JSON.stringify(company.company_info) : null);
+
   const [updated] = await sql`
     UPDATE companies
     SET
@@ -46,6 +51,7 @@ module.exports = async function handler(req, res) {
       research_result  = ${JSON.stringify(result)},
       status           = ${status},
       email             = ${emailToSet},
+      company_info      = ${companyInfoToSet},
       updated_at       = NOW()
     WHERE id = ${id}
     RETURNING *
