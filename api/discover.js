@@ -28,6 +28,8 @@ const EXCLUDE_DOMAINS = [
   "city.takasaki.gunma.jp", "city.fujioka.gunma.jp", "city.tomioka.lg.jp",
   "sites.google.com",
   "lg.jp", // 地方公共団体専用ドメイン
+  "schoolweb.ne.jp", "gakushu-kukan.com",
+  "ac.jp", // 大学・高等教育機関専用ドメイン(hiroshima-u.ac.jp等のサブドメインも末尾一致で除外)
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -37,6 +39,7 @@ const NOISE_NAME_KEYWORDS = [
   "ワークス", "はたらく", "hatarakunavi", "求人ワーク",
   "教育センター", "教育委員会", "特別支援学校", "生涯学習センター",
   "市役所", "県庁", "保健所", "児童相談所",
+  "社会福祉協議会", "学習塾", "教室", "個別指導",
 ];
 
 function isNoisyName(rawName) {
