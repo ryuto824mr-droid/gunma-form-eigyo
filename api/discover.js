@@ -30,6 +30,8 @@ const EXCLUDE_DOMAINS = [
   "lg.jp", // 地方公共団体専用ドメイン
   "schoolweb.ne.jp", "gakushu-kukan.com",
   "ac.jp", // 大学・高等教育機関専用ドメイン(hiroshima-u.ac.jp等のサブドメインも末尾一致で除外)
+  "fallabs.com", "ntticc.or.jp", "govtechtokyo.or.jp", "shigotozaidan.or.jp",
+  "or.jp", // 公益法人・財団法人専用ドメイン(末尾一致で除外)
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
