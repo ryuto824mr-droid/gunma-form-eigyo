@@ -242,6 +242,7 @@
   .bulk-result-item.success { color: var(--green-700); background: var(--green-50); }
   .bulk-result-item.error   { color: #dc2626; background: #fff5f5; }
   .bulk-result-item.captcha { color: #b45309; background: #fffbeb; }
+  .bulk-result-item.skip    { color: #b45309; background: #fffbeb; }
   .bulk-summary { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--gray-700); }
 
   /* Bulk send */
@@ -514,6 +515,7 @@
   .badge-ok         { background: var(--green-50); color: var(--green-700); }
   .badge-ng         { background: #fff5f5; color: #dc2626; }
   .hiring-badge     { background: var(--green-50); color: var(--green-700); margin-left: 6px; vertical-align: middle; }
+  .action-needed-badge { background: #fffbeb; color: #b45309; margin-left: 6px; vertical-align: middle; }
 
   /* Action buttons */
   .btn-research {
@@ -1175,6 +1177,10 @@
       </select>
       <button class="btn-filter-clear" onclick="clearFilters()">クリア</button>
       <label class="filter-show-archived">
+        <input type="checkbox" id="filterActionNeeded" onchange="onFilterChange()" />
+        📞 要手動対応のみ
+      </label>
+      <label class="filter-show-archived">
         <input type="checkbox" id="filterShowArchived" onchange="onShowArchivedChange()" />
         アーカイブ済みを表示
       </label>
@@ -1295,7 +1301,7 @@
   let showingGroupView = false;
   let isBulkResearching = false;
   let isBulkSending = false;
-  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null };
+  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
@@ -1449,6 +1455,10 @@
       <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span></div>`;
   }
 
+  function needsManualAction(c) {
+    return !!(c.next_action && c.next_action.includes("手動対応"));
+  }
+
   function getFilteredCompanies() {
     return companies.filter(c => {
       if (filters.search) {
@@ -1465,6 +1475,7 @@
         if (!tags.includes(filters.tag)) return false;
       }
       if (filters.companyIds && !filters.companyIds.has(c.id)) return false;
+      if (filters.actionNeeded && !needsManualAction(c)) return false;
       return true;
     });
   }
@@ -1504,10 +1515,11 @@
   }
 
   function onFilterChange() {
-    filters.search      = document.getElementById("filterSearch").value.trim();
-    filters.status      = document.getElementById("filterStatus").value;
-    filters.automation  = document.getElementById("filterAutomation").value;
-    filters.tag         = document.getElementById("filterTag").value;
+    filters.search       = document.getElementById("filterSearch").value.trim();
+    filters.status       = document.getElementById("filterStatus").value;
+    filters.automation   = document.getElementById("filterAutomation").value;
+    filters.tag          = document.getElementById("filterTag").value;
+    filters.actionNeeded = document.getElementById("filterActionNeeded").checked;
     currentPage = 1;
     renderTable();
   }
@@ -1517,7 +1529,8 @@
     document.getElementById("filterStatus").value = "all";
     document.getElementById("filterAutomation").value = "all";
     document.getElementById("filterTag").value = "all";
-    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null };
+    document.getElementById("filterActionNeeded").checked = false;
+    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false };
     document.getElementById("companyIdsFilterNotice").hidden = true;
     currentPage = 1;
     renderTable();
@@ -1545,7 +1558,7 @@
   function updateFilterCount(filteredCount) {
     const el = document.getElementById("filterCount");
     if (!el) return;
-    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all" || filters.companyIds;
+    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all" || filters.companyIds || filters.actionNeeded;
     el.textContent = isFiltering ? `${companies.length}社中${filteredCount}社を表示中` : "";
   }
 
@@ -1830,6 +1843,9 @@
       const hiringBadge = c.company_info?.hiring_status?.hasHiringPage
         ? '<span class="badge hiring-badge" title="採用ページが見つかりました">🎯採用中</span>'
         : "";
+      const actionNeededBadge = needsManualAction(c)
+        ? `<span class="badge action-needed-badge" title="${esc(c.next_action)}">📞 要手動対応</span>`
+        : "";
       const archiveBtn = !c.archived
         ? `<button class="btn-archive-company" onclick="archiveCompany(${c.id})" title="アーカイブ">📦</button>`
         : "";
@@ -1838,7 +1854,7 @@
         : `<button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>`;
       return `
         <tr id="row-${c.id}">
-          <td class="name">${esc(c.name)}${hiringBadge}${archivedBadge}${companyTagsHtml(c)}</td>
+          <td class="name">${esc(c.name)}${hiringBadge}${actionNeededBadge}${archivedBadge}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}</td>
@@ -2335,11 +2351,37 @@
     return null;
   }
 
-  function getBulkSendSendableTargets() {
+  function getBulkSendTargetsWithChannel() {
     const channelSetting = document.getElementById("bulkSendChannel").value;
-    return getBulkSendTargets()
-      .map(c => ({ company: c, channel: resolveSendChannel(c, channelSetting) }))
-      .filter(t => t.channel !== null);
+    return getBulkSendTargets().map(c => ({ company: c, channel: resolveSendChannel(c, channelSetting) }));
+  }
+
+  function getBulkSendSendableTargets() {
+    return getBulkSendTargetsWithChannel().filter(t => t.channel !== null);
+  }
+
+  // 一括送信/予約でスキップされた(フォーム・メアドともに無い)企業に、
+  // 既にアクションステータスが設定済みでなければフォローアップ要のマークを付ける
+  async function markSkippedCompaniesForFollowUp(companyIds) {
+    for (const id of companyIds) {
+      const company = companies.find(c => c.id === id);
+      if (company && company.action_status && company.action_status !== "none") continue;
+      try {
+        const res = await fetch("/api/companies", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            action_status: "follow_up",
+            next_action: "手動対応が必要(フォーム・メアド未検出)",
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) updateCompany(data);
+      } catch {
+        // フォローアップ設定の失敗は一括送信結果自体には影響させない
+      }
+    }
   }
 
   function openBulkSendModal(companyIds, label) {
@@ -2395,19 +2437,29 @@
     const variantId = parseInt(document.getElementById("bulkSendVariant").value, 10);
     if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
 
-    const targets = getBulkSendSendableTargets();
+    const targets = getBulkSendTargetsWithChannel();
     if (targets.length === 0) { showToast("送信対象の企業がありません", "warning"); return; }
 
     isBulkSending = true;
     setBulkSendButtonsDisabled(true);
     const { barFill, resultList, summaryEl } = prepareBulkSendProgress();
 
-    let success = 0, failure = 0;
+    let success = 0, failure = 0, skipped = 0;
+    const skippedCompanyIds = [];
     const total = targets.length;
     const nowIso = new Date().toISOString();
 
     for (let i = 0; i < targets.length; i++) {
       const { company, channel } = targets[i];
+      if (channel === null) {
+        skipped++;
+        skippedCompanyIds.push(company.id);
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 送信手段なし（フォーム・メアドともに未検出）</li>`);
+        resultList.scrollTop = resultList.scrollHeight;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
       try {
         const res = await fetch("/api/analytics?action=scheduled-sends", {
           method: "POST",
@@ -2430,9 +2482,13 @@
 
     isBulkSending = false;
     setBulkSendButtonsDisabled(false);
-    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社`;
+    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社 / スキップ${skipped}社`;
     summaryEl.hidden = false;
-    showToast(`予約登録が完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
+    showToast(`予約登録が完了しました（成功: ${success}件 / 失敗: ${failure}件 / スキップ: ${skipped}件）`, "success");
+
+    if (skippedCompanyIds.length > 0) {
+      await markSkippedCompaniesForFollowUp(skippedCompanyIds);
+    }
   }
 
   async function bulkSendNow() {
@@ -2441,19 +2497,31 @@
     if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
 
     const force = document.getElementById("bulkSendForce").checked;
-    const targets = getBulkSendSendableTargets();
+    const targets = getBulkSendTargetsWithChannel();
+    const sendableCount = targets.filter(t => t.channel !== null).length;
     if (targets.length === 0) { showToast("送信対象の企業がありません", "warning"); return; }
-    if (!confirm(`${targets.length}社へ今すぐ送信します。よろしいですか？`)) return;
+    if (sendableCount === 0) { showToast("送信対象の企業がありません（全件スキップ対象）", "warning"); return; }
+    if (!confirm(`${sendableCount}社へ今すぐ送信します。よろしいですか？`)) return;
 
     isBulkSending = true;
     setBulkSendButtonsDisabled(true);
     const { barFill, resultList, summaryEl } = prepareBulkSendProgress();
 
-    let success = 0, failure = 0;
+    let success = 0, failure = 0, skipped = 0;
+    const skippedCompanyIds = [];
     const total = targets.length;
 
     for (let i = 0; i < targets.length; i++) {
       const { company, channel } = targets[i];
+      if (channel === null) {
+        skipped++;
+        skippedCompanyIds.push(company.id);
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 送信手段なし（フォーム・メアドともに未検出）</li>`);
+        resultList.scrollTop = resultList.scrollHeight;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
       const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
       try {
         const res = await fetch(endpoint, {
@@ -2477,9 +2545,13 @@
 
     isBulkSending = false;
     setBulkSendButtonsDisabled(false);
-    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社`;
+    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社 / スキップ${skipped}社`;
     summaryEl.hidden = false;
-    showToast(`一括送信が完了しました（成功: ${success}件 / 失敗: ${failure}件）`, "success");
+    showToast(`一括送信が完了しました（成功: ${success}件 / 失敗: ${failure}件 / スキップ: ${skipped}件）`, "success");
+
+    if (skippedCompanyIds.length > 0) {
+      await markSkippedCompaniesForFollowUp(skippedCompanyIds);
+    }
   }
 
   async function research(id) {
@@ -3164,12 +3236,13 @@
       </div>`;
 
     const info = company.company_info;
-    if (info && (info.representative || info.founded_year || info.employee_count_text || info.capital || info.business_description || info.hiring_status?.hasHiringPage)) {
+    if (info && (info.representative || info.founded_year || info.employee_count_text || info.capital || info.phone_number || info.business_description || info.hiring_status?.hasHiringPage)) {
       const infoRows = [];
       if (info.representative) infoRows.push(`<dt>代表者</dt><dd>${esc(info.representative)}</dd>`);
       if (info.founded_year) infoRows.push(`<dt>設立年</dt><dd>${esc(info.founded_year)}年</dd>`);
       if (info.employee_count_text) infoRows.push(`<dt>従業員数</dt><dd>${esc(info.employee_count_text)}</dd>`);
       if (info.capital) infoRows.push(`<dt>資本金</dt><dd>${esc(info.capital)}</dd>`);
+      if (info.phone_number) infoRows.push(`<dt>電話番号</dt><dd>${esc(info.phone_number)}</dd>`);
       if (info.hiring_status?.hasHiringPage) {
         const hiringLink = info.hiring_status.url
           ? ` <a href="${esc(info.hiring_status.url)}" target="_blank" rel="noopener">採用ページ</a>`
