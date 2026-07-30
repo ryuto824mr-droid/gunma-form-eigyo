@@ -35,6 +35,8 @@ const EXCLUDE_DOMAINS = [
   "hotstaff.co.jp", "odoor.co.jp", "revive-support.jp", "amazon.co.jp",
   "some-rize.jp", "tepco.co.jp", "peraichi.com", "school.stephouse.jp",
   "usappy.jp",
+  "hokennomadoguchi.com", "jfc.go.jp", "hoken-clinic.com", "jp-life.japanpost.jp",
+  "aeonbank.co.jp", "fp-moneydoctor.com", "gran-class-hoken.com", "gunmabank.co.jp",
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -48,10 +50,19 @@ const NOISE_NAME_KEYWORDS = [
   "就労継続支援", "障がい者", "税理士法人", "税理士事務所",
   "社会保険労務士", "行政書士", "弁護士法人", "サービスステーション",
   "ガソリンスタンド", "service station",
+  "ほけんの窓口", "保険クリニック", "保険相談", "マネードクター",
 ];
+
+// 「銀行」単体では正当な金融法人ヒットもあり誤除外が多いため、
+// 支店・出張所単位の結果(例: "〇〇銀行△△支店")に限定して除外する
+function isBankBranchName(rawName) {
+  if (!rawName) return false;
+  return rawName.includes("銀行") && (rawName.endsWith("支店") || rawName.endsWith("出張所"));
+}
 
 function isNoisyName(rawName) {
   if (!rawName) return false;
+  if (isBankBranchName(rawName)) return true;
   const name = rawName.toLowerCase();
   return NOISE_NAME_KEYWORDS.some(k => name.includes(k.toLowerCase()));
 }
