@@ -6,7 +6,9 @@
 const fs = require("fs");
 const path = require("path");
 const { neon } = require("@neondatabase/serverless");
-const { sql } = require("../lib/db");
+const { sql, getSettings } = require("../lib/db");
+const submitFormHandler = require("./submit-form");
+const sendEmailHandler = require("./send-email");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -26,8 +28,9 @@ module.exports = async function handler(req, res) {
     case "api-usage":         return handleApiUsage(req, res);
     case "attachments":       return handleAttachments(req, res);
     case "company-clusters": return handleCompanyClusters(req, res);
+    case "run-scheduled-sends": return handleRunScheduledSends(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends）を指定してください" });
   }
 };
 
@@ -116,7 +119,8 @@ async function handleDbSetup(req, res) {
       INSERT INTO settings (key, value) VALUES
         ('daily_send_limit', '20'),
         ('send_interval_seconds', '30'),
-        ('skip_rejection_sites', 'true')
+        ('skip_rejection_sites', 'true'),
+        ('auto_send_hour', '9')
       ON CONFLICT (key) DO NOTHING
     `);
     // ab_testsテーブル追加（A/Bテスト機能用）
@@ -165,6 +169,8 @@ async function handleDbSetup(req, res) {
     // companies.company_info追加（企業サイトから自動抽出した会社概要情報用）
     // { representative, founded_year, employee_count_text, business_description, capital, hiring_status }
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_info JSONB");
+    // scheduled_sends.error_message追加（自動送信失敗時のエラー内容記録用）
+    await dbSql.query("ALTER TABLE scheduled_sends ADD COLUMN IF NOT EXISTS error_message TEXT");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -1122,5 +1128,96 @@ async function handleCompanyClusters(req, res) {
     return res.status(200).json({ clusters });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== run-scheduled-sends ====================
+
+// 現在時刻(JST)を0〜23の時間で返す。hourCycle: "h23"を明示しないと
+// ICU実装によっては深夜0時が「24」として返ることがあるため固定する
+function currentJstHour() {
+  return Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23",
+  }).format(new Date()));
+}
+
+// submit-form / send-email はVercel Functionハンドラー(req, res)として実装されているため、
+// HTTPリクエストを発行せず同一プロセス内でハンドラーを直接呼び出すための簡易req/resを用意する
+function createInternalRes() {
+  return {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(payload) { this.body = payload; return this; },
+  };
+}
+
+async function invokeHandlerInternally(handler, body) {
+  const req = { method: "POST", body };
+  const res = createInternalRes();
+  await handler(req, res);
+  return { ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: res.body };
+}
+
+async function handleRunScheduledSends(req, res) {
+  try {
+    const settings = await getSettings();
+    const configuredHour = parseInt(settings.auto_send_hour, 10);
+    const targetHour = Number.isFinite(configuredHour) ? configuredHour : 9;
+    const nowHour = currentJstHour();
+
+    // Vercel Cronは "0 9 * * *" 固定(1日1回)のため、設定時刻が9時以外の場合は
+    // 実際には「次にcronが呼ばれた時」まで実行が持ち越される
+    if (nowHour !== targetHour) {
+      return res.status(200).json({
+        processed: 0,
+        success: 0,
+        failed: 0,
+        skipped: true,
+        message: `設定された実行時刻(${targetHour}時)ではないため今回はスキップしました(現在${nowHour}時 JST)`,
+      });
+    }
+
+    const due = await sql`
+      SELECT * FROM scheduled_sends WHERE scheduled_at <= NOW() AND status = 'pending'
+    `;
+
+    let success = 0;
+    let failed = 0;
+
+    for (const item of due) {
+      try {
+        let result;
+        if (item.channel === "email") {
+          const [variant] = await sql`SELECT attachment_id FROM message_variants WHERE id = ${item.variant_id}`;
+          result = await invokeHandlerInternally(sendEmailHandler, {
+            company_id: item.company_id,
+            variant_id: item.variant_id,
+            attachment_id: variant?.attachment_id || null,
+          });
+        } else {
+          result = await invokeHandlerInternally(submitFormHandler, {
+            company_id: item.company_id,
+            variant_id: item.variant_id,
+          });
+        }
+
+        if (result.ok) {
+          await sql`UPDATE scheduled_sends SET status = 'sent', error_message = NULL WHERE id = ${item.id}`;
+          success++;
+        } else {
+          const errorMessage = result.body?.error || `HTTPステータス${result.status}`;
+          await sql`UPDATE scheduled_sends SET status = 'failed', error_message = ${errorMessage} WHERE id = ${item.id}`;
+          failed++;
+        }
+      } catch (err) {
+        await sql`UPDATE scheduled_sends SET status = 'failed', error_message = ${err.message} WHERE id = ${item.id}`;
+        failed++;
+      }
+    }
+
+    return res.status(200).json({ processed: due.length, success, failed });
+  } catch (err) {
+    return res.status(500).json({ error: `実行エラー: ${err.message}` });
   }
 }

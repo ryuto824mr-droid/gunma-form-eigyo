@@ -1266,6 +1266,7 @@
             <option value="auto">自動判定（自動化OK→フォーム / メアドのみ→メール）</option>
             <option value="form">フォーム</option>
             <option value="email">メール</option>
+            <option value="both">両方（フォーム→メールの順に送信、自動化OKかつメアド設定済みの企業のみ）</option>
           </select>
         </div>
         <label class="bulk-send-checkbox">
@@ -2370,6 +2371,9 @@
   function resolveSendChannel(c, channelSetting) {
     if (channelSetting === "form") return c.research_result?.automatable === true ? "form" : null;
     if (channelSetting === "email") return c.email ? "email" : null;
+    if (channelSetting === "both") {
+      return (c.research_result?.automatable === true && c.email) ? "both" : null;
+    }
     // 自動判定: 自動化OK優先、なければメアドありでメール
     if (c.research_result?.automatable === true) return "form";
     if (c.email) return "email";
@@ -2474,13 +2478,46 @@
     const total = targets.length;
     const nowIso = new Date().toISOString();
 
+    const channelSetting = document.getElementById("bulkSendChannel").value;
+
     for (let i = 0; i < targets.length; i++) {
       const { company, channel } = targets[i];
       if (channel === null) {
         skipped++;
         skippedCompanyIds.push(company.id);
+        const skipReason = channelSetting === "both"
+          ? "自動化OKかつメアド設定済みではないため両方送信不可"
+          : "送信手段なし（フォーム・メアドともに未検出）";
         resultList.insertAdjacentHTML("beforeend",
-          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 送信手段なし（フォーム・メアドともに未検出）</li>`);
+          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → ${skipReason}</li>`);
+        resultList.scrollTop = resultList.scrollHeight;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+      if (channel === "both") {
+        try {
+          const res1 = await fetch("/api/analytics?action=scheduled-sends", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, channel: "form", scheduled_at: nowIso }),
+          });
+          const data1 = await res1.json();
+          if (!res1.ok) throw new Error(data1.error || "フォーム予約エラー");
+          const res2 = await fetch("/api/analytics?action=scheduled-sends", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, channel: "email", scheduled_at: nowIso }),
+          });
+          const data2 = await res2.json();
+          if (!res2.ok) throw new Error(data2.error || "メール予約エラー");
+          success++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item success">✓ ${esc(company.name)} → 予約登録（フォーム+メール）</li>`);
+        } catch (err) {
+          failure++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>`);
+        }
         resultList.scrollTop = resultList.scrollHeight;
         barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
         continue;
@@ -2535,14 +2572,59 @@
     let success = 0, failure = 0, skipped = 0;
     const skippedCompanyIds = [];
     const total = targets.length;
+    const channelSetting = document.getElementById("bulkSendChannel").value;
 
     for (let i = 0; i < targets.length; i++) {
       const { company, channel } = targets[i];
       if (channel === null) {
         skipped++;
         skippedCompanyIds.push(company.id);
+        const skipReason = channelSetting === "both"
+          ? "自動化OKかつメアド設定済みではないため両方送信不可"
+          : "送信手段なし（フォーム・メアドともに未検出）";
         resultList.insertAdjacentHTML("beforeend",
-          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 送信手段なし（フォーム・メアドともに未検出）</li>`);
+          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → ${skipReason}</li>`);
+        resultList.scrollTop = resultList.scrollHeight;
+        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+        continue;
+      }
+      if (channel === "both") {
+        let formOk = false, formErr = null;
+        let emailOk = false, emailErr = null;
+        try {
+          const res = await fetch("/api/submit-form", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "フォーム送信エラー");
+          formOk = true;
+        } catch (err) {
+          formErr = err.message;
+        }
+        try {
+          const res = await fetch("/api/send-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "メール送信エラー");
+          emailOk = true;
+        } catch (err) {
+          emailErr = err.message;
+        }
+        if (formOk && emailOk) {
+          success++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（フォーム+メール）</li>`);
+        } else {
+          failure++;
+          const detail = `フォーム: ${formOk ? "成功" : `失敗(${formErr})`} / メール: ${emailOk ? "成功" : `失敗(${emailErr})`}`;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(detail)}</li>`);
+        }
         resultList.scrollTop = resultList.scrollHeight;
         barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
         continue;

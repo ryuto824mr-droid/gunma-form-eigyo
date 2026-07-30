@@ -2,11 +2,16 @@
   "functions": {
     "api/analyze-form.js": { "memory": 1024, "maxDuration": 30 },
     "api/companies/[id]/research.js": { "memory": 1024, "maxDuration": 60 },
-    "api/submit-form.js": { "memory": 1024, "maxDuration": 60 }
+    "api/submit-form.js": { "memory": 1024, "maxDuration": 60 },
+    "api/crm.js": { "memory": 1024, "maxDuration": 60 }
   },
   "crons": [
     {
       "path": "/api/analytics?action=check-replies",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/crm?action=run-scheduled-sends",
       "schedule": "0 9 * * *"
     }
   ]

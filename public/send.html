@@ -193,6 +193,20 @@
   }
   .btn-send-email:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   .btn-send-email svg { width: 13px; height: 13px; }
+  .btn-send-both {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #7C3AED, #5B21B6);
+    box-shadow: 0 4px 12px rgba(124,58,237,0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-send-both:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6D28D9, #4C1D95);
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(124,58,237,0.4);
+  }
+  .btn-send-both:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-send-both svg { width: 13px; height: 13px; }
   .btn-schedule {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
     border: 1px solid var(--gray-200); color: var(--gray-700);
@@ -479,7 +493,7 @@
     .btn-generate { width: 100%; min-height: 44px; justify-content: center; }
     .preview-box { width: 100%; }
     .preview-actions { flex-direction: column; }
-    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email, .btn-schedule { min-height: 44px; width: 100%; justify-content: center; }
+    .btn-copy, .btn-record, .btn-auto-submit, .btn-send-email, .btn-send-both, .btn-schedule { min-height: 44px; width: 100%; justify-content: center; }
     .resp-form select, .resp-form input[type="text"] { font-size: 16px; }
     .btn-save-resp, .btn-cancel-resp { min-height: 44px; }
     table th:nth-child(2), table td:nth-child(2),
@@ -663,6 +677,12 @@
             <i data-lucide="mail"></i>メールで送信
           </button>
           <span class="tooltip-text">Gmail OAuth 経由でメールを直接送信</span>
+        </span>
+        <span class="tooltip-wrap">
+          <button class="btn-send-both" id="bothSendBtn" onclick="sendBothChannels()" hidden>
+            <i data-lucide="send-horizontal"></i>フォーム+メール両方に送信
+          </button>
+          <span class="tooltip-text">フォームに自動送信した後、続けてメールも送信します</span>
         </span>
         <button class="btn-schedule" onclick="openScheduleModal()">
           <i data-lucide="calendar-clock"></i>スケジュール送信
@@ -891,6 +911,7 @@
     const canEmail = !!company.email;
     document.getElementById("autoSubmitBtn").hidden = !canAutoSubmit;
     document.getElementById("emailSendBtn").hidden = !canEmail;
+    document.getElementById("bothSendBtn").hidden = !(canAutoSubmit && canEmail);
     document.getElementById("forceRow").hidden = !(canAutoSubmit || canEmail);
     lucide.createIcons();
     showDraftMsg("", "");
@@ -912,7 +933,7 @@
     }
   }
 
-  let pendingSendAction = null; // "form" | "email"
+  let pendingSendAction = null; // "form" | "email" | "both"
 
   function autoSubmit() {
     if (!currentDraft) return;
@@ -929,6 +950,16 @@
     openSendConfirmModal("email");
   }
 
+  function sendBothChannels() {
+    if (!currentDraft) return;
+    const { company } = currentDraft;
+    if (company.research_result?.automatable !== true || !company.email) {
+      showDraftMsg("この企業はフォーム自動送信とメール送信の両方には対応していません", "error");
+      return;
+    }
+    openSendConfirmModal("both");
+  }
+
   function openSendConfirmModal(action) {
     if (!currentDraft) return;
     pendingSendAction = action;
@@ -936,11 +967,12 @@
     const subject = (variant.subject_template || "").replace(/\{\{company_name\}\}/g, company.name);
 
     document.getElementById("confirmCompanyName").textContent = company.name;
-    document.getElementById("confirmChannel").textContent = action === "email" ? "メール" : "フォーム";
+    document.getElementById("confirmChannel").textContent =
+      action === "both" ? "フォーム+メール（両方）" : (action === "email" ? "メール" : "フォーム");
 
     const emailLabel = document.getElementById("confirmEmailLabel");
     const emailVal    = document.getElementById("confirmEmail");
-    if (action === "email") {
+    if (action === "email" || action === "both") {
       emailLabel.hidden = false; emailVal.hidden = false;
       emailVal.textContent = company.email || "(未設定)";
     } else {
@@ -978,6 +1010,8 @@
       await performSendEmail();
     } else if (action === "form") {
       await performAutoSubmit();
+    } else if (action === "both") {
+      await performBothSend();
     }
   }
 
@@ -1060,6 +1094,67 @@
       btn.disabled = false;
       lucide.createIcons();
     }
+  }
+
+  async function performBothSend() {
+    if (!currentDraft) return;
+    const { companyId, variantId, variant } = currentDraft;
+    const btn = document.getElementById("bothSendBtn");
+    btn.innerHTML = '<span class="spinner"></span>送信中...';
+    btn.disabled = true;
+    const force = document.getElementById("forceCheck").checked;
+
+    let formOk = false, formErr = null;
+    let emailOk = false, emailErr = null;
+
+    try {
+      const res = await fetch("/api/submit-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "フォーム送信エラー");
+      formOk = true;
+    } catch (err) {
+      formErr = err.message;
+    }
+
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force, attachment_id: variant?.attachment_id || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "メール送信エラー");
+      emailOk = true;
+    } catch (err) {
+      emailErr = err.message;
+    }
+
+    const lRes = await fetch("/api/send-logs");
+    logs = await lRes.json();
+    renderLogs();
+
+    const formMsg  = formOk  ? "フォーム送信: 成功" : `フォーム送信: 失敗（${formErr}）`;
+    const emailMsg = emailOk ? "メール送信: 成功"   : `メール送信: 失敗（${emailErr}）`;
+    const combinedMsg = `${formMsg} / ${emailMsg}`;
+
+    if (formOk && emailOk) {
+      showDraftMsg(combinedMsg, "ok");
+      showToast(combinedMsg, "success");
+    } else if (formOk || emailOk) {
+      showDraftMsg(combinedMsg, "warn");
+      showToast(combinedMsg, "warning");
+    } else {
+      showDraftMsg(combinedMsg, "error");
+      showToast(combinedMsg, "error");
+    }
+
+    btn.innerHTML = '<i data-lucide="send-horizontal"></i>フォーム+メール両方に送信';
+    btn.disabled = false;
+    lucide.createIcons();
   }
 
   async function recordSent() {
@@ -1556,7 +1651,7 @@
   init();
   startTour([
     { targetSelector: ".draft-section",   title: "下書きを生成する",     description: "企業とバリアントを選んで「下書き生成」を押すと、企業名が自動で差し込まれたメッセージが表示されます。",          position: "bottom" },
-    { targetSelector: ".preview-actions", title: "送信する",             description: "「フォームに自動送信」か「メールで送信」で送信できます。24時間以内の再送信はガードされます。",               position: "top" },
+    { targetSelector: ".preview-actions", title: "送信する",             description: "「フォームに自動送信」か「メールで送信」で送信できます。両方に対応した企業は「フォーム+メール両方に送信」も選べます。24時間以内の再送信はガードされます。",               position: "top" },
     { targetSelector: ".history-section", title: "送信履歴と反応記録",   description: "送信履歴がここに表示されます。返信が来たら「反応を記録」ボタンで記録すると、分析に反映されます。",            position: "top" },
     { targetSelector: "#draftScoreCard",  title: "文面スコアで品質チェック", description: "下書き生成後に文字数・読みやすさスコア・改善ヒントが表示されます。スコア80以上を目安に文面を調整しましょう。", position: "top" }
   ], "locle_tour_send");

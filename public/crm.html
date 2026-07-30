@@ -232,6 +232,10 @@
     color: var(--gray-700); cursor: pointer; font-family: inherit;
   }
   .settings-checkbox-row input { width: 16px; height: 16px; cursor: pointer; }
+  .settings-note {
+    font-size: 12px; color: var(--gray-500); line-height: 1.6;
+    background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px;
+  }
 
   /* A/B tests */
   .ab-status-badge {
@@ -696,6 +700,14 @@
         <input type="checkbox" id="settingSkipRejection" />
         営業お断りサイトを自動スキップ
       </label>
+      <div class="form-group">
+        <label for="settingAutoSendHour">自動送信の実行時刻</label>
+        <select id="settingAutoSendHour"></select>
+      </div>
+      <p class="settings-note">
+        自動送信は1日1回、Vercelの実行スケジュールに基づいて処理されます。設定時刻に正確に
+        実行されるとは限りません（概ね毎日9時頃に処理されます）。
+      </p>
       <div>
         <button class="btn-add" onclick="saveSettings()"><i data-lucide="save"></i>保存</button>
       </div>
@@ -1844,17 +1856,28 @@
     document.getElementById("settingDailyLimit").value = settings.daily_send_limit ?? 20;
     document.getElementById("settingSendInterval").value = settings.send_interval_seconds ?? 30;
     document.getElementById("settingSkipRejection").checked = settings.skip_rejection_sites !== "false";
+
+    const hourSelect = document.getElementById("settingAutoSendHour");
+    if (!hourSelect.options.length) {
+      hourSelect.innerHTML = Array.from({ length: 24 }, (_, h) =>
+        `<option value="${h}">${h}時</option>`
+      ).join("");
+    }
+    const autoSendHour = parseInt(settings.auto_send_hour, 10);
+    hourSelect.value = String(Number.isFinite(autoSendHour) ? autoSendHour : 9);
   }
 
   async function saveSettings() {
     const dailyLimit = document.getElementById("settingDailyLimit").value;
     const sendInterval = document.getElementById("settingSendInterval").value;
     const skipRejection = document.getElementById("settingSkipRejection").checked;
+    const autoSendHour = document.getElementById("settingAutoSendHour").value;
 
     const updates = [
       { key: "daily_send_limit", value: String(dailyLimit || 20) },
       { key: "send_interval_seconds", value: String(sendInterval || 30) },
       { key: "skip_rejection_sites", value: skipRejection ? "true" : "false" },
+      { key: "auto_send_hour", value: String(autoSendHour || 9) },
     ];
 
     try {
