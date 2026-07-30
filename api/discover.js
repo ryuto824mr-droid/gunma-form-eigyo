@@ -58,6 +58,12 @@ function isBranchOrStore(name) {
   const branchKeywords = ["支店", "営業所", "出張所"];
   if (branchKeywords.some(k => name.includes(k))) return true;
   if (/[一-龠ぁ-んァ-ヶ]店$/.test(name) && !name.endsWith("本店")) return true;
+
+  // 駅名+方角+店舗系(「駅」という文字を含み、かつ店舗を示す語も含む場合)
+  if (name.includes("駅") && (name.includes("前") || name.includes("東口") || name.includes("西口") || name.includes("南口") || name.includes("北口"))) {
+    return true;
+  }
+
   return false;
 }
 
