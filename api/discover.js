@@ -32,6 +32,9 @@ const EXCLUDE_DOMAINS = [
   "ac.jp", // 大学・高等教育機関専用ドメイン(hiroshima-u.ac.jp等のサブドメインも末尾一致で除外)
   "fallabs.com", "ntticc.or.jp", "govtechtokyo.or.jp", "shigotozaidan.or.jp",
   "or.jp", // 公益法人・財団法人専用ドメイン(末尾一致で除外)
+  "hotstaff.co.jp", "odoor.co.jp", "revive-support.jp", "amazon.co.jp",
+  "some-rize.jp", "tepco.co.jp", "peraichi.com", "school.stephouse.jp",
+  "usappy.jp",
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -42,6 +45,9 @@ const NOISE_NAME_KEYWORDS = [
   "教育センター", "教育委員会", "特別支援学校", "生涯学習センター",
   "市役所", "県庁", "保健所", "児童相談所",
   "社会福祉協議会", "学習塾", "教室", "個別指導",
+  "就労継続支援", "障がい者", "税理士法人", "税理士事務所",
+  "社会保険労務士", "行政書士", "弁護士法人", "サービスステーション",
+  "ガソリンスタンド", "service station",
 ];
 
 function isNoisyName(rawName) {
