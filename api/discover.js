@@ -50,6 +50,17 @@ function isNoisyName(rawName) {
   return NOISE_NAME_KEYWORDS.some(k => name.includes(k.toLowerCase()));
 }
 
+// 店舗・支店単位の結果(例: "○○支店", "○○西口店")は企業単位の営業リストとして
+// 重複・粒度過多になるため除外する。「本店」は本社的な意味合いのため除外しない
+function isBranchOrStore(name) {
+  if (!name) return false;
+  if (name.includes("本店")) return false;
+  const branchKeywords = ["支店", "営業所", "出張所"];
+  if (branchKeywords.some(k => name.includes(k))) return true;
+  if (/[一-龠ぁ-んァ-ヶ]店$/.test(name) && !name.endsWith("本店")) return true;
+  return false;
+}
+
 // URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
 const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
 
@@ -275,7 +286,7 @@ async function searchViaBrave(params, apiKey, resultCount = DEFAULT_RESULT_COUNT
   const webResults = data.web?.results || [];
 
   // ブラックリスト除外 + ホスト名重複除去
-  const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, name_match: 0, other: 0 };
+  const excludedReasons = { domain_match: 0, path_match: 0, punycode_job: 0, name_match: 0, branch_store: 0, other: 0 };
   const seen = new Set();
   const results = [];
   for (const r of webResults) {
@@ -286,6 +297,10 @@ async function searchViaBrave(params, apiKey, resultCount = DEFAULT_RESULT_COUNT
     }
     if (isNoisyName(r.title)) {
       excludedReasons.name_match++;
+      continue;
+    }
+    if (isBranchOrStore(r.title)) {
+      excludedReasons.branch_store++;
       continue;
     }
     const host = getHostname(r.url);
