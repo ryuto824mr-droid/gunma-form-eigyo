@@ -1367,7 +1367,7 @@
     const now = new Date();
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const daysRemaining = lastDayOfMonth - now.getDate();
-    if (daysRemaining > 3) return;
+    if (daysRemaining > 7) return;
 
     try {
       if (localStorage.getItem(usageConfirmedKey())) return;
