@@ -116,6 +116,29 @@
   }
   .btn-tag-add:hover { background: var(--green-50); }
 
+  .ai-generate-wrap { margin-bottom: 4px; }
+  .btn-ai-generate {
+    padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); background: var(--white);
+    color: var(--green-700); cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: all 150ms; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .btn-ai-generate:hover:not(:disabled) { background: var(--green-50); }
+  .btn-ai-generate:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-ai-generate svg { width: 13px; height: 13px; }
+  .ai-generate-panel {
+    border: 1px solid var(--green-200); background: var(--green-50);
+    border-radius: var(--radius-md); padding: 14px 16px; margin-top: 10px;
+  }
+  .ai-generate-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .ai-generate-actions { margin-top: 10px; display: flex; align-items: center; gap: 12px; }
+  .ai-generate-msg { font-size: 12px; }
+  .ai-generate-msg.error { color: #dc2626; }
+  .ai-generate-msg.ok    { color: var(--green-700); }
+  @media (max-width: 640px) {
+    .ai-generate-grid { grid-template-columns: 1fr; }
+  }
+
   .create-footer { margin-top: 18px; display: flex; align-items: center; gap: 14px; }
   .btn-create {
     padding: 8px 20px;
@@ -463,6 +486,39 @@
         <input type="text" id="inputSubject" placeholder="例: {{company_name}} 様へのご提案" />
       </div>
 
+      <div class="form-group full ai-generate-wrap">
+        <button type="button" class="btn-ai-generate" id="aiGenerateToggleBtn" onclick="toggleAiGeneratePanel()">
+          <i data-lucide="sparkles"></i>AIで文面を自動生成
+        </button>
+        <div class="ai-generate-panel" id="aiGeneratePanel" hidden>
+          <div class="ai-generate-grid">
+            <div class="form-group">
+              <label for="aiGenCompany">参考にする企業（任意）</label>
+              <select id="aiGenCompany"><option value="">選択なし</option></select>
+            </div>
+            <div class="form-group">
+              <label for="aiGenTone">トーン</label>
+              <select id="aiGenTone">
+                <option value="丁寧">丁寧</option>
+                <option value="カジュアル">カジュアル</option>
+                <option value="熱意重視">熱意重視</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="aiGenLength">長さ</label>
+              <select id="aiGenLength">
+                <option value="短文">短文</option>
+                <option value="長文">長文</option>
+              </select>
+            </div>
+          </div>
+          <div class="ai-generate-actions">
+            <button type="button" class="btn-tag-add" id="aiGenerateRunBtn" onclick="runAiGenerate()">生成する</button>
+            <span class="ai-generate-msg" id="aiGenerateMsg"></span>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group full">
         <label for="inputBody">本文テンプレート <span style="color:#dc2626">*</span></label>
         <textarea id="inputBody" placeholder="例: {{company_name}} ご担当者様&#10;&#10;はじめてご連絡させていただきます..."></textarea>
@@ -551,6 +607,74 @@
       sel.innerHTML = '<option value="">添付なし</option>' + options;
     } catch (err) {
       // 添付ファイル一覧の取得失敗はバリアント作成自体には影響させない
+    }
+  }
+
+  async function loadCompaniesForAiSelect() {
+    const sel = document.getElementById("aiGenCompany");
+    if (!sel) return;
+    try {
+      const res = await fetch("/api/companies");
+      if (!res.ok) throw new Error("取得失敗");
+      const companiesList = await res.json();
+      const options = companiesList
+        .map(c => `<option value="${c.id}">${esc(c.name)}</option>`)
+        .join("");
+      sel.innerHTML = '<option value="">選択なし</option>' + options;
+    } catch (err) {
+      // 企業一覧の取得失敗はAI生成パネル自体には影響させない(参考企業なしで生成できる)
+    }
+  }
+
+  function toggleAiGeneratePanel() {
+    const panel = document.getElementById("aiGeneratePanel");
+    panel.hidden = !panel.hidden;
+  }
+
+  async function runAiGenerate() {
+    const companyId = document.getElementById("aiGenCompany").value || null;
+    const tone      = document.getElementById("aiGenTone").value;
+    const length    = document.getElementById("aiGenLength").value;
+    const channel   = document.getElementById("inputChannel").value;
+    const btn       = document.getElementById("aiGenerateRunBtn");
+    const msgEl     = document.getElementById("aiGenerateMsg");
+
+    btn.disabled = true;
+    btn.textContent = "生成中...";
+    msgEl.textContent = "";
+    msgEl.className = "ai-generate-msg";
+
+    try {
+      const res = await fetch("/api/crm?action=generate-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, tone, length, channel }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        msgEl.textContent = data.error === "AI機能が設定されていません"
+          ? "AI機能を使うにはAPIキーの設定が必要です"
+          : (data.error || "生成に失敗しました");
+        msgEl.classList.add("error");
+        return;
+      }
+
+      const subjectEl = document.getElementById("inputSubject");
+      const bodyEl    = document.getElementById("inputBody");
+      const hasExisting = subjectEl.value.trim() || bodyEl.value.trim();
+      if (hasExisting && !confirm("既に入力されている件名・本文を上書きします。よろしいですか？")) {
+        return;
+      }
+      subjectEl.value = data.subject || "";
+      bodyEl.value    = data.body || "";
+      msgEl.textContent = "生成しました";
+      msgEl.classList.add("ok");
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.classList.add("error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "生成する";
     }
   }
 
@@ -901,6 +1025,7 @@
   lucide.createIcons();
   loadVariants();
   loadAttachmentsForSelect();
+  loadCompaniesForAiSelect();
   startTour([
     { targetSelector: ".create-section", title: "バリアントを作成する", description: "名前・チャネル・件名・本文を入力して作成します。本文に{{company_name}}と書くと送信時に企業名が自動で入ります。", position: "bottom" },
     { targetSelector: "#tagRows",        title: "タグで分類する",       description: "「トーン:カジュアル」「長さ:短文」など自由にタグを付けられます。分析ページでタグ別の反応率を比較できます。",        position: "top" },

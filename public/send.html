@@ -108,6 +108,38 @@
   }
   .btn-generate svg { width: 13px; height: 13px; }
 
+  /* AI suggest */
+  .btn-ai-suggest-link {
+    background: none; border: none; padding: 4px 0; margin-top: 6px;
+    color: var(--green-700); font-size: 12px; font-weight: 600; font-family: inherit;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-ai-suggest-link:hover { text-decoration: underline; }
+  .btn-ai-suggest-link svg { width: 12px; height: 12px; }
+  .ai-suggest-panel {
+    border: 1px solid var(--green-200); background: var(--green-50);
+    border-radius: var(--radius-md); padding: 12px 14px; margin-top: 8px;
+  }
+  .ai-suggest-controls { display: flex; align-items: center; gap: 12px; }
+  .ai-suggest-msg { font-size: 12px; }
+  .ai-suggest-msg.error { color: #dc2626; }
+  .ai-suggest-msg.ok    { color: var(--green-700); }
+  .ai-suggest-result { margin-top: 10px; }
+  .ai-suggest-result pre {
+    white-space: pre-wrap; font-family: inherit; font-size: 13px;
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    padding: 10px 12px; margin: 6px 0 0;
+  }
+  .ai-suggest-save-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .ai-suggest-save-row input[type="text"] {
+    flex: 1; min-width: 160px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+  }
+  .ai-suggest-save-row select {
+    padding: 7px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+  }
+
   /* Preview */
   .preview-box {
     margin-top: 18px; border: 1px solid var(--gray-200);
@@ -644,6 +676,28 @@
       </button>
     </div>
 
+    <button type="button" class="btn-ai-suggest-link" onclick="toggleAiSuggestPanel()">
+      <i data-lucide="sparkles"></i>AIで新しいバリアントを提案
+    </button>
+    <div class="ai-suggest-panel" id="aiSuggestPanel" hidden>
+      <div class="ai-suggest-controls">
+        <button type="button" class="btn-generate" id="aiSuggestRunBtn" onclick="runAiSuggest()">生成する</button>
+        <span class="ai-suggest-msg" id="aiSuggestMsg"></span>
+      </div>
+      <div class="ai-suggest-result" id="aiSuggestResult" hidden>
+        <div class="preview-meta"><div>件名: <span id="aiSuggestSubjectVal"></span></div></div>
+        <pre id="aiSuggestBodyText"></pre>
+        <div class="ai-suggest-save-row">
+          <input type="text" id="aiSuggestVariantName" placeholder="バリアント名（例: AI生成 v1）" />
+          <select id="aiSuggestChannel">
+            <option value="email">メール</option>
+            <option value="form">フォーム</option>
+          </select>
+          <button type="button" class="btn-generate" id="aiSuggestSaveBtn" onclick="saveAiSuggestAsVariant()">このままバリアントとして保存</button>
+        </div>
+      </div>
+    </div>
+
     <div class="preview-box" id="draftPreview" hidden>
       <div class="preview-meta">
         <div>チャネル: <span id="draftChannelVal"></span></div>
@@ -915,6 +969,96 @@
     document.getElementById("forceRow").hidden = !(canAutoSubmit || canEmail);
     lucide.createIcons();
     showDraftMsg("", "");
+  }
+
+  let aiSuggestDraft = null;
+
+  function toggleAiSuggestPanel() {
+    document.getElementById("aiSuggestPanel").hidden = !document.getElementById("aiSuggestPanel").hidden;
+  }
+
+  async function runAiSuggest() {
+    const companyId = parseInt(document.getElementById("companySelect").value, 10);
+    if (!companyId) {
+      showToast("企業を選択してください", "error");
+      return;
+    }
+
+    const btn       = document.getElementById("aiSuggestRunBtn");
+    const msgEl      = document.getElementById("aiSuggestMsg");
+    const resultBox = document.getElementById("aiSuggestResult");
+    btn.disabled = true;
+    btn.textContent = "生成中...";
+    msgEl.textContent = "";
+    msgEl.className = "ai-suggest-msg";
+    resultBox.hidden = true;
+
+    try {
+      const res = await fetch("/api/crm?action=generate-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        msgEl.textContent = data.error === "AI機能が設定されていません"
+          ? "AI機能を使うにはAPIキーの設定が必要です"
+          : (data.error || "生成に失敗しました");
+        msgEl.classList.add("error");
+        return;
+      }
+
+      aiSuggestDraft = { subject: data.subject || "", body: data.body || "" };
+      document.getElementById("aiSuggestSubjectVal").textContent = aiSuggestDraft.subject || "(件名なし)";
+      document.getElementById("aiSuggestBodyText").textContent = aiSuggestDraft.body;
+      const company = companies.find(c => c.id === companyId);
+      document.getElementById("aiSuggestVariantName").value = `AI生成${company ? " - " + company.name + "案" : ""}`;
+      resultBox.hidden = false;
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.classList.add("error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "生成する";
+    }
+  }
+
+  async function saveAiSuggestAsVariant() {
+    if (!aiSuggestDraft) return;
+    const name    = document.getElementById("aiSuggestVariantName").value.trim();
+    const channel = document.getElementById("aiSuggestChannel").value;
+    if (!name) { showToast("バリアント名を入力してください", "error"); return; }
+
+    const btn = document.getElementById("aiSuggestSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "保存中...";
+
+    try {
+      const res = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name, channel,
+          subject_template: aiSuggestDraft.subject || null,
+          body_template: aiSuggestDraft.body,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "保存エラー"), "error"); return; }
+
+      variants.push(data);
+      document.getElementById("variantSelect").insertAdjacentHTML("beforeend",
+        `<option value="${data.id}">${esc(data.name)}（${data.channel === "email" ? "メール" : "フォーム"}）</option>`);
+      showToast("バリアントとして保存しました", "success");
+      document.getElementById("aiSuggestResult").hidden = true;
+      document.getElementById("aiSuggestPanel").hidden = true;
+      aiSuggestDraft = null;
+    } catch (err) {
+      showToast(esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "このままバリアントとして保存";
+    }
   }
 
   async function copyDraft() {

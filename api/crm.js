@@ -9,6 +9,7 @@ const { neon } = require("@neondatabase/serverless");
 const { sql, getSettings } = require("../lib/db");
 const submitFormHandler = require("./submit-form");
 const sendEmailHandler = require("./send-email");
+const { generateMessageDraft } = require("../lib/ai-message-generator");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -29,8 +30,9 @@ module.exports = async function handler(req, res) {
     case "attachments":       return handleAttachments(req, res);
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
+    case "generate-message": return handleGenerateMessage(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message）を指定してください" });
   }
 };
 
@@ -1219,5 +1221,51 @@ async function handleRunScheduledSends(req, res) {
     return res.status(200).json({ processed: due.length, success, failed });
   } catch (err) {
     return res.status(500).json({ error: `実行エラー: ${err.message}` });
+  }
+}
+
+// ==================== generate-message ====================
+
+async function handleGenerateMessage(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
+  }
+
+  const { company_id, tone, length } = req.body || {};
+
+  let company = null;
+  if (company_id) {
+    const companyId = parseInt(company_id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なcompany_idを指定してください" });
+    }
+    try {
+      [company] = await sql`SELECT name, company_info, company_tags FROM companies WHERE id = ${companyId}`;
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+    if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+  }
+
+  const industry = company?.company_tags
+    ? extractTagValue(Array.isArray(company.company_tags) ? company.company_tags : [], "業種")
+    : null;
+
+  try {
+    const result = await generateMessageDraft({
+      companyName: company?.name,
+      companyInfo: company?.company_info,
+      industry,
+      tone,
+      length,
+    });
+
+    if (result.configured === false) {
+      return res.status(400).json({ error: "AI機能が設定されていません" });
+    }
+
+    return res.status(200).json({ subject: result.subject, body: result.body });
+  } catch (err) {
+    return res.status(500).json({ error: `AI文面生成エラー: ${err.message}` });
   }
 }
