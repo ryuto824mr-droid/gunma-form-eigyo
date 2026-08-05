@@ -19,6 +19,8 @@
   :root {
     --green-500: #44B13F; --green-700: #2F8A2A;
     --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --blue-500: #2563eb;  --blue-700: #1d4ed8;
+    --blue-50: #eff6ff;   --blue-100: #dbeafe;  --blue-200: #bfdbfe;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -130,6 +132,27 @@
     margin-bottom: 26px; box-shadow: var(--shadow-sm);
   }
   .stat-section h2 { margin: 0 0 18px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+
+  /* Channel breakdown cards */
+  .channel-cards { display: flex; gap: 16px; flex-wrap: wrap; }
+  .channel-card {
+    flex: 1; min-width: 220px; background: var(--white);
+    border: 1px solid var(--gray-100); border-top: 3px solid var(--gray-300);
+    border-radius: var(--radius-lg); padding: 20px 24px; box-shadow: var(--shadow-sm);
+  }
+  .channel-card.email { border-top-color: var(--blue-500); }
+  .channel-card.form  { border-top-color: var(--green-500); }
+  .channel-card-header {
+    font-size: 14px; font-weight: 700; color: var(--gray-900);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 6px;
+  }
+  .channel-card-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 10px; }
+  .channel-card-stat .value { font-size: 22px; font-weight: 700; color: var(--gray-900); line-height: 1.2; letter-spacing: -0.02em; }
+  .channel-card-stat .value.rate { color: var(--green-700); }
+  .channel-card-stat .label {
+    font-size: 11px; color: var(--gray-400); text-transform: uppercase;
+    letter-spacing: 0.05em; font-weight: 600; margin-top: 3px;
+  }
 
   .chart-wrap { position: relative; height: 240px; margin-bottom: 20px; }
 
@@ -466,6 +489,39 @@
     });
   }
 
+  function channelBreakdownCardHtml(channel, stats) {
+    const isEmail = channel === "email";
+    const icon  = isEmail ? "📧" : "📬";
+    const label = isEmail ? "メール" : "フォーム";
+    const avgDaysDisplay = stats.avg_response_days != null ? `${stats.avg_response_days}日` : "-";
+    return `
+      <div class="channel-card ${channel}">
+        <div class="channel-card-header">${icon} ${label}</div>
+        <div class="channel-card-stats">
+          <div class="channel-card-stat"><div class="value">${stats.send_count}</div><div class="label">送信数</div></div>
+          <div class="channel-card-stat"><div class="value">${stats.response_count}</div><div class="label">反応数</div></div>
+          <div class="channel-card-stat"><div class="value rate">${stats.response_rate}%</div><div class="label">反応率</div></div>
+          <div class="channel-card-stat"><div class="value">${avgDaysDisplay}</div><div class="label">平均返信日数</div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChannelBreakdownSection(channelBreakdown) {
+    const defaults = { send_count: 0, response_count: 0, response_rate: 0, avg_response_days: null };
+    const email = channelBreakdown?.email || defaults;
+    const form  = channelBreakdown?.form  || defaults;
+    return `
+      <section class="stat-section">
+        <h2>チャネル別パフォーマンス</h2>
+        <div class="channel-cards">
+          ${channelBreakdownCardHtml("email", email)}
+          ${channelBreakdownCardHtml("form", form)}
+        </div>
+      </section>
+    `;
+  }
+
   function animateCount(el, target, isFloat = false) {
     const duration = 600;
     const start = performance.now();
@@ -504,6 +560,7 @@
         destroyCharts();
       } else {
         document.getElementById("mainContent").innerHTML =
+          renderChannelBreakdownSection(data.channel_breakdown) +
           `<section class="stat-section">
             <h2>バリアント別集計</h2>
             <div class="chart-wrap"><canvas id="variantsChart"></canvas></div>

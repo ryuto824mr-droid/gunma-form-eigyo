@@ -48,6 +48,47 @@ module.exports = async function handler(req, res) {
       ORDER BY send_count DESC, mv.name
     `;
 
+    const channelRows = await sql`
+      SELECT
+        sl.channel                                                        AS channel,
+        COUNT(DISTINCT sl.id)::int                                        AS send_count,
+        COUNT(DISTINCT r.id)::int                                         AS response_count,
+        CASE
+          WHEN COUNT(DISTINCT sl.id) > 0
+          THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+          ELSE 0
+        END                                                               AS response_rate
+      FROM send_logs sl
+      LEFT JOIN responses r ON r.send_log_id = sl.id
+      GROUP BY sl.channel
+    `;
+
+    // 平均返信日数はメールチャネルのみ算出する(フォーム経由の反応は相手が別途メールで
+    // 返信してきたものであり、フォーム送信〜返信の「経過日数」に分析上の意味がないため)
+    const [{ avg_days: emailAvgResponseDays }] = await sql`
+      SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+      FROM send_logs sl
+      JOIN responses r ON r.send_log_id = sl.id
+      WHERE sl.channel = 'email'
+    `;
+    const emailAvgResponseDaysRounded = emailAvgResponseDays != null
+      ? Math.round(Number(emailAvgResponseDays) * 10) / 10
+      : null;
+
+    const channel_breakdown = {
+      email: { send_count: 0, response_count: 0, response_rate: 0, avg_response_days: null },
+      form:  { send_count: 0, response_count: 0, response_rate: 0, avg_response_days: null },
+    };
+    channelRows.forEach(row => {
+      if (!channel_breakdown[row.channel]) return;
+      channel_breakdown[row.channel] = {
+        send_count: row.send_count,
+        response_count: row.response_count,
+        response_rate: Number(row.response_rate),
+        avg_response_days: row.channel === "email" ? emailAvgResponseDaysRounded : null,
+      };
+    });
+
     const tags_stats = await sql`
       SELECT
         kv.key                                                            AS tag_key,
@@ -67,7 +108,7 @@ module.exports = async function handler(req, res) {
       ORDER BY send_count DESC, kv.key, kv.value
     `;
 
-    return res.status(200).json({ variants_stats, tags_stats });
+    return res.status(200).json({ variants_stats, tags_stats, channel_breakdown });
   } catch (err) {
     return res.status(500).json({ error: `集計エラー: ${err.message}` });
   }

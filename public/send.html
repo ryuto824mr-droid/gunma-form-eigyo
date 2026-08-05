@@ -19,6 +19,8 @@
   :root {
     --green-500: #44B13F; --green-700: #2F8A2A;
     --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --blue-500: #2563eb;  --blue-700: #1d4ed8;
+    --blue-50: #eff6ff;   --blue-100: #dbeafe;  --blue-200: #bfdbfe;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -350,6 +352,24 @@
   }
   .btn-export-csv:hover { background: var(--gray-50); transform: translateY(-1px); }
   .btn-export-csv svg { width: 13px; height: 13px; }
+
+  /* Channel summary cards */
+  .channel-summary-cards { display: flex; gap: 14px; margin-bottom: 16px; flex-wrap: wrap; }
+  .channel-summary-card {
+    flex: 1; min-width: 220px;
+    background: var(--white); border: 1px solid var(--gray-200); border-top: 3px solid var(--gray-300);
+    border-radius: var(--radius-lg); padding: 14px 18px; box-shadow: var(--shadow-sm);
+  }
+  .channel-summary-card.email { border-top-color: var(--blue-500); }
+  .channel-summary-card.form  { border-top-color: var(--green-500); }
+  .channel-summary-header { font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 10px; }
+  .channel-summary-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .channel-summary-stat { display: flex; flex-direction: column; gap: 2px; }
+  .channel-summary-stat strong { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+  .channel-summary-stat span { font-size: 10px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.03em; }
+  @media (max-width: 640px) {
+    .channel-summary-stats { grid-template-columns: repeat(2, 1fr); row-gap: 10px; }
+  }
 
   /* History filter bar */
   .filter-bar {
@@ -764,8 +784,14 @@
         <i data-lucide="download"></i>CSVエクスポート
       </button>
     </div>
+    <div class="channel-summary-cards" id="channelSummaryCards"></div>
     <div class="filter-bar">
       <input type="text" id="filterCompany" placeholder="企業名で検索" oninput="onLogFilterChange()" />
+      <select id="filterLogChannel" onchange="onLogFilterChange()">
+        <option value="all">チャネル: すべて</option>
+        <option value="email">📧 メール</option>
+        <option value="form">📬 フォーム</option>
+      </select>
       <select id="filterLogStatus" onchange="onLogFilterChange()">
         <option value="all">ステータス: すべて</option>
         <option value="sent">sent</option>
@@ -865,7 +891,7 @@
   let logs      = [];
   let scheduledSends = [];
   let currentDraft = null;
-  let logFilters = { company: "", status: "all", date: "all" };
+  let logFilters = { company: "", status: "all", date: "all", channel: "all" };
 
   const CLASSIF_LABELS = {
     interested: "興味あり",
@@ -1443,36 +1469,79 @@
     URL.revokeObjectURL(url);
   }
 
+  // company/status/date のみで判定する(channelは含めない)。
+  // これによりチャネル別サマリーカードは、チャネルフィルターの選択に左右されず
+  // 常に2チャネルを横並びで比較できる
+  function logMatchesBaseFilters(log) {
+    if (logFilters.company) {
+      const q = logFilters.company.toLowerCase();
+      if (!(log.company_name || "").toLowerCase().includes(q)) return false;
+    }
+    if (logFilters.status !== "all" && log.status !== logFilters.status) return false;
+    if (logFilters.date !== "all") {
+      if (!log.sent_at) return false;
+      const sentAt = new Date(log.sent_at);
+      const now = new Date();
+      if (logFilters.date === "today") {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (sentAt < start) return false;
+      } else if (logFilters.date === "week") {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay());
+        start.setHours(0, 0, 0, 0);
+        if (sentAt < start) return false;
+      } else if (logFilters.date === "month") {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (sentAt < start) return false;
+      }
+    }
+    return true;
+  }
+
   function getFilteredLogs() {
     return logs.filter(log => {
-      if (logFilters.company) {
-        const q = logFilters.company.toLowerCase();
-        if (!(log.company_name || "").toLowerCase().includes(q)) return false;
-      }
-      if (logFilters.status !== "all" && log.status !== logFilters.status) return false;
-      if (logFilters.date !== "all") {
-        if (!log.sent_at) return false;
-        const sentAt = new Date(log.sent_at);
-        const now = new Date();
-        if (logFilters.date === "today") {
-          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          if (sentAt < start) return false;
-        } else if (logFilters.date === "week") {
-          const start = new Date(now);
-          start.setDate(now.getDate() - now.getDay());
-          start.setHours(0, 0, 0, 0);
-          if (sentAt < start) return false;
-        } else if (logFilters.date === "month") {
-          const start = new Date(now.getFullYear(), now.getMonth(), 1);
-          if (sentAt < start) return false;
-        }
-      }
+      if (!logMatchesBaseFilters(log)) return false;
+      if (logFilters.channel !== "all" && log.channel !== logFilters.channel) return false;
       return true;
     });
   }
 
+  function getChannelSummary(channel) {
+    const channelLogs = logs.filter(log => logMatchesBaseFilters(log) && log.channel === channel);
+    const sendCount     = channelLogs.length;
+    const successCount  = channelLogs.filter(l => l.status === "sent").length;
+    const responseCount = channelLogs.filter(l => !!l.latest_response).length;
+    const responseRate  = sendCount > 0 ? Math.round((responseCount / sendCount) * 1000) / 10 : 0;
+    return { sendCount, successCount, responseCount, responseRate };
+  }
+
+  function channelSummaryCardHtml(channel) {
+    const s = getChannelSummary(channel);
+    const isEmail = channel === "email";
+    const icon  = isEmail ? "📧" : "📬";
+    const label = isEmail ? "メール" : "フォーム";
+    return `
+      <div class="channel-summary-card ${channel}">
+        <div class="channel-summary-header">${icon} ${label}</div>
+        <div class="channel-summary-stats">
+          <div class="channel-summary-stat"><strong>${s.sendCount}</strong><span>送信数</span></div>
+          <div class="channel-summary-stat"><strong>${s.successCount}</strong><span>成功数</span></div>
+          <div class="channel-summary-stat"><strong>${s.responseCount}</strong><span>反応数</span></div>
+          <div class="channel-summary-stat"><strong>${s.responseRate}%</strong><span>反応率</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChannelSummary() {
+    const container = document.getElementById("channelSummaryCards");
+    if (!container) return;
+    container.innerHTML = channelSummaryCardHtml("email") + channelSummaryCardHtml("form");
+  }
+
   function onLogFilterChange() {
     logFilters.company = document.getElementById("filterCompany").value.trim();
+    logFilters.channel = document.getElementById("filterLogChannel").value;
     logFilters.status  = document.getElementById("filterLogStatus").value;
     logFilters.date    = document.getElementById("filterLogDate").value;
     renderLogs();
@@ -1480,20 +1549,22 @@
 
   function clearLogFilters() {
     document.getElementById("filterCompany").value = "";
+    document.getElementById("filterLogChannel").value = "all";
     document.getElementById("filterLogStatus").value = "all";
     document.getElementById("filterLogDate").value = "all";
-    logFilters = { company: "", status: "all", date: "all" };
+    logFilters = { company: "", status: "all", date: "all", channel: "all" };
     renderLogs();
   }
 
   function updateLogFilterCount(filteredCount) {
     const el = document.getElementById("logFilterCount");
     if (!el) return;
-    const isFiltering = logFilters.company || logFilters.status !== "all" || logFilters.date !== "all";
+    const isFiltering = logFilters.company || logFilters.status !== "all" || logFilters.date !== "all" || logFilters.channel !== "all";
     el.textContent = isFiltering ? `${logs.length}件中${filteredCount}件を表示中` : "";
   }
 
   function renderLogs() {
+    renderChannelSummary();
     const tbody = document.getElementById("logsBody");
     if (logs.length === 0) {
       tbody.innerHTML =
