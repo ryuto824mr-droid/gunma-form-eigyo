@@ -173,6 +173,9 @@ async function handleDbSetup(req, res) {
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_info JSONB");
     // scheduled_sends.error_message追加（自動送信失敗時のエラー内容記録用）
     await dbSql.query("ALTER TABLE scheduled_sends ADD COLUMN IF NOT EXISTS error_message TEXT");
+    // api_usage_logs.input_tokens / output_tokens追加（Anthropic API利用量の正確な集計用）
+    await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS input_tokens INTEGER");
+    await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS output_tokens INTEGER");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -943,6 +946,19 @@ function placesEstimatedCostJpy(count) {
   return Math.round((count - GOOGLE_PLACES_FREE_CALLS) * GOOGLE_PLACES_COST_PER_CALL_JPY);
 }
 
+// Claude Sonnet 4.6(2026年時点、要確認): 入力$3/100万トークン、出力$15/100万トークン
+const ANTHROPIC_INPUT_COST_PER_MTOK_USD = 3;
+const ANTHROPIC_OUTPUT_COST_PER_MTOK_USD = 15;
+// 為替レートの概算(円換算)
+const USD_TO_JPY_RATE = 150;
+
+function anthropicEstimatedCostJpy(inputTokens, outputTokens) {
+  const costUsd =
+    (inputTokens / 1000000) * ANTHROPIC_INPUT_COST_PER_MTOK_USD +
+    (outputTokens / 1000000) * ANTHROPIC_OUTPUT_COST_PER_MTOK_USD;
+  return Math.round(costUsd * USD_TO_JPY_RATE);
+}
+
 function percentageOf(count, limit) {
   if (!limit) return 0;
   return Math.round((count / limit) * 100);
@@ -960,17 +976,24 @@ async function handleApiUsage(req, res) {
   }
   try {
     const rows = await sql`
-      SELECT provider, COUNT(*)::int AS count
+      SELECT
+        provider,
+        COUNT(*)::int AS count,
+        COALESCE(SUM(input_tokens), 0)::int  AS input_tokens,
+        COALESCE(SUM(output_tokens), 0)::int AS output_tokens
       FROM api_usage_logs
       WHERE created_at >= date_trunc('month', NOW())
         AND created_at <  date_trunc('month', NOW()) + INTERVAL '1 month'
       GROUP BY provider
     `;
     const counts = {};
-    rows.forEach(r => { counts[r.provider] = r.count; });
+    rows.forEach(r => { counts[r.provider] = r; });
 
-    const braveCount  = counts.brave_search  || 0;
-    const placesCount = counts.google_places || 0;
+    const braveCount     = counts.brave_search?.count  || 0;
+    const placesCount    = counts.google_places?.count || 0;
+    const anthropicCount = counts.anthropic?.count      || 0;
+    const anthropicInputTokens  = counts.anthropic?.input_tokens  || 0;
+    const anthropicOutputTokens = counts.anthropic?.output_tokens || 0;
 
     return res.status(200).json({
       brave_search: {
@@ -984,6 +1007,13 @@ async function handleApiUsage(req, res) {
         free_limit: null,
         estimated_cost_jpy: placesEstimatedCostJpy(placesCount),
         percentage: percentageOf(placesCount, GOOGLE_PLACES_FREE_CALLS),
+      },
+      anthropic: {
+        count: anthropicCount,
+        input_tokens: anthropicInputTokens,
+        output_tokens: anthropicOutputTokens,
+        estimated_cost_jpy: anthropicEstimatedCostJpy(anthropicInputTokens, anthropicOutputTokens),
+        note: "実際のトークン数に基づく計算値です。為替レートにより多少前後します",
       },
       days_until_reset: daysUntilMonthEnd(),
     });

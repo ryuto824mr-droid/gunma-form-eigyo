@@ -122,6 +122,17 @@
   }
   .usage-card-cost { color: #dc2626; font-weight: 600; }
 
+  .usage-card-tokens {
+    font-size: 11px; color: var(--gray-400); margin-bottom: 8px;
+  }
+  .usage-card-cost-big {
+    font-size: 26px; font-weight: 700; color: var(--gray-900);
+    margin: 4px 0 10px;
+  }
+  .usage-card-cost-big .label { font-size: 11px; font-weight: 600; color: var(--gray-400); display: block; margin-bottom: 2px; }
+  .usage-card-note { font-size: 11px; color: var(--gray-400); line-height: 1.5; }
+  .usage-card-note a { color: var(--green-700); font-weight: 600; text-decoration: underline; }
+
   .usage-reminder {
     background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);
     padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #92400e;
@@ -1394,6 +1405,24 @@
     `;
   }
 
+  function anthropicUsageCardHtml({ count, inputTokens, outputTokens, estimatedCostJpy, note }) {
+    return `
+      <div class="usage-card">
+        <div class="usage-card-header">🤖 Anthropic API</div>
+        <div class="usage-card-count">${count}<span class="unit">回</span></div>
+        <div class="usage-card-tokens">入力: ${inputTokens.toLocaleString()} トークン / 出力: ${outputTokens.toLocaleString()} トークン</div>
+        <div class="usage-card-cost-big">
+          <span class="label">今月の推定利用額（実測トークンベース）</span>
+          ¥${estimatedCostJpy.toLocaleString()}
+        </div>
+        <div class="usage-card-note">
+          ${esc(note)}<br>
+          <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer">Anthropic Consoleを開く</a>
+        </div>
+      </div>
+    `;
+  }
+
   async function loadApiUsage() {
     const container = document.getElementById("apiUsageCards");
     if (!container) return;
@@ -1402,8 +1431,9 @@
       if (!res.ok) return;
       const data = await res.json();
 
-      const brave  = data.brave_search  || { count: 0, free_limit: 1000, estimated_cost_jpy: 0, percentage: 0 };
-      const places = data.google_places || { count: 0, free_limit: null, estimated_cost_jpy: 0, percentage: 0 };
+      const brave     = data.brave_search  || { count: 0, free_limit: 1000, estimated_cost_jpy: 0, percentage: 0 };
+      const places     = data.google_places || { count: 0, free_limit: null, estimated_cost_jpy: 0, percentage: 0 };
+      const anthropic = data.anthropic || { count: 0, input_tokens: 0, output_tokens: 0, estimated_cost_jpy: 0, note: "実際のトークン数に基づく計算値です。為替レートにより多少前後します" };
       const daysUntilReset = data.days_until_reset ?? 0;
 
       container.innerHTML =
@@ -1418,6 +1448,13 @@
           count: places.count, freeLimit: GOOGLE_PLACES_FREE_CALLS_APPROX,
           percentage: places.percentage, estimatedCostJpy: places.estimated_cost_jpy,
           daysUntilReset,
+        }) +
+        anthropicUsageCardHtml({
+          count: anthropic.count,
+          inputTokens: anthropic.input_tokens,
+          outputTokens: anthropic.output_tokens,
+          estimatedCostJpy: anthropic.estimated_cost_jpy,
+          note: anthropic.note,
         });
       container.hidden = false;
     } catch {
