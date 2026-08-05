@@ -78,7 +78,7 @@ module.exports = async function handler(req, res) {
   if (!variant) return res.status(404).json({ error: "バリアントが見つかりません" });
 
   // テンプレート置換
-  const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+  const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
   const subject = replace(variant.subject_template);
   const body    = replace(variant.body_template);
 

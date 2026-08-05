@@ -92,7 +92,7 @@ module.exports = async function handler(req, res) {
   if (!variant) return res.status(404).json({ error: "バリアントが見つかりません" });
 
   // フィールド値の組み立て
-  const replace      = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+  const replace      = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
   const fieldMapping = researchResult.fieldMapping || [];
 
   const VALUE_MAP = {

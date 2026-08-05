@@ -932,7 +932,8 @@
     const variant = variants.find(v => v.id === variantId);
     if (!company || !variant) return;
 
-    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+    const companyName = company.company_info?.official_name || company.name;
+    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, companyName);
     const body    = replace(variant.body_template);
     const subject = replace(variant.subject_template || "");
 
@@ -1108,7 +1109,7 @@
     if (!currentDraft) return;
     pendingSendAction = action;
     const { company, variant, body } = currentDraft;
-    const subject = (variant.subject_template || "").replace(/\{\{company_name\}\}/g, company.name);
+    const subject = (variant.subject_template || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
 
     document.getElementById("confirmCompanyName").textContent = company.name;
     document.getElementById("confirmChannel").textContent =

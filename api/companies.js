@@ -51,10 +51,28 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, priority, memo, status, next_action, next_action_date, action_status, company_tags, archived } = req.body || {};
+    const { id, name, priority, memo, status, next_action, next_action_date, action_status, company_tags, archived } = req.body || {};
     const companyId = parseInt(id, 10);
     if (!companyId || isNaN(companyId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
+    }
+
+    if (name !== undefined) {
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "nameは空にできません" });
+      }
+      try {
+        const [updated] = await sql`
+          UPDATE companies
+          SET name = ${name.trim()}
+          WHERE id = ${companyId}
+          RETURNING *
+        `;
+        if (!updated) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(updated);
+      } catch (err) {
+        return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+      }
     }
 
     if (priority !== undefined) {
@@ -173,7 +191,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    return res.status(400).json({ error: "priority, memo, status, next_action, next_action_date, action_status, company_tags, archivedのいずれかが必要です" });
+    return res.status(400).json({ error: "name, priority, memo, status, next_action, next_action_date, action_status, company_tags, archivedのいずれかが必要です" });
   }
 
   if (req.method === "DELETE") {

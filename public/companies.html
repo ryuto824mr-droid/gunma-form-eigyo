@@ -592,6 +592,20 @@
 
   .fields-title { font-size: 13px; font-weight: 600; color: var(--gray-700); margin: 0 0 10px; }
 
+  .official-name-notice {
+    background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);
+    padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #92400e;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .official-name-notice button {
+    padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;
+    font-family: inherit; font-weight: 600; white-space: nowrap;
+  }
+  .official-name-notice button:hover { background: #fef3c7; }
+  .official-name-ok { font-size: 13px; color: var(--gray-700); margin-bottom: 12px; }
+  .official-name-ok .check { color: var(--green-700); font-weight: 700; }
+
   .manual-action-section {
     margin-bottom: 18px; padding: 14px 16px;
     background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);
@@ -3257,7 +3271,7 @@
     const state = manualSendState;
     if (!state) return;
     const variant = variants.find(v => v.id === state.variantId);
-    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.name);
+    const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
     const subject = replace(variant?.subject_template || "");
     const body    = replace(variant?.body_template || "");
     const channel = resolveSendChannel(company, "auto");
@@ -3380,7 +3394,8 @@
       </div>`;
 
     const info = company.company_info;
-    if (info && (info.representative || info.founded_year || info.employee_count_text || info.capital || info.phone_number || info.business_description || info.hiring_status?.hasHiringPage)) {
+    const officialName = info?.official_name || null;
+    if (info && (officialName || info.representative || info.founded_year || info.employee_count_text || info.capital || info.phone_number || info.business_description || info.hiring_status?.hasHiringPage)) {
       const infoRows = [];
       if (info.representative) infoRows.push(`<dt>代表者</dt><dd>${esc(info.representative)}</dd>`);
       if (info.founded_year) infoRows.push(`<dt>設立年</dt><dd>${esc(info.founded_year)}年</dd>`);
@@ -3395,9 +3410,21 @@
       }
       if (info.business_description) infoRows.push(`<dt>事業内容</dt><dd style="white-space:pre-wrap">${esc(info.business_description)}</dd>`);
 
+      let officialNameHtml = "";
+      if (officialName && officialName !== company.name) {
+        officialNameHtml = `
+          <div class="official-name-notice">
+            <span>正式名称: <strong>${esc(officialName)}</strong>（登録名と異なります）</span>
+            <button onclick="updateCompanyNameToOfficial(${id})">登録名を正式名称に更新</button>
+          </div>`;
+      } else if (officialName) {
+        officialNameHtml = `<div class="official-name-ok">正式名称: ${esc(officialName)} <span class="check">✓</span></div>`;
+      }
+
       html += `
         <p class="fields-title">企業情報</p>
-        <dl class="info-grid">${infoRows.join("")}</dl>`;
+        ${officialNameHtml}
+        ${infoRows.length > 0 ? `<dl class="info-grid">${infoRows.join("")}</dl>` : ""}`;
     }
 
     if (needsManualAction(company)) {
@@ -3542,6 +3569,26 @@
       showToast("タグを保存しました", "success");
     } catch (err) {
       showToast("タグの保存に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  async function updateCompanyNameToOfficial(id) {
+    const company = companies.find(c => c.id === id);
+    const officialName = company?.company_info?.official_name;
+    if (!officialName) return;
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name: officialName }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "企業名の更新に失敗しました"), "error"); return; }
+      updateCompany(data);
+      showToast("登録名を正式名称に更新しました", "success");
+      showDetail(id);
+    } catch (err) {
+      showToast("企業名の更新に失敗しました: " + esc(err.message), "error");
     }
   }
 
