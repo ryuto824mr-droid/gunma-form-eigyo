@@ -176,6 +176,11 @@ async function handleDbSetup(req, res) {
     // api_usage_logs.input_tokens / output_tokens追加（Anthropic API利用量の正確な集計用）
     await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS input_tokens INTEGER");
     await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS output_tokens INTEGER");
+    // responses.candidate_datetime等追加（返信メールからの日程調整情報自動抽出用）
+    await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS candidate_datetime TEXT");
+    await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS location TEXT");
+    await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS contact_person TEXT");
+    await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS special_notes TEXT");
     // companies.project追加（LOCLE統合ツール拡張: 'ozukanzukan' / 'locle' を区別）
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
     await dbSql.query(`

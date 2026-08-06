@@ -207,8 +207,16 @@ function extractDomain(email) {
   return email.split("@")[1] || "";
 }
 
+const EMPTY_EMAIL_INFO = {
+  classification:     "other",
+  candidate_datetime: null,
+  location:           null,
+  contact_person:     null,
+  special_notes:      null,
+};
+
 async function classifyEmail(subject, body) {
-  if (!process.env.ANTHROPIC_API_KEY) return "other";
+  if (!process.env.ANTHROPIC_API_KEY) return { ...EMPTY_EMAIL_INFO };
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -219,18 +227,28 @@ async function classifyEmail(subject, body) {
       },
       body: JSON.stringify({
         model:      "claude-haiku-4-5-20251001",
-        max_tokens: 10,
+        max_tokens: 300,
         messages: [{
           role:    "user",
-          content: `以下のメールを分類してください。\n件名: ${subject}\n本文: ${(body || "").slice(0, 500)}\n\n以下のいずれか1語のみで回答してください（他の文字は一切不要）:\ninterested / declined / question / other`,
+          content: `以下のメールを解析し、JSONのみで回答してください（コードブロックや説明文は不要）。\n\n{"classification":"interested/declined/question/otherのいずれか1語","candidate_datetime":"候補日時（本文中の表現のまま。無ければnull）","location":"場所（無ければnull）","contact_person":"担当者名（無ければnull）","special_notes":"特記事項を1文で（無ければnull）"}\n\n件名: ${subject}\n本文: ${(body || "").slice(0, 500)}`,
         }],
       }),
     });
     const data = await res.json();
-    const text = (data.content?.[0]?.text || "").trim().toLowerCase();
-    return ["interested", "declined", "question"].includes(text) ? text : "other";
+    const text = (data.content?.[0]?.text || "{}").replace(/```json\n?|```/g, "").trim();
+    const parsed = JSON.parse(text);
+    const classification = ["interested", "declined", "question"].includes(parsed.classification)
+      ? parsed.classification
+      : "other";
+    return {
+      classification,
+      candidate_datetime: parsed.candidate_datetime || null,
+      location:           parsed.location || null,
+      contact_person:     parsed.contact_person || null,
+      special_notes:      parsed.special_notes || null,
+    };
   } catch {
-    return "other";
+    return { ...EMPTY_EMAIL_INFO };
   }
 }
 
@@ -277,21 +295,47 @@ async function handleCheckReplies(req, res) {
       `;
       if (existing) continue;
 
-      // AI分類
-      const classification = await classifyEmail(email.subject, email.body);
+      // AI分類 + 日程調整情報の抽出
+      const { classification, candidate_datetime, location, contact_person, special_notes } =
+        await classifyEmail(email.subject, email.body);
 
       // 記録
       await sql`
-        INSERT INTO responses (send_log_id, classification, raw_excerpt, message_id, received_at)
+        INSERT INTO responses (
+          send_log_id, classification, raw_excerpt, message_id, received_at,
+          candidate_datetime, location, contact_person, special_notes
+        )
         VALUES (
           ${matchedLog.id},
           ${classification},
           ${(email.body || "").slice(0, 500)},
           ${email.messageId},
-          NOW()
+          NOW(),
+          ${candidate_datetime},
+          ${location},
+          ${contact_person},
+          ${special_notes}
         )
       `;
       recorded++;
+
+      // interestedかつ候補日時が抽出できた場合、活動履歴に自動記録し、進行中の商談があればcontactedに更新
+      if (classification === "interested" && candidate_datetime) {
+        await sql`
+          INSERT INTO activities (company_id, type, content, activity_at)
+          VALUES (
+            ${matchedLog.company_id},
+            'email',
+            ${`返信あり(日程調整の可能性): ${candidate_datetime} / ${location || "場所未定"} / ${contact_person || "担当者不明"}`},
+            NOW()
+          )
+        `;
+        await sql`
+          UPDATE deals
+          SET stage = 'contacted', updated_at = NOW()
+          WHERE company_id = ${matchedLog.company_id} AND stage NOT IN ('won', 'lost')
+        `;
+      }
     }
 
     const payload = { checked, matched, recorded };
