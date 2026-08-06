@@ -118,12 +118,28 @@ function applyProjectTheme() {
 
 // 各ページ共通ヘッダーの id="projectBadge" 要素を現在のプロジェクトに合わせて表示する。
 // あわせて --project-accent CSS変数にプロジェクトカラーを反映する(ページ全体の配色統合は今後の対応)。
+// id="navHomeLink" のヘッダー「ホーム」リンクがあれば、現在のプロジェクトを引き継いだ
+// home.htmlへのリンクに更新する(app.html自身の「ホーム」リンクは自己参照のため対象外)。
+//
+// app.html(プロジェクト未選択のニュートラルな選択画面)では実行しない: getCurrentProject()は
+// URLの?project=パラメータを読むとlocalStorageへ自動保存してしまうため、app.htmlをこの関数の
+// 対象にすると「URLにパラメータを付けて開いただけで選択状態が変わる」という、分割前の挙動が
+// 意図せず残ってしまう。app.htmlにはbadge/home-link要素も置いていないため、実害なく丸ごとスキップできる。
 function initProjectBadge() {
+  try {
+    if (window.location && /\/app\.html$/.test(window.location.pathname)) return;
+  } catch (e) {}
+
   var project = getCurrentProject();
 
   try {
     document.documentElement.style.setProperty("--project-accent", getProjectColor(project));
   } catch (e) {}
+
+  var homeLink = document.getElementById("navHomeLink");
+  if (homeLink) {
+    homeLink.href = addProjectParamToUrl("/home.html", project);
+  }
 
   var badge = document.getElementById("projectBadge");
   if (!badge) return;
