@@ -13,6 +13,7 @@
     } catch (e) {}
   })();
 </script>
+<script src="/project-context.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
@@ -62,6 +63,12 @@
     color: white; font-weight: 600;
     background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
   }
+  .project-badge-nav {
+    border: none; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    color: white; cursor: pointer; font-family: inherit; white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity 150ms;
+  }
+  .project-badge-nav:hover { opacity: 0.85; }
 
   .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
 
@@ -182,6 +189,35 @@
   }
 
   /* Feature cards */
+  /* Project select */
+  .project-select-section { margin-bottom: 28px; }
+  .project-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .project-select-grid { grid-template-columns: 1fr; } }
+  .project-card {
+    position: relative; background: var(--white); border: 2px solid var(--gray-200);
+    border-radius: var(--radius-lg); padding: 20px; cursor: pointer; transition: all 150ms;
+    box-shadow: var(--shadow-sm);
+  }
+  .project-card:hover { box-shadow: var(--shadow-md); border-color: var(--gray-300); }
+  .project-card-check {
+    position: absolute; top: 14px; right: 14px; width: 22px; height: 22px; border-radius: 50%;
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; opacity: 0; transition: opacity 150ms;
+  }
+  .project-card.selected .project-card-check { opacity: 1; }
+  .project-card-icon {
+    width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center;
+    justify-content: center; font-size: 22px; margin-bottom: 12px;
+  }
+  .project-card-name { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px; }
+  .project-card-desc { font-size: 13px; color: var(--gray-500); margin: 0 0 14px; line-height: 1.5; }
+  .btn-project-goto {
+    font-size: 12px; font-weight: 600; color: var(--gray-700); background: var(--gray-50);
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 7px 12px;
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-project-goto:hover { background: var(--gray-100); }
+
   .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
   .feature-card {
     background: var(--white); border: 1px solid var(--gray-100);
@@ -371,6 +407,7 @@
   <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
     <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
   </a></h1>
+  <button class="project-badge-nav" id="projectBadge" title="クリックしてプロジェクトを切り替え"></button>
   <nav class="page-nav">
     <a href="/app.html" class="active">ホーム</a>
     <a href="/companies.html" id="nav-companies">企業リスト</a>
@@ -450,6 +487,26 @@
   <section class="followup-section" id="taskSection">
     <h2>未完了タスク</h2>
     <p class="followup-empty">読み込み中...</p>
+  </section>
+
+  <section class="project-select-section" id="project-select">
+    <p class="section-title">プロジェクトを選択</p>
+    <div class="project-select-grid">
+      <div class="project-card" data-project="locle" id="projectCardLocle" onclick="selectProject('locle')">
+        <span class="project-card-check" id="projectCheckLocle">✓</span>
+        <div class="project-card-icon" style="background:#44B13F">🏢</div>
+        <div class="project-card-name">LOCLE</div>
+        <p class="project-card-desc">地域企業への採用・広報支援営業</p>
+        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToCompaniesForProject('locle')">このプロジェクトで企業リストへ →</button>
+      </div>
+      <div class="project-card" data-project="ozukanzukan" id="projectCardOzukanzukan" onclick="selectProject('ozukanzukan')">
+        <span class="project-card-check" id="projectCheckOzukanzukan">✓</span>
+        <div class="project-card-icon" style="background:#f97316">📖</div>
+        <div class="project-card-name">群馬お仕事図鑑</div>
+        <p class="project-card-desc">若手向け求人メディアの営業・運用</p>
+        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToCompaniesForProject('ozukanzukan')">このプロジェクトで企業リストへ →</button>
+      </div>
+    </div>
   </section>
 
   <p class="section-title">機能一覧</p>
@@ -759,6 +816,34 @@
     localStorage.setItem("locle_tour_done", "1");
   }
   if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
+
+  function renderProjectSelectUI() {
+    var current = getCurrentProject();
+    var map = { locle: "Locle", ozukanzukan: "Ozukanzukan" };
+    Object.keys(map).forEach(function (project) {
+      var card  = document.getElementById("projectCard" + map[project]);
+      var check = document.getElementById("projectCheck" + map[project]);
+      if (!card || !check) return;
+      var isSelected = project === current;
+      var color = getProjectColor(project);
+      card.classList.toggle("selected", isSelected);
+      card.style.borderColor = isSelected ? color : "";
+      check.style.background = color;
+    });
+  }
+
+  function selectProject(project) {
+    setCurrentProject(project);
+    renderProjectSelectUI();
+    initProjectBadge();
+  }
+
+  function goToCompaniesForProject(project) {
+    setCurrentProject(project);
+    window.location.href = addProjectParamToUrl("/companies.html", project);
+  }
+
+  renderProjectSelectUI();
 
   lucide.createIcons();
   loadStats();
