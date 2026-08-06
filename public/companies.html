@@ -78,7 +78,9 @@
   .list-project-label {
     display: inline-block; font-size: 11px; font-weight: 700; color: white;
     padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit; transition: opacity 150ms;
   }
+  .list-project-label:hover { opacity: 0.85; }
 
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
@@ -1293,7 +1295,7 @@
 
   <section class="table-section">
     <div class="bulk-toolbar">
-      <h2>登録企業一覧<span class="list-project-label" id="listProjectLabel"></span></h2>
+      <h2>登録企業一覧<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
       <span class="tooltip-wrap">
         <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
         <span class="tooltip-text">未リサーチの企業を順番に自動解析します</span>
@@ -1336,11 +1338,6 @@
         <option value="all">自動化: すべて</option>
         <option value="ok">自動化OK</option>
         <option value="ng">自動化NG</option>
-      </select>
-      <select id="filterProject" onchange="onFilterChange()">
-        <option value="all">プロジェクト: すべて</option>
-        <option value="locle">LOCLE</option>
-        <option value="ozukanzukan">群馬お仕事図鑑</option>
       </select>
       <select id="filterTag" onchange="onFilterChange()">
         <option value="all">タグ: すべて</option>
@@ -1481,7 +1478,7 @@
   let showingGroupView = false;
   let isBulkResearching = false;
   let isBulkSending = false;
-  let filters = { search: "", status: "all", automation: "all", project: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
+  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
@@ -1496,6 +1493,7 @@
     if (el) {
       el.textContent = `(${label})`;
       el.style.background = color;
+      el.onclick = () => { window.location.href = "/app.html#project-select"; };
     }
   }
 
@@ -1700,7 +1698,6 @@
       if (filters.status !== "all" && c.status !== filters.status) return false;
       if (filters.automation === "ok" && c.research_result?.automatable !== true) return false;
       if (filters.automation === "ng" && c.research_result?.automatable !== false) return false;
-      if (filters.project !== "all" && (c.project || "locle") !== filters.project) return false;
       if (filters.tag !== "all") {
         const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
         if (!tags.includes(filters.tag)) return false;
@@ -1753,7 +1750,6 @@
     filters.search       = document.getElementById("filterSearch").value.trim();
     filters.status       = document.getElementById("filterStatus").value;
     filters.automation   = document.getElementById("filterAutomation").value;
-    filters.project       = document.getElementById("filterProject").value;
     filters.tag          = document.getElementById("filterTag").value;
     filters.actionNeeded = document.getElementById("filterActionNeeded").checked;
     currentPage = 1;
@@ -1764,11 +1760,10 @@
     document.getElementById("filterSearch").value = "";
     document.getElementById("filterStatus").value = "all";
     document.getElementById("filterAutomation").value = "all";
-    document.getElementById("filterProject").value = "all";
     document.getElementById("filterTag").value = "all";
     document.getElementById("filterActionNeeded").checked = false;
     document.querySelectorAll("#appealFilterPanel input[type=checkbox]").forEach(cb => { cb.checked = false; });
-    filters = { search: "", status: "all", automation: "all", project: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
+    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
     document.getElementById("companyIdsFilterNotice").hidden = true;
     renderAppealTagBar();
     currentPage = 1;
