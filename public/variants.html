@@ -71,6 +71,13 @@
   }
   .project-badge-nav:hover { opacity: 0.85; }
 
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit; transition: opacity 150ms;
+  }
+  .list-project-label:hover { opacity: 0.85; }
+
   .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
 
   .create-section, .list-section {
@@ -559,7 +566,7 @@
   </section>
 
   <section class="list-section">
-    <h2>バリアント一覧<span class="list-count" id="listCount"></span></h2>
+    <h2>バリアント一覧<span class="list-count" id="listCount"></span><button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
     <div id="variantList"><p class="list-empty">読み込み中...</p></div>
   </section>
 
@@ -597,6 +604,21 @@
 <script>
   let variants = [];
   let attachments = [];
+
+  const BASE_TITLE = document.title;
+
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const label   = getProjectLabel(project);
+    const color   = getProjectColor(project);
+    document.title = `${BASE_TITLE} (${label})`;
+    const el = document.getElementById("listProjectLabel");
+    if (el) {
+      el.textContent = `(${label})`;
+      el.style.background = color;
+      el.onclick = () => { window.location.href = "/app.html#project-select"; };
+    }
+  }
 
   function formatFileSize(bytes) {
     if (!bytes || bytes < 1024) return `${bytes || 0}B`;
@@ -690,7 +712,7 @@
 
   async function loadVariants() {
     try {
-      const res = await fetch("/api/variants");
+      const res = await fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) throw new Error("取得失敗");
       variants = await res.json();
       renderVariants();
@@ -766,7 +788,7 @@
       const res = await fetch("/api/variants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id }),
+        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id, project: getCurrentProject() }),
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || "作成エラー", "error"); showToast(esc(data.error || "作成エラー"), "error"); return; }
@@ -821,7 +843,7 @@
       const res  = await fetch("/api/variants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ copy_from_id: id }),
+        body: JSON.stringify({ copy_from_id: id, project: getCurrentProject() }),
       });
       const data = await res.json();
       if (!res.ok) { showToast(esc(data.error || "コピーエラー"), "error"); return; }
@@ -1033,6 +1055,7 @@
   // ===== End Spotlight Tour =====
 
   lucide.createIcons();
+  updateProjectDisplay();
   loadVariants();
   loadAttachmentsForSelect();
   loadCompaniesForAiSelect();

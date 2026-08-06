@@ -2,27 +2,53 @@ const { sql } = require("../lib/db");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
-    const logs = await sql`
-      SELECT
-        sl.id,
-        sl.company_id,
-        c.name  AS company_name,
-        sl.variant_id,
-        mv.name AS variant_name,
-        sl.channel,
-        sl.status,
-        sl.trigger_mode,
-        sl.sent_at,
-        (
-          SELECT classification FROM responses
-          WHERE send_log_id = sl.id
-          ORDER BY received_at DESC LIMIT 1
-        ) AS latest_response
-      FROM send_logs sl
-      JOIN companies c        ON c.id  = sl.company_id
-      JOIN message_variants mv ON mv.id = sl.variant_id
-      ORDER BY sl.sent_at DESC
-    `;
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+    const logs = hasProjectFilter
+      ? await sql`
+          SELECT
+            sl.id,
+            sl.company_id,
+            c.name  AS company_name,
+            sl.variant_id,
+            mv.name AS variant_name,
+            sl.channel,
+            sl.status,
+            sl.trigger_mode,
+            sl.sent_at,
+            (
+              SELECT classification FROM responses
+              WHERE send_log_id = sl.id
+              ORDER BY received_at DESC LIMIT 1
+            ) AS latest_response
+          FROM send_logs sl
+          JOIN companies c        ON c.id  = sl.company_id
+          JOIN message_variants mv ON mv.id = sl.variant_id
+          WHERE c.project = ${project}
+          ORDER BY sl.sent_at DESC
+        `
+      : await sql`
+          SELECT
+            sl.id,
+            sl.company_id,
+            c.name  AS company_name,
+            sl.variant_id,
+            mv.name AS variant_name,
+            sl.channel,
+            sl.status,
+            sl.trigger_mode,
+            sl.sent_at,
+            (
+              SELECT classification FROM responses
+              WHERE send_log_id = sl.id
+              ORDER BY received_at DESC LIMIT 1
+            ) AS latest_response
+          FROM send_logs sl
+          JOIN companies c        ON c.id  = sl.company_id
+          JOIN message_variants mv ON mv.id = sl.variant_id
+          ORDER BY sl.sent_at DESC
+        `;
     return res.status(200).json(logs);
   }
 

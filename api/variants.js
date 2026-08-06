@@ -2,12 +2,18 @@ const { sql } = require("../lib/db");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
-    const variants = await sql`SELECT * FROM message_variants ORDER BY created_at DESC`;
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+    const variants = hasProjectFilter
+      ? await sql`SELECT * FROM message_variants WHERE project = ${project} ORDER BY created_at DESC`
+      : await sql`SELECT * FROM message_variants ORDER BY created_at DESC`;
     return res.status(200).json(variants);
   }
 
   if (req.method === "POST") {
-    const { copy_from_id } = req.body || {};
+    const { copy_from_id, project } = req.body || {};
+    const projectToSet = project === "ozukanzukan" ? "ozukanzukan" : "locle";
+
     if (copy_from_id !== undefined) {
       const sourceId = parseInt(copy_from_id, 10);
       if (!sourceId || isNaN(sourceId)) {
@@ -18,13 +24,14 @@ module.exports = async function handler(req, res) {
         return res.status(404).json({ error: "コピー元のバリアントが見つかりません" });
       }
       const [copied] = await sql`
-        INSERT INTO message_variants (name, channel, subject_template, body_template, tags, created_at)
+        INSERT INTO message_variants (name, channel, subject_template, body_template, tags, project, created_at)
         VALUES (
           ${source.name + " (コピー)"},
           ${source.channel},
           ${source.subject_template},
           ${source.body_template},
           ${JSON.stringify(source.tags || {})},
+          ${projectToSet},
           NOW()
         )
         RETURNING *
@@ -48,7 +55,7 @@ module.exports = async function handler(req, res) {
     const attachmentId = attachment_id ? parseInt(attachment_id, 10) || null : null;
 
     const [created] = await sql`
-      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, attachment_id, created_at)
+      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, attachment_id, project, created_at)
       VALUES (
         ${name.trim()},
         ${channel},
@@ -56,6 +63,7 @@ module.exports = async function handler(req, res) {
         ${body_template.trim()},
         ${tagsJson},
         ${attachmentId},
+        ${projectToSet},
         NOW()
       )
       RETURNING *

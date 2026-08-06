@@ -78,6 +78,13 @@
   }
   .project-badge-nav:hover { opacity: 0.85; }
 
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit; transition: opacity 150ms;
+  }
+  .list-project-label:hover { opacity: 0.85; }
+
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
   .draft-section, .history-section {
@@ -786,7 +793,7 @@
   </section>
 
   <section class="history-section">
-    <h2>送信履歴</h2>
+    <h2>送信履歴<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
       <button class="btn-export-csv" onclick="exportLogsCSV()">
         <i data-lucide="download"></i>CSVエクスポート
@@ -908,12 +915,32 @@
     other:      "その他",
   };
 
+  const BASE_TITLE = document.title;
+
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const label   = getProjectLabel(project);
+    const color   = getProjectColor(project);
+    document.title = `${BASE_TITLE} (${label})`;
+    const el = document.getElementById("listProjectLabel");
+    if (el) {
+      el.textContent = `(${label})`;
+      el.style.background = color;
+      el.onclick = () => { window.location.href = "/app.html#project-select"; };
+    }
+  }
+
+  function sendLogsUrl() {
+    return "/api/send-logs?project=" + encodeURIComponent(getCurrentProject());
+  }
+
   async function init() {
+    updateProjectDisplay();
     try {
       const [cRes, vRes, lRes, sRes, aRes] = await Promise.all([
-        fetch("/api/companies"),
-        fetch("/api/variants"),
-        fetch("/api/send-logs"),
+        fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject())),
+        fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject())),
+        fetch(sendLogsUrl()),
         fetch("/api/analytics?action=scheduled-sends"),
         fetch("/api/crm?action=attachments"),
       ]);
@@ -1221,7 +1248,7 @@
         showToast(`メール送信失敗: ${esc(data.error)}`, "error");
         return;
       }
-      const lRes = await fetch("/api/send-logs");
+      const lRes = await fetch(sendLogsUrl());
       logs = await lRes.json();
       renderLogs();
       showDraftMsg(`メールを送信しました（${esc(company.email)}）`, "ok");
@@ -1255,7 +1282,7 @@
         showToast(`自動送信失敗: ${esc(data.error)}`, "error");
         return;
       }
-      const lRes = await fetch("/api/send-logs");
+      const lRes = await fetch(sendLogsUrl());
       logs = await lRes.json();
       renderLogs();
       if (data.submitStatus === "uncertain") {
@@ -1312,7 +1339,7 @@
       emailErr = err.message;
     }
 
-    const lRes = await fetch("/api/send-logs");
+    const lRes = await fetch(sendLogsUrl());
     logs = await lRes.json();
     renderLogs();
 
@@ -1360,7 +1387,7 @@
         showToast(esc(data.error || "記録エラー"), "error");
         return;
       }
-      const lRes = await fetch("/api/send-logs");
+      const lRes = await fetch(sendLogsUrl());
       logs = await lRes.json();
       renderLogs();
       showDraftMsg("送信を記録しました", "ok");

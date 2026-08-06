@@ -216,6 +216,18 @@ async function handleDbSetup(req, res) {
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
+    await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
+    await dbSql.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'message_variants_project_check'
+        ) THEN
+          ALTER TABLE message_variants ADD CONSTRAINT message_variants_project_check CHECK (project IN ('ozukanzukan', 'locle'));
+        END IF;
+      END $$;
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -999,6 +1011,15 @@ async function handleAbTests(req, res) {
       return res.status(400).json({ error: "variant_a_idとvariant_b_idには異なるバリアントを指定してください" });
     }
     try {
+      const [variantA] = await sql`SELECT project FROM message_variants WHERE id = ${variantAId}`;
+      const [variantB] = await sql`SELECT project FROM message_variants WHERE id = ${variantBId}`;
+      if (!variantA || !variantB) {
+        return res.status(400).json({ error: "指定されたバリアントが見つかりません" });
+      }
+      if (variantA.project !== variantB.project) {
+        return res.status(400).json({ error: "variant_a_idとvariant_b_idは同じプロジェクトのバリアントを指定してください" });
+      }
+
       const [test] = await sql`
         INSERT INTO ab_tests (name, variant_a_id, variant_b_id)
         VALUES (${name.trim()}, ${variantAId}, ${variantBId})

@@ -1003,7 +1003,7 @@
 
   async function loadVariants() {
     try {
-      const res = await fetch("/api/variants");
+      const res = await fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       variants = Array.isArray(raw) ? raw : [];
       const options = variants.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join("");
