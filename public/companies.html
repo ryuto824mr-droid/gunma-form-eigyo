@@ -438,8 +438,27 @@
   }
   .company-tag-pill:hover { background: var(--green-100); }
   .company-tag-pill.editable { padding: 1px 4px 1px 8px; display: inline-flex; align-items: center; gap: 4px; cursor: default; }
+  .company-tag-pill.appeal-pill { background: #fff7ed; color: #b45309; border-color: #fed7aa; }
+  .company-tag-pill.appeal-pill:hover { background: #ffedd5; }
   .tag-pill-remove { background: none; border: none; cursor: pointer; color: var(--green-700); font-size: 12px; padding: 0 2px; line-height: 1; }
   .tag-pill-remove:hover { color: #dc2626; }
+
+  /* Appeal point filter */
+  .appeal-filter-panel {
+    display: flex; flex-wrap: wrap; gap: 10px 16px;
+    padding: 10px 20px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50);
+  }
+  .appeal-filter-panel[hidden] { display: none; }
+  .appeal-cb-label {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    color: var(--gray-700); cursor: pointer; white-space: nowrap;
+  }
+  .appeal-tag-bar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    padding: 8px 20px; border-bottom: 1px solid var(--gray-200); background: var(--gray-50);
+  }
+  .appeal-tag-bar[hidden] { display: none; }
+  .appeal-tag-bar-label { font-size: 11px; color: var(--gray-500); margin-right: 2px; }
 
   /* Status change (modal) */
   .status-change-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
@@ -1219,6 +1238,7 @@
       <select id="filterTag" onchange="onFilterChange()">
         <option value="all">タグ: すべて</option>
       </select>
+      <button class="btn-filter-clear" id="appealFilterToggle" onclick="toggleAppealFilterPanel()">✨ 訴求ポイントで絞り込み</button>
       <button class="btn-filter-clear" onclick="clearFilters()">クリア</button>
       <label class="filter-show-archived">
         <input type="checkbox" id="filterActionNeeded" onchange="onFilterChange()" />
@@ -1230,6 +1250,14 @@
       </label>
       <span class="filter-count" id="filterCount"></span>
     </div>
+    <div class="appeal-filter-panel" id="appealFilterPanel" hidden>
+      <label class="appeal-cb-label"><input type="checkbox" value="SNS映え" onchange="toggleAppealFilter(this)"> ✨ SNS映え</label>
+      <label class="appeal-cb-label"><input type="checkbox" value="知名度の高さ" onchange="toggleAppealFilter(this)"> ✨ 知名度の高さ</label>
+      <label class="appeal-cb-label"><input type="checkbox" value="福利厚生充実" onchange="toggleAppealFilter(this)"> ✨ 福利厚生充実</label>
+      <label class="appeal-cb-label"><input type="checkbox" value="若手活躍" onchange="toggleAppealFilter(this)"> ✨ 若手活躍</label>
+      <label class="appeal-cb-label"><input type="checkbox" value="ユニークな事業内容" onchange="toggleAppealFilter(this)"> ✨ ユニークな事業内容</label>
+    </div>
+    <div class="appeal-tag-bar" id="appealTagBar" hidden></div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -1346,7 +1374,7 @@
   let showingGroupView = false;
   let isBulkResearching = false;
   let isBulkSending = false;
-  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false };
+  let filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
@@ -1552,6 +1580,10 @@
         const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
         if (!tags.includes(filters.tag)) return false;
       }
+      if (filters.appealPoints.length) {
+        const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
+        if (!filters.appealPoints.some(p => tags.includes(`訴求:${p}`))) return false;
+      }
       if (filters.companyIds && !filters.companyIds.has(c.id)) return false;
       if (filters.actionNeeded && !needsManualAction(c)) return false;
       return true;
@@ -1608,10 +1640,66 @@
     document.getElementById("filterAutomation").value = "all";
     document.getElementById("filterTag").value = "all";
     document.getElementById("filterActionNeeded").checked = false;
-    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false };
+    document.querySelectorAll("#appealFilterPanel input[type=checkbox]").forEach(cb => { cb.checked = false; });
+    filters = { search: "", status: "all", automation: "all", tag: "all", companyIds: null, actionNeeded: false, appealPoints: [] };
     document.getElementById("companyIdsFilterNotice").hidden = true;
+    renderAppealTagBar();
     currentPage = 1;
     renderTable();
+  }
+
+  function toggleAppealFilterPanel() {
+    const panel = document.getElementById("appealFilterPanel");
+    if (panel) panel.hidden = !panel.hidden;
+  }
+
+  function toggleAppealFilter(cb) {
+    const val = cb.value;
+    const arr = filters.appealPoints;
+    const idx = arr.indexOf(val);
+    if (cb.checked) {
+      if (idx === -1) arr.push(val);
+    } else if (idx !== -1) {
+      arr.splice(idx, 1);
+    }
+    renderAppealTagBar();
+    currentPage = 1;
+    renderTable();
+  }
+
+  function removeAppealFilter(val) {
+    const arr = filters.appealPoints;
+    const idx = arr.indexOf(val);
+    if (idx !== -1) arr.splice(idx, 1);
+    document.querySelectorAll('#appealFilterPanel input[type=checkbox]').forEach(cb => {
+      if (cb.value === val) cb.checked = false;
+    });
+    renderAppealTagBar();
+    currentPage = 1;
+    renderTable();
+  }
+
+  function clearAppealFilters() {
+    filters.appealPoints = [];
+    document.querySelectorAll("#appealFilterPanel input[type=checkbox]").forEach(cb => { cb.checked = false; });
+    renderAppealTagBar();
+    currentPage = 1;
+    renderTable();
+  }
+
+  function renderAppealTagBar() {
+    const bar = document.getElementById("appealTagBar");
+    if (!bar) return;
+    if (!filters.appealPoints.length) {
+      bar.hidden = true;
+      bar.innerHTML = "";
+      return;
+    }
+    bar.hidden = false;
+    const chips = filters.appealPoints.map(v =>
+      `<span class="company-tag-pill appeal-pill editable">✨${esc(v)}<button class="tag-pill-remove" onclick="removeAppealFilter('${v.replace(/'/g, "\\'")}')">×</button></span>`
+    ).join("");
+    bar.innerHTML = `<span class="appeal-tag-bar-label">訴求ポイント絞り込み中:</span>${chips}<button class="btn-filter-clear" onclick="clearAppealFilters()">クリア</button>`;
   }
 
   function filterByCompanyIds(ids, label) {
@@ -1779,7 +1867,12 @@
   function companyTagsHtml(c) {
     const tags = Array.isArray(c.company_tags) ? c.company_tags : [];
     if (!tags.length) return "";
-    return `<div class="company-tags">${tags.map(t => `<span class="company-tag-pill" data-tag="${esc(t)}">${esc(t)}</span>`).join("")}</div>`;
+    return `<div class="company-tags">${tags.map(t => {
+      const isAppeal = t.startsWith("訴求:");
+      const cls = isAppeal ? "company-tag-pill appeal-pill" : "company-tag-pill";
+      const label = isAppeal ? `✨${t.slice(3)}` : t;
+      return `<span class="${cls}" data-tag="${esc(t)}">${esc(label)}</span>`;
+    }).join("")}</div>`;
   }
 
   document.getElementById("tableBody").addEventListener("click", (e) => {
@@ -3535,9 +3628,12 @@
     const el = document.getElementById(`tagPillList-${id}`);
     if (!el) return;
     el.innerHTML = modalTagsState.length
-      ? modalTagsState.map((t, i) =>
-          `<span class="company-tag-pill editable">${esc(t)}<button class="tag-pill-remove" onclick="removeTagFromModal(${id}, ${i})">×</button></span>`
-        ).join("")
+      ? modalTagsState.map((t, i) => {
+          const isAppeal = t.startsWith("訴求:");
+          const cls = isAppeal ? "company-tag-pill appeal-pill editable" : "company-tag-pill editable";
+          const label = isAppeal ? `✨${t.slice(3)}` : t;
+          return `<span class="${cls}">${esc(label)}<button class="tag-pill-remove" onclick="removeTagFromModal(${id}, ${i})">×</button></span>`;
+        }).join("")
       : '<span style="color:var(--gray-300);font-size:12px">タグはまだありません</span>';
   }
 

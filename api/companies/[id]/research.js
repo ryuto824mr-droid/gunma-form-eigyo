@@ -1,5 +1,6 @@
 const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
+const { classifyAppealPoints } = require("../../../lib/appeal-point-classifier");
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
@@ -56,6 +57,25 @@ module.exports = async function handler(req, res) {
     WHERE id = ${id}
     RETURNING *
   `;
+
+  // 訴求ポイントの自動推定（ANTHROPIC_API_KEY未設定時は何もしない）
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const appealPoints = await classifyAppealPoints(updated);
+      if (appealPoints.length > 0) {
+        const existingTags = Array.isArray(updated.company_tags) ? updated.company_tags : [];
+        const mergedTags = Array.from(new Set([...existingTags, ...appealPoints.map(p => `訴求:${p}`)]));
+        if (mergedTags.length !== existingTags.length) {
+          const [withTags] = await sql`
+            UPDATE companies SET company_tags = ${JSON.stringify(mergedTags)} WHERE id = ${id} RETURNING *
+          `;
+          return res.status(200).json(withTags);
+        }
+      }
+    } catch {
+      // 訴求ポイント判定の失敗はリサーチ結果本体には影響させない
+    }
+  }
 
   return res.status(200).json(updated);
 };
