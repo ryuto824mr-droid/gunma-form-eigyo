@@ -199,14 +199,14 @@
         <div class="project-card-icon" style="background:#44B13F">🏢</div>
         <div class="project-card-name">LOCLE</div>
         <p class="project-card-desc">地域企業への採用・広報支援営業</p>
-        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToCompaniesForProject('locle')">このプロジェクトで企業リストへ →</button>
+        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToHome('locle')">このプロジェクトを開く →</button>
       </div>
       <div class="project-card" data-project="ozukanzukan" id="projectCardOzukanzukan" onclick="goToHome('ozukanzukan')">
         <span class="project-card-check" id="projectCheckOzukanzukan">✓</span>
         <div class="project-card-icon" style="background:#f97316">📖</div>
         <div class="project-card-name">群馬お仕事図鑑</div>
         <p class="project-card-desc">若手向け求人メディアの営業・運用</p>
-        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToCompaniesForProject('ozukanzukan')">このプロジェクトで企業リストへ →</button>
+        <button type="button" class="btn-project-goto" onclick="event.stopPropagation(); goToHome('ozukanzukan')">このプロジェクトを開く →</button>
       </div>
     </div>
   </section>
@@ -261,11 +261,6 @@
   function goToHome(project) {
     setCurrentProject(project);
     window.location.href = addProjectParamToUrl("/home.html", project);
-  }
-
-  function goToCompaniesForProject(project) {
-    setCurrentProject(project);
-    window.location.href = addProjectParamToUrl("/companies.html", project);
   }
 
   renderProjectSelectUI();
