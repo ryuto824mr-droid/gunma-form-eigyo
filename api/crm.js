@@ -228,18 +228,38 @@ async function handleContacts(req, res) {
   if (req.method === "GET") {
     try {
       const companyId = req.query.company_id ? parseInt(req.query.company_id, 10) : null;
-      const contacts = companyId
-        ? await sql`
-            SELECT ct.*, c.name AS company_name
-            FROM contacts ct JOIN companies c ON c.id = ct.company_id
-            WHERE ct.company_id = ${companyId}
-            ORDER BY ct.created_at DESC
-          `
-        : await sql`
-            SELECT ct.*, c.name AS company_name
-            FROM contacts ct JOIN companies c ON c.id = ct.company_id
-            ORDER BY ct.created_at DESC
-          `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      let contacts;
+      if (companyId && hasProjectFilter) {
+        contacts = await sql`
+          SELECT ct.*, c.name AS company_name
+          FROM contacts ct JOIN companies c ON c.id = ct.company_id
+          WHERE ct.company_id = ${companyId} AND c.project = ${project}
+          ORDER BY ct.created_at DESC
+        `;
+      } else if (companyId) {
+        contacts = await sql`
+          SELECT ct.*, c.name AS company_name
+          FROM contacts ct JOIN companies c ON c.id = ct.company_id
+          WHERE ct.company_id = ${companyId}
+          ORDER BY ct.created_at DESC
+        `;
+      } else if (hasProjectFilter) {
+        contacts = await sql`
+          SELECT ct.*, c.name AS company_name
+          FROM contacts ct JOIN companies c ON c.id = ct.company_id
+          WHERE c.project = ${project}
+          ORDER BY ct.created_at DESC
+        `;
+      } else {
+        contacts = await sql`
+          SELECT ct.*, c.name AS company_name
+          FROM contacts ct JOIN companies c ON c.id = ct.company_id
+          ORDER BY ct.created_at DESC
+        `;
+      }
       return res.status(200).json(contacts);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -294,18 +314,38 @@ async function handleDeals(req, res) {
   if (req.method === "GET") {
     try {
       const companyId = req.query.company_id ? parseInt(req.query.company_id, 10) : null;
-      const deals = companyId
-        ? await sql`
-            SELECT d.*, c.name AS company_name
-            FROM deals d JOIN companies c ON c.id = d.company_id
-            WHERE d.company_id = ${companyId}
-            ORDER BY d.updated_at DESC
-          `
-        : await sql`
-            SELECT d.*, c.name AS company_name
-            FROM deals d JOIN companies c ON c.id = d.company_id
-            ORDER BY d.updated_at DESC
-          `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      let deals;
+      if (companyId && hasProjectFilter) {
+        deals = await sql`
+          SELECT d.*, c.name AS company_name
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE d.company_id = ${companyId} AND c.project = ${project}
+          ORDER BY d.updated_at DESC
+        `;
+      } else if (companyId) {
+        deals = await sql`
+          SELECT d.*, c.name AS company_name
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE d.company_id = ${companyId}
+          ORDER BY d.updated_at DESC
+        `;
+      } else if (hasProjectFilter) {
+        deals = await sql`
+          SELECT d.*, c.name AS company_name
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE c.project = ${project}
+          ORDER BY d.updated_at DESC
+        `;
+      } else {
+        deals = await sql`
+          SELECT d.*, c.name AS company_name
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          ORDER BY d.updated_at DESC
+        `;
+      }
       return res.status(200).json(deals);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -398,18 +438,38 @@ async function handleActivities(req, res) {
   if (req.method === "GET") {
     try {
       const companyId = req.query.company_id ? parseInt(req.query.company_id, 10) : null;
-      const activities = companyId
-        ? await sql`
-            SELECT a.*, c.name AS company_name
-            FROM activities a JOIN companies c ON c.id = a.company_id
-            WHERE a.company_id = ${companyId}
-            ORDER BY a.activity_at DESC
-          `
-        : await sql`
-            SELECT a.*, c.name AS company_name
-            FROM activities a JOIN companies c ON c.id = a.company_id
-            ORDER BY a.activity_at DESC
-          `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      let activities;
+      if (companyId && hasProjectFilter) {
+        activities = await sql`
+          SELECT a.*, c.name AS company_name
+          FROM activities a JOIN companies c ON c.id = a.company_id
+          WHERE a.company_id = ${companyId} AND c.project = ${project}
+          ORDER BY a.activity_at DESC
+        `;
+      } else if (companyId) {
+        activities = await sql`
+          SELECT a.*, c.name AS company_name
+          FROM activities a JOIN companies c ON c.id = a.company_id
+          WHERE a.company_id = ${companyId}
+          ORDER BY a.activity_at DESC
+        `;
+      } else if (hasProjectFilter) {
+        activities = await sql`
+          SELECT a.*, c.name AS company_name
+          FROM activities a JOIN companies c ON c.id = a.company_id
+          WHERE c.project = ${project}
+          ORDER BY a.activity_at DESC
+        `;
+      } else {
+        activities = await sql`
+          SELECT a.*, c.name AS company_name
+          FROM activities a JOIN companies c ON c.id = a.company_id
+          ORDER BY a.activity_at DESC
+        `;
+      }
       return res.status(200).json(activities);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -502,22 +562,48 @@ async function handleTasks(req, res) {
   if (req.method === "GET") {
     try {
       const includeDone = req.query.include_done === "1";
-      const tasks = includeDone
-        ? await sql`
-            SELECT t.*, c.name AS company_name, d.title AS deal_title
-            FROM tasks t
-            LEFT JOIN companies c ON c.id = t.company_id
-            LEFT JOIN deals d ON d.id = t.deal_id
-            ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
-          `
-        : await sql`
-            SELECT t.*, c.name AS company_name, d.title AS deal_title
-            FROM tasks t
-            LEFT JOIN companies c ON c.id = t.company_id
-            LEFT JOIN deals d ON d.id = t.deal_id
-            WHERE t.done = FALSE
-            ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
-          `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      // tasks.company_idはNULL許容(企業に紐付かない汎用タスク)のため、
+      // project絞り込み時もcompany_idが無いタスクは常に表示対象に含める
+      let tasks;
+      if (includeDone && hasProjectFilter) {
+        tasks = await sql`
+          SELECT t.*, c.name AS company_name, d.title AS deal_title
+          FROM tasks t
+          LEFT JOIN companies c ON c.id = t.company_id
+          LEFT JOIN deals d ON d.id = t.deal_id
+          WHERE t.company_id IS NULL OR c.project = ${project}
+          ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+        `;
+      } else if (includeDone) {
+        tasks = await sql`
+          SELECT t.*, c.name AS company_name, d.title AS deal_title
+          FROM tasks t
+          LEFT JOIN companies c ON c.id = t.company_id
+          LEFT JOIN deals d ON d.id = t.deal_id
+          ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+        `;
+      } else if (hasProjectFilter) {
+        tasks = await sql`
+          SELECT t.*, c.name AS company_name, d.title AS deal_title
+          FROM tasks t
+          LEFT JOIN companies c ON c.id = t.company_id
+          LEFT JOIN deals d ON d.id = t.deal_id
+          WHERE t.done = FALSE AND (t.company_id IS NULL OR c.project = ${project})
+          ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+        `;
+      } else {
+        tasks = await sql`
+          SELECT t.*, c.name AS company_name, d.title AS deal_title
+          FROM tasks t
+          LEFT JOIN companies c ON c.id = t.company_id
+          LEFT JOIN deals d ON d.id = t.deal_id
+          WHERE t.done = FALSE
+          ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
+        `;
+      }
       return res.status(200).json(tasks);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -608,14 +694,27 @@ async function handlePipelineStats(req, res) {
     return res.status(405).json({ error: "GETのみ対応しています" });
   }
   try {
-    const stageRows = await sql`
-      SELECT stage,
-             COUNT(*)::int AS deal_count,
-             COALESCE(SUM(amount), 0)::int AS total_amount,
-             COALESCE(AVG(amount), 0)::int AS avg_amount
-      FROM deals
-      GROUP BY stage
-    `;
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+    const stageRows = hasProjectFilter
+      ? await sql`
+          SELECT d.stage,
+                 COUNT(*)::int AS deal_count,
+                 COALESCE(SUM(d.amount), 0)::int AS total_amount,
+                 COALESCE(AVG(d.amount), 0)::int AS avg_amount
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE c.project = ${project}
+          GROUP BY d.stage
+        `
+      : await sql`
+          SELECT stage,
+                 COUNT(*)::int AS deal_count,
+                 COALESCE(SUM(amount), 0)::int AS total_amount,
+                 COALESCE(AVG(amount), 0)::int AS avg_amount
+          FROM deals
+          GROUP BY stage
+        `;
     const stageMap = {};
     stageRows.forEach(r => { stageMap[r.stage] = r; });
     const stages = DEAL_STAGES.map(stage => ({
@@ -625,11 +724,17 @@ async function handlePipelineStats(req, res) {
       avg_amount: stageMap[stage]?.avg_amount || 0,
     }));
 
-    const [{ total_pipeline }] = await sql`
-      SELECT COALESCE(SUM(amount), 0)::int AS total_pipeline
-      FROM deals
-      WHERE stage NOT IN ('won', 'lost')
-    `;
+    const [{ total_pipeline }] = hasProjectFilter
+      ? await sql`
+          SELECT COALESCE(SUM(d.amount), 0)::int AS total_pipeline
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE d.stage NOT IN ('won', 'lost') AND c.project = ${project}
+        `
+      : await sql`
+          SELECT COALESCE(SUM(amount), 0)::int AS total_pipeline
+          FROM deals
+          WHERE stage NOT IN ('won', 'lost')
+        `;
     const wonCount  = stageMap["won"]?.deal_count || 0;
     const lostCount = stageMap["lost"]?.deal_count || 0;
     const winRate   = (wonCount + lostCount) > 0 ? (wonCount / (wonCount + lostCount)) * 100 : 0;
@@ -1152,13 +1257,25 @@ async function handleCompanyClusters(req, res) {
     return res.status(405).json({ error: "GETのみ対応しています" });
   }
   try {
-    const companies = await sql`
-      SELECT id, company_tags, priority, email, research_result
-      FROM companies
-      WHERE archived = FALSE
-        AND company_tags IS NOT NULL
-        AND jsonb_array_length(company_tags) > 0
-    `;
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+    const companies = hasProjectFilter
+      ? await sql`
+          SELECT id, company_tags, priority, email, research_result
+          FROM companies
+          WHERE archived = FALSE
+            AND company_tags IS NOT NULL
+            AND jsonb_array_length(company_tags) > 0
+            AND project = ${project}
+        `
+      : await sql`
+          SELECT id, company_tags, priority, email, research_result
+          FROM companies
+          WHERE archived = FALSE
+            AND company_tags IS NOT NULL
+            AND jsonb_array_length(company_tags) > 0
+        `;
 
     const groups = {};
     for (const c of companies) {

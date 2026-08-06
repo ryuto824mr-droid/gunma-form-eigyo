@@ -68,6 +68,15 @@
   }
   .project-badge-nav:hover { opacity: 0.85; }
 
+  .crm-project-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .crm-project-bar-label { font-size: 12px; color: var(--gray-500); }
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit; transition: opacity 150ms;
+  }
+  .list-project-label:hover { opacity: 0.85; }
+
   .container { max-width: 1120px; margin: 0 auto; padding: 24px 16px; }
 
   /* Tabs */
@@ -534,6 +543,11 @@
 
 <div class="container">
 
+  <div class="crm-project-bar">
+    <span class="crm-project-bar-label">表示中のプロジェクト:</span>
+    <button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button>
+  </div>
+
   <div class="crm-tabs">
     <button class="crm-tab-btn active" data-tab="pipeline" onclick="switchTab('pipeline')">📊 パイプライン</button>
     <button class="crm-tab-btn" data-tab="contacts" onclick="switchTab('contacts')">👤 コンタクト</button>
@@ -957,12 +971,28 @@
   const ACTIVITY_ICONS  = { call: "📞", email: "📧", note: "📝", meeting: "🤝", form: "📬", other: "📌" };
   const ACTIVITY_LABELS = { call: "電話", email: "メール", note: "メモ", meeting: "商談", form: "フォーム", other: "その他" };
 
+  const BASE_TITLE = document.title;
+
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const label   = getProjectLabel(project);
+    const color   = getProjectColor(project);
+    document.title = `${BASE_TITLE} (${label})`;
+    const el = document.getElementById("listProjectLabel");
+    if (el) {
+      el.textContent = `(${label})`;
+      el.style.background = color;
+      el.onclick = () => { window.location.href = "/app.html#project-select"; };
+    }
+  }
+
   function switchTab(name) {
     document.querySelectorAll(".crm-tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
     document.querySelectorAll(".crm-panel").forEach(p => p.classList.toggle("active", p.id === `panel-${name}`));
   }
 
   async function init() {
+    updateProjectDisplay();
     await loadCompanies();
     await Promise.all([
       loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
@@ -988,7 +1018,7 @@
 
   async function loadCompanies() {
     try {
-      const res = await fetch("/api/companies");
+      const res = await fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       companies = Array.isArray(raw) ? raw : [];
       populateCompanySelects();
@@ -1017,7 +1047,7 @@
 
   async function loadDeals() {
     try {
-      const res = await fetch("/api/crm?action=deals");
+      const res = await fetch("/api/crm?action=deals&project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       deals = Array.isArray(raw) ? raw : [];
       renderKanban();
@@ -1028,7 +1058,7 @@
 
   async function loadPipelineStats() {
     try {
-      const res = await fetch("/api/crm?action=pipeline-stats");
+      const res = await fetch("/api/crm?action=pipeline-stats&project=" + encodeURIComponent(getCurrentProject()));
       pipelineStats = await res.json();
       renderPipelineSummary();
       renderKanban();
@@ -1216,7 +1246,7 @@
 
   async function loadContacts() {
     try {
-      const res = await fetch("/api/crm?action=contacts");
+      const res = await fetch("/api/crm?action=contacts&project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       contacts = Array.isArray(raw) ? raw : [];
       renderContacts();
@@ -1321,7 +1351,7 @@
 
   async function loadActivities() {
     try {
-      const res = await fetch("/api/crm?action=activities");
+      const res = await fetch("/api/crm?action=activities&project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       activities = Array.isArray(raw) ? raw : [];
       renderTimeline();
@@ -1416,7 +1446,8 @@
   async function loadTasks() {
     try {
       const includeDone = document.getElementById("taskShowDoneCheckbox")?.checked;
-      const url = includeDone ? "/api/crm?action=tasks&include_done=1" : "/api/crm?action=tasks";
+      const projectParam = "&project=" + encodeURIComponent(getCurrentProject());
+      const url = (includeDone ? "/api/crm?action=tasks&include_done=1" : "/api/crm?action=tasks") + projectParam;
       const res = await fetch(url);
       const raw = await res.json();
       tasks = Array.isArray(raw) ? raw : [];
