@@ -19,8 +19,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-300: #86efac; --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --green-900: #1a5c17; --green-700: #2F8A2A; --green-500: #44B13F; --green-400: #5BC952;
+    --green-300: #86efac; --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -43,7 +44,7 @@
   /* Header */
   .page-header {
     background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
-    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
@@ -76,9 +77,9 @@
   /* Hero */
   .hero {
     text-align: center; padding: 56px 24px 44px;
-    background: linear-gradient(135deg, #1a5c17 0%, #2F8A2A 40%, #44B13F 70%, #5BC952 100%);
+    background: linear-gradient(135deg, var(--green-900) 0%, var(--green-700) 40%, var(--green-500) 70%, var(--green-400) 100%);
     border-radius: var(--radius-lg);
-    box-shadow: 0 4px 24px rgba(26,92,23,0.35);
+    box-shadow: 0 4px 24px rgba(var(--green-900-rgb), 0.35);
     margin-bottom: 32px;
   }
   .hero-logo {
@@ -273,12 +274,12 @@
   .tour-btn-skip:hover { color: var(--gray-700); }
   .tour-btn-next {
     padding: 8px 20px; font-size: 13px; font-weight: 600; font-family: inherit;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
     color: white; border: none; border-radius: var(--radius-sm);
     cursor: pointer; transition: all 150ms;
-    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
   }
-  .tour-btn-next:hover { background: linear-gradient(135deg, #3da038, #277025); transform: translateY(-1px); }
+  .tour-btn-next:hover { background: linear-gradient(135deg, var(--green-600), var(--green-800)); transform: translateY(-1px); }
   .tour-highlight {
     outline: 3px solid var(--green-500) !important;
     outline-offset: 4px !important;
@@ -312,7 +313,7 @@
     font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
     pointer-events: auto;
   }
-  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
   .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
   .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
   .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
@@ -366,7 +367,7 @@
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
     button[class*="btn-research"], #addBtn, #bulkBtn {
-      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
+      background: linear-gradient(135deg, var(--green-500), var(--green-700)) !important;
       color: white !important;
       opacity: 1 !important;
     }

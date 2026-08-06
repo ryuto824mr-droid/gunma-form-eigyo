@@ -19,8 +19,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -43,7 +45,7 @@
 
   .page-header {
     background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
-    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
@@ -92,15 +94,15 @@
   }
   button {
     margin-top: 10px; padding: 8px 16px;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
-    box-shadow: 0 4px 12px rgba(68,177,63,0.3);
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
     color: var(--white); border: none; border-radius: var(--radius-sm); cursor: pointer;
     font-size: 13px; font-weight: 600; font-family: inherit; transition: all 150ms ease;
     display: inline-flex; align-items: center; gap: 6px;
   }
   button:hover:not(:disabled) {
-    background: linear-gradient(135deg, #3da038, #277025);
-    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(68,177,63,0.4);
+    background: linear-gradient(135deg, var(--green-600), var(--green-800));
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--green-500-rgb), 0.4);
   }
   button:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
   button svg { width: 14px; height: 14px; }
@@ -139,7 +141,7 @@
     font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
     pointer-events: auto;
   }
-  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
   .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
   .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
   .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
@@ -193,7 +195,7 @@
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
     button[class*="btn-research"], #addBtn, #bulkBtn {
-      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
+      background: linear-gradient(135deg, var(--green-500), var(--green-700)) !important;
       color: white !important;
       opacity: 1 !important;
     }

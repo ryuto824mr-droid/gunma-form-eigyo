@@ -19,8 +19,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
     --blue-500: #2563eb;  --blue-700: #1d4ed8;
     --blue-50: #eff6ff;   --blue-100: #dbeafe;  --blue-200: #bfdbfe;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
@@ -44,7 +46,7 @@
 
   .page-header {
     background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
-    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
@@ -116,7 +118,7 @@
   }
   .summary-card::before {
     content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, #44B13F, #5BC952);
+    background: linear-gradient(90deg, var(--green-500), var(--green-400));
   }
   .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
   .card-icon {
@@ -268,10 +270,10 @@
   }
   .btn-tnext {
     padding: 10px 24px; font-size: 14px; font-weight: 600;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
     color: white; border: none; border-radius: var(--radius-sm);
     cursor: pointer; font-family: inherit;
-    box-shadow: 0 2px 8px rgba(68,177,63,0.3);
+    box-shadow: 0 2px 8px rgba(var(--green-500-rgb), 0.3);
   }
   .btn-help-float {
     position: fixed; bottom: 24px; right: 24px; z-index: 500;
@@ -309,7 +311,7 @@
     font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
     pointer-events: auto;
   }
-  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
   .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
   .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
   .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
@@ -363,7 +365,7 @@
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .btn-primary, button[class*="btn-add"], button[class*="btn-bulk"],
     button[class*="btn-research"], #addBtn, #bulkBtn {
-      background: linear-gradient(135deg, #44B13F, #2F8A2A) !important;
+      background: linear-gradient(135deg, var(--green-500), var(--green-700)) !important;
       color: white !important;
       opacity: 1 !important;
     }
@@ -506,7 +508,7 @@
         labels: monthlySends.map(r => monthLabel(r.month)),
         datasets: [{
           label: "送信数", data: monthlySends.map(r => r.count),
-          borderColor: "#44B13F", backgroundColor: "rgba(68,177,63,0.15)",
+          borderColor: getProjectColor(getCurrentProject()), backgroundColor: getProjectColorRgba(getCurrentProject(), 0.15),
           tension: 0.3, fill: true, pointRadius: 2,
         }],
       },
@@ -818,8 +820,8 @@
         labels,
         datasets: [
           { label: "送信数",   data: stats.map(r => Number(r.send_count)),       backgroundColor: "#94a3b8", borderRadius: 4 },
-          { label: "反応数",   data: stats.map(r => Number(r.response_count)),   backgroundColor: "#44B13F", borderRadius: 4 },
-          { label: "興味あり", data: stats.map(r => Number(r.interested_count)), backgroundColor: "#2F8A2A", borderRadius: 4 },
+          { label: "反応数",   data: stats.map(r => Number(r.response_count)),   backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 },
+          { label: "興味あり", data: stats.map(r => Number(r.interested_count)), backgroundColor: getProjectColorDark(getCurrentProject()), borderRadius: 4 },
         ],
       },
       options: {
@@ -864,7 +866,7 @@
       type: "bar",
       data: {
         labels,
-        datasets: [{ label: "反応率", data: rates, backgroundColor: "#44B13F", borderRadius: 4 }],
+        datasets: [{ label: "反応率", data: rates, backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
       },
       options: {
         indexAxis: "y",

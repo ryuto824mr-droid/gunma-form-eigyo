@@ -10,6 +10,22 @@ var PROJECT_STORAGE_KEY = "locle_current_project";
 var PROJECT_LABELS = { locle: "LOCLE", ozukanzukan: "群馬お仕事図鑑" };
 var PROJECT_COLORS = { locle: "#44B13F", ozukanzukan: "#f97316" };
 
+// アクセントカラーのフルパレット(既存の--green-*系CSS変数・Chart.js等のJS色指定を
+// 一括でプロジェクトカラーに切り替えるための土台)。オレンジ側はTailwindのorangeスケール
+// (50/100/200/300/400/500/700/900)に合わせ、既存の訴求ポイントpill等と色味を揃えている。
+var PROJECT_THEME = {
+  locle: {
+    g900: "#1a5c17", g800: "#277025", g700: "#2F8A2A", g600: "#3da038", g500: "#44B13F", g400: "#5BC952",
+    g300: "#86efac", g200: "#b7e4b0", g100: "#d8f0d8", g50: "#f0faf0",
+    rgb900: "26,92,23", rgb500: "68,177,63", rgb700: "47,138,42",
+  },
+  ozukanzukan: {
+    g900: "#7c2d12", g800: "#9a3412", g700: "#c2410c", g600: "#ea580c", g500: "#f97316", g400: "#fb923c",
+    g300: "#fdba74", g200: "#fed7aa", g100: "#ffedd5", g50: "#fff7ed",
+    rgb900: "124,45,18", rgb500: "249,115,22", rgb700: "194,65,12",
+  },
+};
+
 function isValidProject(project) {
   return project === "locle" || project === "ozukanzukan";
 }
@@ -49,6 +65,18 @@ function getProjectColor(project) {
   return PROJECT_COLORS[project] || PROJECT_COLORS.locle;
 }
 
+// Chart.js等、CSS変数を直接解釈できないJS側の色指定で使う濃色バージョン(--green-700相当)
+function getProjectColorDark(project) {
+  var t = PROJECT_THEME[project] || PROJECT_THEME.locle;
+  return t.g700;
+}
+
+// Chart.js等で塗りつぶし用の半透明色(--green-500相当)が必要な箇所で使うrgba文字列を返す
+function getProjectColorRgba(project, alpha) {
+  var t = PROJECT_THEME[project] || PROJECT_THEME.locle;
+  return "rgba(" + t.rgb500 + "," + alpha + ")";
+}
+
 // ページ間リンク用: 指定URLにproject パラメータを付与して返す(パス+クエリ+ハッシュ)
 function addProjectParamToUrl(url, project) {
   try {
@@ -61,20 +89,30 @@ function addProjectParamToUrl(url, project) {
   }
 }
 
-// ページ全体のアクセントカラー(--green-500/700/50/100)を現在のプロジェクトに合わせて
-// 上書きする。既存のCSS(ボタン・バッジ・ヘッダーグラデーション等)はこれらの変数を
-// 参照しているため、この関数を呼ぶだけで一括して緑↔オレンジに切り替わる。
+// ページ全体のアクセントカラー(--green-50〜900とそのrgba用-rgbサフィックス版)を
+// 現在のプロジェクトに合わせて上書きする。既存のCSS(ボタン・バッジ・ヘッダー
+// グラデーション等)はこれらの変数を参照しているため、この関数を呼ぶだけで
+// 一括して緑↔オレンジに切り替わる。
 // <head>内でproject-context.js読み込み直後、できるだけ早いタイミング(<style>がまだ
 // パースされる前)に同期的に呼び出すことで、ちらつき無く初回描画から正しい色にする。
 function applyProjectTheme() {
-  var project   = getCurrentProject();
-  var color     = getProjectColor(project); // locle=#44B13F, ozukanzukan=#f97316
-  var colorDark = project === "ozukanzukan" ? "#c2410c" : "#2F8A2A"; // 濃い色バージョン
+  var project = getCurrentProject();
+  var t = PROJECT_THEME[project] || PROJECT_THEME.locle;
   try {
-    document.documentElement.style.setProperty("--green-500", color);
-    document.documentElement.style.setProperty("--green-700", colorDark);
-    document.documentElement.style.setProperty("--green-50", project === "ozukanzukan" ? "#fff7ed" : "#f0faf0");
-    document.documentElement.style.setProperty("--green-100", project === "ozukanzukan" ? "#ffedd5" : "#d8f0d8");
+    var s = document.documentElement.style;
+    s.setProperty("--green-900", t.g900);
+    s.setProperty("--green-800", t.g800);
+    s.setProperty("--green-700", t.g700);
+    s.setProperty("--green-600", t.g600);
+    s.setProperty("--green-500", t.g500);
+    s.setProperty("--green-400", t.g400);
+    s.setProperty("--green-300", t.g300);
+    s.setProperty("--green-200", t.g200);
+    s.setProperty("--green-100", t.g100);
+    s.setProperty("--green-50", t.g50);
+    s.setProperty("--green-500-rgb", t.rgb500);
+    s.setProperty("--green-700-rgb", t.rgb700);
+    s.setProperty("--green-900-rgb", t.rgb900);
   } catch (e) {}
 }
 

@@ -19,8 +19,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --green-500: #44B13F; --green-700: #2F8A2A;
-    --green-50: #f0faf0;  --green-100: #d8f0d8; --green-200: #b7e4b0;
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
     --gray-50: #f8fafc;   --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
     --gray-400: #94a3b8;  --gray-500: #64748b;
@@ -42,7 +44,7 @@
 
   .page-header {
     background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
-    border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
   }
@@ -188,10 +190,10 @@
   }
   .btn-tnext {
     padding: 10px 24px; font-size: 14px; font-weight: 600;
-    background: linear-gradient(135deg, #44B13F, #2F8A2A);
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
     color: white; border: none; border-radius: var(--radius-sm);
     cursor: pointer; font-family: inherit;
-    box-shadow: 0 2px 8px rgba(68,177,63,0.3);
+    box-shadow: 0 2px 8px rgba(var(--green-500-rgb), 0.3);
   }
   .btn-help-float {
     position: fixed; bottom: 24px; right: 24px; z-index: 500;
@@ -226,7 +228,7 @@
     font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
     pointer-events: auto;
   }
-  .toast.success { background: #f0faf0; border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
   .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
   .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
   .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
@@ -521,7 +523,7 @@
         labels: (monthlySends || []).map(r => monthLabel(r.month)),
         datasets: [
           { label: "送信数", data: (monthlySends || []).map(r => r.count), borderColor: "#94a3b8", backgroundColor: "rgba(148,163,184,0.15)", tension: 0.3, fill: true },
-          { label: "反応数", data: (monthlyResponses || []).map(r => r.count), borderColor: "#44B13F", backgroundColor: "rgba(68,177,63,0.15)", tension: 0.3, fill: true },
+          { label: "反応数", data: (monthlyResponses || []).map(r => r.count), borderColor: getProjectColor(getCurrentProject()), backgroundColor: getProjectColorRgba(getCurrentProject(), 0.15), tension: 0.3, fill: true },
         ],
       },
       options: {
@@ -548,7 +550,7 @@
       type: "doughnut",
       data: {
         labels: ["フォーム", "メール"],
-        datasets: [{ data: [stats.form, stats.email], backgroundColor: ["#44B13F", "#94a3b8"], borderWidth: 0 }],
+        datasets: [{ data: [stats.form, stats.email], backgroundColor: [getProjectColor(getCurrentProject()), "#94a3b8"], borderWidth: 0 }],
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -561,7 +563,7 @@
     legend.innerHTML = `
       <div class="donut-legend">
         <div class="donut-legend-item">
-          <span class="donut-legend-dot" style="background:#44B13F"></span>
+          <span class="donut-legend-dot" style="background:var(--green-500)"></span>
           <span>フォーム</span>
           <span class="donut-legend-count">${stats.form}件<span class="donut-legend-pct">(${pct(stats.form)}%)</span></span>
         </div>
@@ -594,7 +596,7 @@
         type: "bar",
         data: {
           labels,
-          datasets: [{ label: "反応率", data: stats.map(r => Number(r.response_rate)), backgroundColor: "#44B13F", borderRadius: 4 }],
+          datasets: [{ label: "反応率", data: stats.map(r => Number(r.response_rate)), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
         },
         options: {
           indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -652,7 +654,7 @@
       type: "bar",
       data: {
         labels: stats.map(r => STAGE_LABELS[r.stage] || r.stage),
-        datasets: [{ label: "金額", data: stats.map(r => r.total_amount), backgroundColor: "#44B13F", borderRadius: 4 }],
+        datasets: [{ label: "金額", data: stats.map(r => r.total_amount), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
       },
       options: {
         indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -685,7 +687,7 @@
       data: {
         labels: stats.map(r => monthLabel(r.month)),
         datasets: [
-          { label: "成約", data: stats.map(r => r.won), backgroundColor: "#44B13F", borderRadius: 4 },
+          { label: "成約", data: stats.map(r => r.won), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 },
           { label: "失注", data: stats.map(r => r.lost), backgroundColor: "#dc2626", borderRadius: 4 },
         ],
       },
@@ -725,7 +727,7 @@
 
     const labels = ["興味あり", "質問", "お断り", "その他"];
     const values = [stats.interested, stats.question, stats.declined, stats.other];
-    const colors = ["#44B13F", "#64748b", "#dc2626", "#94a3b8"];
+    const colors = [getProjectColor(getCurrentProject()), "#64748b", "#dc2626", "#94a3b8"];
 
     classificationChartInstance = new Chart(canvas.getContext("2d"), {
       type: "doughnut",
@@ -772,7 +774,7 @@
       type: "bar",
       data: {
         labels: stats.map(r => r.weekday),
-        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: "#44B13F", borderRadius: 4 }],
+        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -815,7 +817,7 @@
       type: "bar",
       data: {
         labels: stats.map(r => r.hour_range),
-        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: "#44B13F", borderRadius: 4 }],
+        datasets: [{ label: "反応率", data: stats.map(r => r.rate), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
