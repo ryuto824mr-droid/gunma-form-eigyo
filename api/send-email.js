@@ -77,6 +77,10 @@ module.exports = async function handler(req, res) {
   const [variant] = await sql`SELECT * FROM message_variants WHERE id = ${variant_id}`;
   if (!variant) return res.status(404).json({ error: "バリアントが見つかりません" });
 
+  if (company.project !== variant.project) {
+    return res.status(400).json({ error: "企業とバリアントのプロジェクトが一致しません" });
+  }
+
   // テンプレート置換
   const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
   const subject = replace(variant.subject_template);

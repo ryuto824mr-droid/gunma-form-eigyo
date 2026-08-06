@@ -31,9 +31,8 @@ module.exports = async function handler(req, res) {
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
     case "generate-message": return handleGenerateMessage(req, res);
-    case "debug-project-mismatch": return handleDebugProjectMismatch(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, debug-project-mismatch）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message）を指定してください" });
   }
 };
 
@@ -793,65 +792,125 @@ async function handleReports(req, res) {
   try {
     const months = last6Months();
     const sinceDate = `${months[0]}-01`;
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 
-    const sendRows = await sql`
-      SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
-      FROM send_logs
-      WHERE sent_at >= ${sinceDate}::date
-      GROUP BY 1
-    `;
+    const sendRows = hasProjectFilter
+      ? await sql`
+          SELECT to_char(date_trunc('month', sl.sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+          WHERE sl.sent_at >= ${sinceDate}::date AND c.project = ${project}
+          GROUP BY 1
+        `
+      : await sql`
+          SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          FROM send_logs
+          WHERE sent_at >= ${sinceDate}::date
+          GROUP BY 1
+        `;
     const sendMap = {};
     sendRows.forEach(r => { sendMap[r.month] = r.count; });
     const monthly_sends = months.map(month => ({ month, count: sendMap[month] || 0 }));
 
-    const responseRows = await sql`
-      SELECT to_char(date_trunc('month', received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
-      FROM responses
-      WHERE received_at >= ${sinceDate}::date
-      GROUP BY 1
-    `;
+    const responseRows = hasProjectFilter
+      ? await sql`
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          JOIN companies c  ON c.id  = sl.company_id
+          WHERE r.received_at >= ${sinceDate}::date AND c.project = ${project}
+          GROUP BY 1
+        `
+      : await sql`
+          SELECT to_char(date_trunc('month', received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          FROM responses
+          WHERE received_at >= ${sinceDate}::date
+          GROUP BY 1
+        `;
     const responseMap = {};
     responseRows.forEach(r => { responseMap[r.month] = r.count; });
     const monthly_responses = months.map(month => ({ month, count: responseMap[month] || 0 }));
 
-    const channelRows = await sql`SELECT channel, COUNT(*)::int AS count FROM send_logs GROUP BY channel`;
+    const channelRows = hasProjectFilter
+      ? await sql`
+          SELECT sl.channel, COUNT(*)::int AS count
+          FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+          WHERE c.project = ${project}
+          GROUP BY sl.channel
+        `
+      : await sql`SELECT channel, COUNT(*)::int AS count FROM send_logs GROUP BY channel`;
     const channel_stats = { form: 0, email: 0 };
     channelRows.forEach(r => { channel_stats[r.channel] = r.count; });
 
-    const variant_performance = await sql`
-      SELECT
-        mv.id                                                             AS variant_id,
-        mv.name                                                           AS variant_name,
-        COUNT(DISTINCT sl.id)::int                                        AS send_count,
-        COUNT(DISTINCT r.id)::int                                         AS response_count,
-        CASE
-          WHEN COUNT(DISTINCT sl.id) > 0
-          THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
-          ELSE 0
-        END                                                               AS response_rate
-      FROM message_variants mv
-      LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
-      LEFT JOIN responses  r  ON r.send_log_id = sl.id
-      GROUP BY mv.id, mv.name
-      ORDER BY send_count DESC, response_rate DESC
-      LIMIT 5
-    `;
+    const variant_performance = hasProjectFilter
+      ? await sql`
+          SELECT
+            mv.id                                                             AS variant_id,
+            mv.name                                                           AS variant_name,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            CASE
+              WHEN COUNT(DISTINCT sl.id) > 0
+              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              ELSE 0
+            END                                                               AS response_rate
+          FROM message_variants mv
+          LEFT JOIN send_logs sl ON sl.variant_id = mv.id
+            AND sl.company_id IN (SELECT id FROM companies WHERE project = ${project})
+          LEFT JOIN responses  r  ON r.send_log_id = sl.id
+          WHERE mv.project = ${project}
+          GROUP BY mv.id, mv.name
+          ORDER BY send_count DESC, response_rate DESC
+          LIMIT 5
+        `
+      : await sql`
+          SELECT
+            mv.id                                                             AS variant_id,
+            mv.name                                                           AS variant_name,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            CASE
+              WHEN COUNT(DISTINCT sl.id) > 0
+              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              ELSE 0
+            END                                                               AS response_rate
+          FROM message_variants mv
+          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
+          LEFT JOIN responses  r  ON r.send_log_id = sl.id
+          GROUP BY mv.id, mv.name
+          ORDER BY send_count DESC, response_rate DESC
+          LIMIT 5
+        `;
 
-    const pipelineRows = await sql`
-      SELECT stage, COALESCE(SUM(amount), 0)::int AS total_amount
-      FROM deals
-      GROUP BY stage
-    `;
+    const pipelineRows = hasProjectFilter
+      ? await sql`
+          SELECT d.stage, COALESCE(SUM(d.amount), 0)::int AS total_amount
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE c.project = ${project}
+          GROUP BY d.stage
+        `
+      : await sql`
+          SELECT stage, COALESCE(SUM(amount), 0)::int AS total_amount
+          FROM deals
+          GROUP BY stage
+        `;
     const pipelineMap = {};
     pipelineRows.forEach(r => { pipelineMap[r.stage] = r.total_amount; });
     const pipeline_value = DEAL_STAGES.map(stage => ({ stage, total_amount: pipelineMap[stage] || 0 }));
 
-    const trendRows = await sql`
-      SELECT to_char(date_trunc('month', updated_at), 'YYYY-MM') AS month, stage, COUNT(*)::int AS count
-      FROM deals
-      WHERE stage IN ('won', 'lost') AND updated_at >= ${sinceDate}::date
-      GROUP BY 1, 2
-    `;
+    const trendRows = hasProjectFilter
+      ? await sql`
+          SELECT to_char(date_trunc('month', d.updated_at), 'YYYY-MM') AS month, d.stage, COUNT(*)::int AS count
+          FROM deals d JOIN companies c ON c.id = d.company_id
+          WHERE d.stage IN ('won', 'lost') AND d.updated_at >= ${sinceDate}::date AND c.project = ${project}
+          GROUP BY 1, 2
+        `
+      : await sql`
+          SELECT to_char(date_trunc('month', updated_at), 'YYYY-MM') AS month, stage, COUNT(*)::int AS count
+          FROM deals
+          WHERE stage IN ('won', 'lost') AND updated_at >= ${sinceDate}::date
+          GROUP BY 1, 2
+        `;
     const trendMap = {};
     trendRows.forEach(r => {
       if (!trendMap[r.month]) trendMap[r.month] = { won: 0, lost: 0 };
@@ -1476,42 +1535,5 @@ async function handleGenerateMessage(req, res) {
     return res.status(200).json({ subject: result.subject, body: result.body });
   } catch (err) {
     return res.status(500).json({ error: `AI文面生成エラー: ${err.message}` });
-  }
-}
-
-// ==================== debug-project-mismatch（一時的な確認用。用済み後は削除予定） ====================
-
-// send_logsのcompany_idとvariant_idが指すproject同士が食い違っていないかを確認する
-// 読み取り専用のデバッグエンドポイント。db-setupと同じSETUP_SECRET(debug_key)で保護する
-async function handleDebugProjectMismatch(req, res) {
-  const authorized = !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
-  if (!authorized) {
-    return res.status(401).json({ error: "debug_keyが正しくありません" });
-  }
-  try {
-    const mismatches = await sql`
-      SELECT
-        sl.id            AS send_log_id,
-        c.id             AS company_id,
-        c.name           AS company_name,
-        c.project        AS company_project,
-        mv.id            AS variant_id,
-        mv.name          AS variant_name,
-        mv.project       AS variant_project,
-        sl.sent_at
-      FROM send_logs sl
-      JOIN companies c         ON c.id  = sl.company_id
-      JOIN message_variants mv ON mv.id = sl.variant_id
-      WHERE c.project != mv.project
-      ORDER BY sl.sent_at DESC
-    `;
-    const [{ total_send_logs }] = await sql`SELECT COUNT(*)::int AS total_send_logs FROM send_logs`;
-    return res.status(200).json({
-      mismatch_count: mismatches.length,
-      total_send_logs,
-      mismatches,
-    });
-  } catch (err) {
-    return res.status(500).json({ error: `確認エラー: ${err.message}` });
   }
 }

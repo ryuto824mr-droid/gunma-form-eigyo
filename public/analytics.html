@@ -71,6 +71,13 @@
   }
   .project-badge-nav:hover { opacity: 0.85; }
 
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit; transition: opacity 150ms;
+  }
+  .list-project-label:hover { opacity: 0.85; }
+
   .container { max-width: 960px; margin: 0 auto; padding: 28px 16px; }
 
   .link-to-reports {
@@ -416,6 +423,7 @@
   <a class="link-to-reports" href="/reports.html">詳細レポートはこちら<i data-lucide="arrow-right"></i></a>
 
   <div class="analytics-header">
+    <button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button>
     <span class="updated-at" id="updatedAt">読み込み中...</span>
     <span class="check-msg" id="checkMsg"></span>
     <span class="tooltip-wrap">
@@ -451,6 +459,21 @@
   let lastTagsStats         = [];
   let lastMonthlySends      = [];
 
+  const BASE_TITLE = document.title;
+
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const label   = getProjectLabel(project);
+    const color   = getProjectColor(project);
+    document.title = `${BASE_TITLE} (${label})`;
+    const el = document.getElementById("listProjectLabel");
+    if (el) {
+      el.textContent = `(${label})`;
+      el.style.background = color;
+      el.onclick = () => { window.location.href = "/app.html#project-select"; };
+    }
+  }
+
   function monthLabel(ym) {
     const parts = String(ym).split("-");
     return `${parseInt(parts[1], 10)}月`;
@@ -458,7 +481,7 @@
 
   async function loadMiniMonthlyChart() {
     try {
-      const res = await fetch("/api/crm?action=reports");
+      const res = await fetch("/api/crm?action=reports&project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) return;
       const data = await res.json();
       lastMonthlySends = data.monthly_sends || [];
@@ -546,7 +569,7 @@
   async function loadAnalytics() {
     document.getElementById("updatedAt").textContent = "読み込み中...";
     try {
-      const res = await fetch("/api/analytics");
+      const res = await fetch("/api/analytics?project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) throw new Error("取得失敗");
       const data = await res.json();
 
@@ -1042,6 +1065,7 @@
   // ===== End Spotlight Tour =====
 
   lucide.createIcons();
+  updateProjectDisplay();
   loadAnalytics();
   loadMiniMonthlyChart();
   startTour([
