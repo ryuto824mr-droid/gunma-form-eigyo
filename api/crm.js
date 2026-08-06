@@ -31,8 +31,9 @@ module.exports = async function handler(req, res) {
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
     case "generate-message": return handleGenerateMessage(req, res);
+    case "debug-project-mismatch": return handleDebugProjectMismatch(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, debug-project-mismatch）を指定してください" });
   }
 };
 
@@ -1475,5 +1476,42 @@ async function handleGenerateMessage(req, res) {
     return res.status(200).json({ subject: result.subject, body: result.body });
   } catch (err) {
     return res.status(500).json({ error: `AI文面生成エラー: ${err.message}` });
+  }
+}
+
+// ==================== debug-project-mismatch（一時的な確認用。用済み後は削除予定） ====================
+
+// send_logsのcompany_idとvariant_idが指すproject同士が食い違っていないかを確認する
+// 読み取り専用のデバッグエンドポイント。db-setupと同じSETUP_SECRET(debug_key)で保護する
+async function handleDebugProjectMismatch(req, res) {
+  const authorized = !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
+  if (!authorized) {
+    return res.status(401).json({ error: "debug_keyが正しくありません" });
+  }
+  try {
+    const mismatches = await sql`
+      SELECT
+        sl.id            AS send_log_id,
+        c.id             AS company_id,
+        c.name           AS company_name,
+        c.project        AS company_project,
+        mv.id            AS variant_id,
+        mv.name          AS variant_name,
+        mv.project       AS variant_project,
+        sl.sent_at
+      FROM send_logs sl
+      JOIN companies c         ON c.id  = sl.company_id
+      JOIN message_variants mv ON mv.id = sl.variant_id
+      WHERE c.project != mv.project
+      ORDER BY sl.sent_at DESC
+    `;
+    const [{ total_send_logs }] = await sql`SELECT COUNT(*)::int AS total_send_logs FROM send_logs`;
+    return res.status(200).json({
+      mismatch_count: mismatches.length,
+      total_send_logs,
+      mismatches,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `確認エラー: ${err.message}` });
   }
 }
