@@ -4,9 +4,19 @@ module.exports = async function handler(req, res) {
   if (req.method === "GET") {
     try {
       const showArchived = req.query?.show_archived === "1";
-      const companies = showArchived
-        ? await sql`SELECT * FROM companies ORDER BY created_at DESC`
-        : await sql`SELECT * FROM companies WHERE archived = FALSE ORDER BY created_at DESC`;
+      const project = req.query?.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      let companies;
+      if (hasProjectFilter && showArchived) {
+        companies = await sql`SELECT * FROM companies WHERE project = ${project} ORDER BY created_at DESC`;
+      } else if (hasProjectFilter) {
+        companies = await sql`SELECT * FROM companies WHERE project = ${project} AND archived = FALSE ORDER BY created_at DESC`;
+      } else if (showArchived) {
+        companies = await sql`SELECT * FROM companies ORDER BY created_at DESC`;
+      } else {
+        companies = await sql`SELECT * FROM companies WHERE archived = FALSE ORDER BY created_at DESC`;
+      }
       return res.status(200).json(companies);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });

@@ -75,6 +75,10 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity 150ms;
   }
   .project-badge-nav:hover { opacity: 0.85; }
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  }
 
   .container { max-width: 1080px; margin: 0 auto; padding: 24px 16px; }
 
@@ -1289,7 +1293,7 @@
 
   <section class="table-section">
     <div class="bulk-toolbar">
-      <h2>登録企業一覧</h2>
+      <h2>登録企業一覧<span class="list-project-label" id="listProjectLabel"></span></h2>
       <span class="tooltip-wrap">
         <button class="btn-bulk" id="bulkBtn" onclick="bulkResearch()">未リサーチを一括リサーチ</button>
         <span class="tooltip-text">未リサーチの企業を順番に自動解析します</span>
@@ -1481,7 +1485,21 @@
   let sortState = { field: null, dir: "desc" };
   let currentPage = 1;
   const PAGE_SIZE = 20;
+  const BASE_TITLE = document.title;
 
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const label   = getProjectLabel(project);
+    const color   = getProjectColor(project);
+    document.title = `${BASE_TITLE} (${label})`;
+    const el = document.getElementById("listProjectLabel");
+    if (el) {
+      el.textContent = `(${label})`;
+      el.style.background = color;
+    }
+  }
+
+  updateProjectDisplay();
   loadCompanies();
   loadVariantsList();
   loadApiUsage();
@@ -1611,7 +1629,10 @@
   async function loadCompanies() {
     try {
       const showArchived = document.getElementById("filterShowArchived")?.checked;
-      const url = showArchived ? "/api/companies?show_archived=1" : "/api/companies";
+      const params = new URLSearchParams();
+      if (showArchived) params.set("show_archived", "1");
+      params.set("project", getCurrentProject());
+      const url = "/api/companies?" + params.toString();
       const res = await fetch(url);
       const raw = await res.json();
       companies = Array.isArray(raw) ? raw : [];
@@ -2352,7 +2373,7 @@
       res = await fetch("/api/companies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, url, email: email || null }),
+        body: JSON.stringify({ name, url, email: email || null, project: getCurrentProject() }),
       });
       data = await res.json();
     } catch (err) {
@@ -2517,9 +2538,7 @@
       msgEl.textContent = `インポート完了: ${data.imported}件追加、${data.skipped}件スキップ`;
       msgEl.className = "import-msg ok";
       fileInput.value = "";
-      const listRes = await fetch("/api/companies");
-      companies = await listRes.json();
-      renderTable();
+      await loadCompanies();
     } catch (err) {
       msgEl.textContent = err.message;
       msgEl.className = "import-msg error";
@@ -3045,8 +3064,9 @@
   }
 
   let lastSearchAutoTags = [];
-  let activeDiscoverProject = "locle";
-  let lastSearchProject = "locle";
+  let activeDiscoverProject = getCurrentProject();
+  let lastSearchProject = getCurrentProject();
+  switchDiscoverTab(activeDiscoverProject);
 
   function switchDiscoverTab(project) {
     activeDiscoverProject = project;
