@@ -176,6 +176,41 @@ async function handleDbSetup(req, res) {
     // api_usage_logs.input_tokens / output_tokens追加（Anthropic API利用量の正確な集計用）
     await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS input_tokens INTEGER");
     await dbSql.query("ALTER TABLE api_usage_logs ADD COLUMN IF NOT EXISTS output_tokens INTEGER");
+    // companies.project追加（LOCLE統合ツール拡張: 'ozukanzukan' / 'locle' を区別）
+    await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
+    await dbSql.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'companies_project_check'
+        ) THEN
+          ALTER TABLE companies ADD CONSTRAINT companies_project_check CHECK (project IN ('ozukanzukan', 'locle'));
+        END IF;
+      END $$;
+    `);
+    // work_logsテーブル追加（勤怠・作業ログ管理用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS work_logs (
+        id              SERIAL PRIMARY KEY,
+        user_name       TEXT NOT NULL,
+        date            DATE NOT NULL,
+        clock_in        TIME,
+        clock_out       TIME,
+        work_hours      NUMERIC(5,2) GENERATED ALWAYS AS (
+                           CASE
+                             WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL
+                               THEN ROUND(EXTRACT(EPOCH FROM (clock_out - clock_in))::numeric / 3600, 2)
+                             ELSE NULL
+                           END
+                         ) STORED,
+        tasks_done      TEXT,
+        tasks_remaining TEXT,
+        memo            TEXT,
+        project         TEXT NOT NULL DEFAULT 'locle'
+                           CONSTRAINT work_logs_project_check CHECK (project IN ('ozukanzukan', 'locle')),
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
