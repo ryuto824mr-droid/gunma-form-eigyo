@@ -61,6 +61,23 @@ function addProjectParamToUrl(url, project) {
   }
 }
 
+// ページ全体のアクセントカラー(--green-500/700/50/100)を現在のプロジェクトに合わせて
+// 上書きする。既存のCSS(ボタン・バッジ・ヘッダーグラデーション等)はこれらの変数を
+// 参照しているため、この関数を呼ぶだけで一括して緑↔オレンジに切り替わる。
+// <head>内でproject-context.js読み込み直後、できるだけ早いタイミング(<style>がまだ
+// パースされる前)に同期的に呼び出すことで、ちらつき無く初回描画から正しい色にする。
+function applyProjectTheme() {
+  var project   = getCurrentProject();
+  var color     = getProjectColor(project); // locle=#44B13F, ozukanzukan=#f97316
+  var colorDark = project === "ozukanzukan" ? "#c2410c" : "#2F8A2A"; // 濃い色バージョン
+  try {
+    document.documentElement.style.setProperty("--green-500", color);
+    document.documentElement.style.setProperty("--green-700", colorDark);
+    document.documentElement.style.setProperty("--green-50", project === "ozukanzukan" ? "#fff7ed" : "#f0faf0");
+    document.documentElement.style.setProperty("--green-100", project === "ozukanzukan" ? "#ffedd5" : "#d8f0d8");
+  } catch (e) {}
+}
+
 // 各ページ共通ヘッダーの id="projectBadge" 要素を現在のプロジェクトに合わせて表示する。
 // あわせて --project-accent CSS変数にプロジェクトカラーを反映する(ページ全体の配色統合は今後の対応)。
 function initProjectBadge() {

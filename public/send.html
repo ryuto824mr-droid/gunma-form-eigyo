@@ -14,6 +14,7 @@
   })();
 </script>
 <script src="/project-context.js"></script>
+<script>applyProjectTheme();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
@@ -49,7 +50,7 @@
   }
 
   .page-header {
-    background: linear-gradient(135deg, #2F8A2A 0%, #44B13F 50%, #5BC952 100%);
+    background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
     border-bottom: none; box-shadow: 0 2px 8px rgba(47,138,42,0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
