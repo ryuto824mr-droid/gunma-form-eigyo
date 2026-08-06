@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
     }
 
     // 単件追加
-    const { name, url, email } = req.body || {};
+    const { name, url, email, project } = req.body || {};
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "name（文字列）が必要です" });
     }
@@ -38,10 +38,12 @@ module.exports = async function handler(req, res) {
       return res.status(400).json(restricted);
     }
 
+    const projectToSet = project === "ozukanzukan" ? "ozukanzukan" : "locle";
+
     try {
       const [company] = await sql`
-        INSERT INTO companies (name, url, email, status)
-        VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending')
+        INSERT INTO companies (name, url, email, status, project)
+        VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending', ${projectToSet})
         RETURNING *
       `;
       return res.status(201).json(company);
