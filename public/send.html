@@ -961,12 +961,29 @@
       });
 
       populateSelects();
+      applyUrlPreselect();
       renderLogs();
       renderScheduleList();
     } catch (err) {
       document.getElementById("logsBody").innerHTML =
         `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
     }
+  }
+
+  // 他ページから ?company_id=xxx&variant_id=yyy 付きで遷移してきた場合、
+  // 企業・バリアントのプルダウンを自動選択し、下書きプレビューまで表示する
+  // (例: home.htmlの未返信フォローアップ候補から「送信管理へ」で遷移してきた場合)
+  function applyUrlPreselect() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const companyId = params.get("company_id");
+      const variantId = params.get("variant_id");
+      const cEl = document.getElementById("companySelect");
+      const vEl = document.getElementById("variantSelect");
+      if (companyId && cEl.querySelector(`option[value="${companyId}"]`)) cEl.value = companyId;
+      if (variantId && vEl.querySelector(`option[value="${variantId}"]`)) vEl.value = variantId;
+      if (cEl.value && vEl.value) generateDraft();
+    } catch (e) {}
   }
 
   function populateSelects() {

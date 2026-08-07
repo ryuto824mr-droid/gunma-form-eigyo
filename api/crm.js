@@ -9,7 +9,7 @@ const { neon } = require("@neondatabase/serverless");
 const { sql, getSettings } = require("../lib/db");
 const submitFormHandler = require("./submit-form");
 const sendEmailHandler = require("./send-email");
-const { generateMessageDraft } = require("../lib/ai-message-generator");
+const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -31,8 +31,10 @@ module.exports = async function handler(req, res) {
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
     case "generate-message": return handleGenerateMessage(req, res);
+    case "followup-suggestions": return handleFollowUpSuggestions(req, res);
+    case "generate-followup": return handleGenerateFollowUp(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup）を指定してください" });
   }
 };
 
@@ -1535,5 +1537,106 @@ async function handleGenerateMessage(req, res) {
     return res.status(200).json({ subject: result.subject, body: result.body });
   } catch (err) {
     return res.status(500).json({ error: `AI文面生成エラー: ${err.message}` });
+  }
+}
+
+// ==================== followup-suggestions ====================
+//
+// 「送信したのに返信が無い」企業を抽出する。対象条件:
+// - status='sent'の送信履歴がある
+// - その企業への「最後の」sent送信から3日以上経過している
+// - その企業のsend_logsに紐づくresponsesが一件も無い(企業単位での未返信判定。
+//   複数回送信していて過去の送信には反応があった企業は、既に一度接点が持てている
+//   とみなして対象から除外する)
+// - action_statusが'closed'/'rejected'でない(既に対応済み・お断りは除外)
+
+async function handleFollowUpSuggestions(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  const project = req.query.project;
+  if (project !== "locle" && project !== "ozukanzukan") {
+    return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
+  }
+  try {
+    const rows = await sql`
+      SELECT
+        c.id             AS company_id,
+        c.name           AS company_name,
+        last_send.sent_at AS last_sent_at,
+        FLOOR(EXTRACT(EPOCH FROM (NOW() - last_send.sent_at)) / 86400)::int AS days_since,
+        mv.name          AS last_variant_name,
+        mv.id            AS last_variant_id,
+        mv.channel       AS last_variant_channel
+      FROM companies c
+      JOIN LATERAL (
+        SELECT sl.id, sl.sent_at, sl.variant_id
+        FROM send_logs sl
+        WHERE sl.company_id = c.id AND sl.status = 'sent'
+        ORDER BY sl.sent_at DESC
+        LIMIT 1
+      ) last_send ON TRUE
+      JOIN message_variants mv ON mv.id = last_send.variant_id
+      WHERE c.project = ${project}
+        AND COALESCE(c.action_status, 'none') NOT IN ('closed', 'rejected')
+        AND last_send.sent_at <= NOW() - INTERVAL '3 days'
+        AND NOT EXISTS (
+          SELECT 1 FROM responses r
+          JOIN send_logs sl3 ON sl3.id = r.send_log_id
+          WHERE sl3.company_id = c.id
+        )
+      ORDER BY last_send.sent_at ASC
+    `;
+    return res.status(200).json(rows);
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== generate-followup ====================
+
+async function handleGenerateFollowUp(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
+  }
+
+  const { company_id } = req.body || {};
+  const companyId = parseInt(company_id, 10);
+  if (!companyId || isNaN(companyId)) {
+    return res.status(400).json({ error: "有効なcompany_idを指定してください" });
+  }
+
+  try {
+    const [company] = await sql`SELECT name FROM companies WHERE id = ${companyId}`;
+    if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+
+    const [lastSend] = await sql`
+      SELECT sl.sent_at, mv.subject_template
+      FROM send_logs sl
+      JOIN message_variants mv ON mv.id = sl.variant_id
+      WHERE sl.company_id = ${companyId} AND sl.status = 'sent'
+      ORDER BY sl.sent_at DESC
+      LIMIT 1
+    `;
+    if (!lastSend) {
+      return res.status(404).json({ error: "この企業への送信履歴が見つかりません" });
+    }
+
+    const daysSinceContact = Math.floor((Date.now() - new Date(lastSend.sent_at).getTime()) / 86400000);
+    const originalSubject = (lastSend.subject_template || "").replace(/\{\{company_name\}\}/g, company.name);
+
+    const result = await generateFollowUpMessage({
+      companyName: company.name,
+      originalSubject,
+      daysSinceContact,
+    });
+
+    if (result.configured === false) {
+      return res.status(400).json({ error: "AI機能が設定されていません" });
+    }
+
+    return res.status(200).json({ subject: result.subject, body: result.body });
+  } catch (err) {
+    return res.status(500).json({ error: `AIフォローアップ文面生成エラー: ${err.message}` });
   }
 }

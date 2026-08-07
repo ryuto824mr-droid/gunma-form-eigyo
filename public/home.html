@@ -143,6 +143,82 @@
   }
   .followup-item-link:hover { background: var(--green-50); }
 
+  /* 未返信フォローアップ候補 */
+  .followup-count-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+    background: #ea580c; color: white; font-size: 11px; font-weight: 700;
+    margin-left: 8px; vertical-align: middle;
+  }
+  .btn-followup-suggest {
+    padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: var(--radius-sm);
+    border: 1px solid var(--green-500); color: var(--green-700); background: var(--white);
+    cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 150ms;
+  }
+  .btn-followup-suggest:hover:not(:disabled) { background: var(--green-50); }
+  .btn-followup-suggest:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* Modal(フォローアップ文面生成) */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 1000;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--white); border-radius: var(--radius-lg); max-width: 640px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-200);
+  }
+  .modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--gray-900); }
+  .modal-close {
+    background: none; border: none; font-size: 18px; cursor: pointer;
+    color: var(--gray-400); line-height: 1; padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: all 150ms;
+  }
+  .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .preview-subject {
+    font-size: 13px; padding: 10px 14px; background: var(--gray-50);
+    border-left: 3px solid var(--green-500); border-radius: var(--radius-sm); color: var(--gray-900);
+  }
+  .preview-body-text {
+    white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.8;
+    padding: 14px 16px; background: var(--gray-50);
+    border-left: 3px solid var(--green-500); border-radius: var(--radius-sm);
+    color: var(--gray-700); margin: 0;
+  }
+  .followup-modal-loading { font-size: 13px; color: var(--gray-500); padding: 12px 0; }
+  .followup-modal-error { font-size: 13px; color: #dc2626; padding: 12px 0; }
+  .modal-footer {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 14px 20px; border-top: 1px solid var(--gray-200);
+  }
+  .btn-modal-close {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .btn-modal-close:hover { background: var(--gray-50); }
+  .btn-primary {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    transition: all 150ms ease; white-space: nowrap;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--green-600), var(--green-800));
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--green-500-rgb), 0.4);
+  }
+  .btn-primary:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+
   /* Section title */
   .section-title {
     font-size: 18px; font-weight: 700; color: var(--gray-900);
@@ -399,6 +475,13 @@
     </div>
   </div>
 
+  <section class="followup-section" id="staleFollowupSection">
+    <h2>📮 未返信フォローアップ候補<span class="followup-count-badge" id="staleFollowupCountBadge" hidden>0</span></h2>
+    <div id="staleFollowupList">
+      <p class="followup-empty">読み込み中...</p>
+    </div>
+  </section>
+
   <section class="followup-section" id="followupSection">
     <h2>今日のフォローアップ</h2>
     <p class="followup-empty">読み込み中...</p>
@@ -482,6 +565,34 @@
     &nbsp;·&nbsp;<a href="/help.html" style="color:var(--gray-400);">ヘルプ</a>
   </p>
 
+</div>
+
+<!-- 未返信フォローアップ: AI文面提案モーダル -->
+<div class="modal-overlay" id="followupModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="followupModalTitle">フォロー文面を提案</h3>
+      <button class="modal-close" onclick="closeFollowUpModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p class="followup-modal-loading" id="followupModalLoading">生成中...</p>
+      <p class="followup-modal-error" id="followupModalError" hidden></p>
+      <div id="followupModalResult" hidden>
+        <div>
+          <label style="font-size:12px; font-weight:600; color:var(--gray-700);">件名</label>
+          <div class="preview-subject" id="followupModalSubject" style="margin-top:4px;"></div>
+        </div>
+        <div style="margin-top:14px;">
+          <label style="font-size:12px; font-weight:600; color:var(--gray-700);">本文</label>
+          <pre class="preview-body-text" id="followupModalBody" style="margin-top:4px;"></pre>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-close" onclick="closeFollowUpModal()">閉じる</button>
+      <button class="btn-primary" id="followupModalSaveBtn" onclick="saveFollowUpAsVariant()" hidden>このまま保存して送信管理へ</button>
+    </div>
+  </div>
 </div>
 
 <!-- Welcome Tour -->
@@ -733,6 +844,7 @@
 
   lucide.createIcons();
   loadStats();
+  loadFollowUpSuggestions();
   checkUsageReminder();
 
   function usageConfirmedKey() {
@@ -761,6 +873,130 @@
     } catch {}
     const banner = document.getElementById("usageReminder");
     if (banner) banner.hidden = true;
+  }
+
+  // ===== 未返信フォローアップ候補 =====
+  let staleFollowups = [];
+  let currentFollowUp = null; // { companyId, companyName, channel, subject, body } モーダルで生成中/生成済みの内容
+
+  async function loadFollowUpSuggestions() {
+    const listEl  = document.getElementById("staleFollowupList");
+    const badgeEl = document.getElementById("staleFollowupCountBadge");
+    try {
+      const res = await fetch("/api/crm?action=followup-suggestions&project=" + encodeURIComponent(getCurrentProject()));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      staleFollowups = Array.isArray(data) ? data : [];
+    } catch (err) {
+      listEl.innerHTML = `<p class="followup-empty" style="color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+      return;
+    }
+
+    if (staleFollowups.length === 0) {
+      badgeEl.hidden = true;
+      listEl.innerHTML = `<p class="followup-empty">未返信のフォローアップ候補はありません ✓</p>`;
+      return;
+    }
+
+    badgeEl.hidden = false;
+    badgeEl.textContent = staleFollowups.length;
+
+    const items = staleFollowups.map(c => `
+      <li class="followup-item">
+        <div class="followup-item-info">
+          <span class="followup-item-company">${esc(c.company_name)}</span>
+          <span class="followup-item-meta">${c.days_since}日経過・最終送信バリアント: ${esc(c.last_variant_name || "不明")}</span>
+        </div>
+        <button type="button" class="btn-followup-suggest" onclick="openFollowUpModal(${c.company_id})">AIでフォロー文面を提案</button>
+      </li>`).join("");
+    listEl.innerHTML = `<ul class="followup-list">${items}</ul>`;
+  }
+
+  async function openFollowUpModal(companyId) {
+    const target = staleFollowups.find(c => c.company_id === companyId);
+    if (!target) return;
+
+    currentFollowUp = {
+      companyId,
+      companyName: target.company_name,
+      channel: target.last_variant_channel || "form",
+      subject: "",
+      body: "",
+    };
+
+    document.getElementById("followupModalTitle").textContent = `フォロー文面を提案 - ${target.company_name}`;
+    document.getElementById("followupModalLoading").hidden = false;
+    document.getElementById("followupModalError").hidden = true;
+    document.getElementById("followupModalResult").hidden = true;
+    document.getElementById("followupModalSaveBtn").hidden = true;
+    document.getElementById("followupModal").classList.add("open");
+
+    try {
+      const res = await fetch("/api/crm?action=generate-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "生成に失敗しました");
+
+      currentFollowUp.subject = data.subject || "";
+      currentFollowUp.body = data.body || "";
+
+      document.getElementById("followupModalLoading").hidden = true;
+      const subjectEl = document.getElementById("followupModalSubject");
+      if (currentFollowUp.subject) {
+        subjectEl.textContent = currentFollowUp.subject;
+        subjectEl.parentElement.hidden = false;
+      } else {
+        subjectEl.parentElement.hidden = true;
+      }
+      document.getElementById("followupModalBody").textContent = currentFollowUp.body;
+      document.getElementById("followupModalResult").hidden = false;
+      document.getElementById("followupModalSaveBtn").hidden = false;
+    } catch (err) {
+      document.getElementById("followupModalLoading").hidden = true;
+      const errEl = document.getElementById("followupModalError");
+      errEl.textContent = err.message;
+      errEl.hidden = false;
+    }
+  }
+
+  function closeFollowUpModal() {
+    document.getElementById("followupModal").classList.remove("open");
+    currentFollowUp = null;
+  }
+
+  async function saveFollowUpAsVariant() {
+    if (!currentFollowUp || !currentFollowUp.body) return;
+    const btn = document.getElementById("followupModalSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "保存中...";
+    try {
+      const res = await fetch("/api/variants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `フォローアップ - ${currentFollowUp.companyName} (${todayDateStr()})`,
+          channel: currentFollowUp.channel === "email" ? "email" : "form",
+          subject_template: currentFollowUp.subject || null,
+          body_template: currentFollowUp.body,
+          project: getCurrentProject(),
+        }),
+      });
+      const variant = await res.json();
+      if (!res.ok) throw new Error(variant.error || "バリアントの保存に失敗しました");
+
+      const url = addProjectParamToUrl(
+        `/send.html?company_id=${currentFollowUp.companyId}&variant_id=${variant.id}`,
+        getCurrentProject()
+      );
+      window.location.href = url;
+    } catch (err) {
+      showToast("保存に失敗しました: " + esc(err.message), "error");
+      btn.disabled = false;
+      btn.textContent = "このまま保存して送信管理へ";
+    }
   }
 </script>
 </body>
