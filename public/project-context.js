@@ -65,6 +65,10 @@ function getProjectColor(project) {
   return PROJECT_COLORS[project] || PROJECT_COLORS.locle;
 }
 
+function getProjectLogo(project) {
+  return project === "ozukanzukan" ? "/ozukanzukan-logo.png" : "/logo.jpg";
+}
+
 // Chart.js等、CSS変数を直接解釈できないJS側の色指定で使う濃色バージョン(--green-700相当)
 function getProjectColorDark(project) {
   var t = PROJECT_THEME[project] || PROJECT_THEME.locle;
@@ -139,6 +143,12 @@ function initProjectBadge() {
   var homeLink = document.getElementById("navHomeLink");
   if (homeLink) {
     homeLink.href = addProjectParamToUrl("/home.html", project);
+  }
+
+  // ヘッダーロゴ(id="headerLogo")もプロジェクトに応じて切り替える
+  var logoImg = document.getElementById("headerLogo");
+  if (logoImg) {
+    logoImg.src = getProjectLogo(project);
   }
 
   // 「コンテンツ制作」機能は群馬お仕事図鑑専用のため、ナビリンク・ホームの機能カードとも
