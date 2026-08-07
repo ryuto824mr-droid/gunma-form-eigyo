@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>コンテンツ制作 - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<script src="/project-context.js"></script>
+<script>applyProjectTheme();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; max-width: 1120px; margin: 0 auto; padding: 24px 16px; }
+
+  .page-header {
+    background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+  .project-badge-nav {
+    border: none; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    color: white; cursor: pointer; font-family: inherit; white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity 150ms;
+  }
+  .project-badge-nav:hover { opacity: 0.85; }
+
+  .section-title {
+    font-size: 18px; font-weight: 700; color: var(--gray-900);
+    border-left: 3px solid var(--green-500); padding-left: 12px;
+    margin: 0 0 6px;
+  }
+  .cs-lead { font-size: 13px; color: var(--gray-500); margin: 0 0 20px; }
+
+  /* 企業選択 */
+  .cs-company-bar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+    background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
+    padding: 14px 18px; box-shadow: var(--shadow-sm);
+  }
+  .cs-company-bar label { font-size: 12px; font-weight: 600; color: var(--gray-500); flex-shrink: 0; }
+  .cs-company-bar select {
+    flex: 1; max-width: 360px; padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+
+  /* プロジェクトガード(LOCLE選択時の案内) */
+  .cs-guard {
+    background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm); padding: 56px 24px; text-align: center;
+  }
+  .cs-guard-icon { font-size: 32px; margin-bottom: 12px; }
+  .cs-guard-text { font-size: 13px; color: var(--gray-500); margin: 0 0 18px; }
+
+  /* レイアウト */
+  .cs-layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .cs-panel {
+    width: 300px; min-width: 300px; background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .cs-mode-tabs { display: flex; flex-direction: column; gap: 6px; }
+  .cs-mode-btn {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius-md);
+    cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--gray-700);
+    transition: all 150ms; text-align: left;
+  }
+  .cs-mode-btn:hover { border-color: var(--gray-300); }
+  .cs-mode-btn.active { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); }
+  .cs-mode-btn .cs-mode-icon { font-size: 15px; }
+
+  .cs-form-group { display: flex; flex-direction: column; gap: 5px; }
+  .cs-form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .cs-form-group input[type="text"],
+  .cs-form-group select {
+    padding: 8px 12px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); width: 100%;
+  }
+  .cs-form-group input:focus, .cs-form-group select:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
+  }
+
+  .btn-primary {
+    padding: 9px 16px;
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit;
+    transition: all 150ms ease; white-space: nowrap; width: 100%;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--green-600), var(--green-800));
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--green-500-rgb), 0.4);
+  }
+  .btn-primary:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+  .btn-secondary {
+    padding: 7px 14px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .btn-secondary:hover { background: var(--gray-50); }
+
+  /* 出力エリア */
+  .cs-output {
+    flex: 1; min-width: 300px; background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; gap: 14px; min-height: 260px;
+  }
+  .cs-output-empty, .cs-output-loading {
+    color: var(--gray-400); font-size: 13px; text-align: center; padding: 60px 0;
+  }
+  .cs-output-loading { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .cs-output-error { color: #dc2626; font-size: 13px; padding: 16px 0; }
+  .cs-block { background: var(--gray-50); border-left: 3px solid var(--green-500); border-radius: var(--radius-sm); padding: 12px 16px; }
+  .cs-block-label {
+    font-size: 10px; font-weight: 700; color: var(--gray-400); text-transform: uppercase;
+    letter-spacing: 0.07em; margin-bottom: 6px;
+  }
+  .cs-block-body { font-size: 13px; color: var(--gray-700); line-height: 1.8; white-space: pre-wrap; }
+  .cs-hashtags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cs-hashtag {
+    font-size: 12px; color: var(--green-700); background: var(--green-50);
+    border: 1px solid var(--green-200); border-radius: 999px; padding: 3px 10px;
+  }
+  .cs-qa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .cs-qa-item { background: var(--gray-50); border-left: 3px solid var(--green-500); border-radius: var(--radius-sm); padding: 12px 16px; }
+  .cs-qa-question { font-size: 13px; font-weight: 600; color: var(--gray-900); margin-bottom: 4px; }
+  .cs-qa-purpose { font-size: 12px; color: var(--gray-500); }
+  .cs-output-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  .loading-dots { display: inline-flex; gap: 4px; }
+  .loading-dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--green-500); animation: pulse 1.2s infinite; display: inline-block; }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  /* 保存済みコンテンツ */
+  .cs-saved-section { margin-top: 32px; }
+  .cs-saved-list { display: flex; flex-direction: column; gap: 10px; }
+  .cs-saved-item {
+    background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-md);
+    padding: 12px 16px; box-shadow: var(--shadow-sm);
+  }
+  .cs-saved-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .cs-saved-item-type {
+    font-size: 11px; font-weight: 700; color: white; background: var(--green-500);
+    border-radius: 999px; padding: 2px 10px;
+  }
+  .cs-saved-item-date { font-size: 11px; color: var(--gray-400); flex: 1; }
+  .cs-saved-item-delete {
+    font-size: 11px; color: #dc2626; background: none; border: 1px solid #fca5a5;
+    border-radius: var(--radius-sm); padding: 3px 10px; cursor: pointer; font-family: inherit;
+    transition: all 150ms;
+  }
+  .cs-saved-item-delete:hover { background: #fff5f5; }
+  .cs-saved-item-preview {
+    font-size: 12px; color: var(--gray-500); overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cs-empty-note { font-size: 13px; color: var(--gray-400); }
+
+  @media (max-width: 700px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .container { padding: 16px 8px; }
+    .cs-panel { width: 100%; min-width: 0; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
+  }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+      --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+      --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    select { background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important; }
+    input::placeholder { color: #475569 !important; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  }
+  html.dark {
+    --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+    --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+    --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark select { background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important; }
+  html.dark input::placeholder { color: #475569 !important; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <button class="project-badge-nav" id="projectBadge" title="クリックしてプロジェクトを切り替え"></button>
+  <nav class="page-nav">
+    <a href="/home.html" id="navHomeLink">ホーム</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html">送信管理</a>
+    <a href="/analytics.html">分析</a>
+    <a href="/crm.html">CRM</a>
+    <a href="/content-studio.html" class="content-studio-only active" hidden>コンテンツ制作</a>
+    <a href="/reports.html">レポート</a>
+    <a href="/help.html">ヘルプ</a>
+    <a href="/index.html" target="_blank">デモ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <p class="section-title">コンテンツ制作</p>
+  <p class="cs-lead">企業を選んで、Reels台本・SNS投稿文・取材Q&amp;Aを生成します</p>
+
+  <div id="csProjectGuard" class="cs-guard" hidden>
+    <div class="cs-guard-icon">🔒</div>
+    <p class="cs-guard-text">この機能は「群馬お仕事図鑑」プロジェクト選択時のみご利用いただけます。</p>
+    <button type="button" class="btn-primary" style="width:auto;" onclick="switchToOzukanzukan()">群馬お仕事図鑑に切り替える</button>
+  </div>
+
+  <div id="csMainContent">
+
+  <div class="cs-company-bar">
+    <label for="csCompanySelect">企業</label>
+    <select id="csCompanySelect" onchange="onCompanyChange()"><option value="">読み込み中...</option></select>
+  </div>
+
+  <div class="cs-layout">
+    <div class="cs-panel">
+      <div class="cs-mode-tabs">
+        <button type="button" class="cs-mode-btn active" data-type="reels_script" onclick="selectContentType('reels_script')">
+          <span class="cs-mode-icon">📱</span>Reels台本
+        </button>
+        <button type="button" class="cs-mode-btn" data-type="social_post" onclick="selectContentType('social_post')">
+          <span class="cs-mode-icon">✍</span>SNS投稿文
+        </button>
+        <button type="button" class="cs-mode-btn" data-type="interview_qa" onclick="selectContentType('interview_qa')">
+          <span class="cs-mode-icon">🎤</span>取材Q&amp;A
+        </button>
+      </div>
+
+      <div id="csFormReels" class="cs-form-group">
+        <label for="csReelsTheme">テーマ</label>
+        <input type="text" id="csReelsTheme" placeholder="例: 若手社員の1日、オフィスツアー、社長インタビュー">
+      </div>
+
+      <div id="csFormSocial" class="cs-form-group" hidden>
+        <label for="csSocialPlatform">プラットフォーム</label>
+        <select id="csSocialPlatform">
+          <option value="Instagram">Instagram</option>
+          <option value="TikTok">TikTok</option>
+          <option value="X">X</option>
+        </select>
+      </div>
+      <div id="csFormSocialTone" class="cs-form-group" hidden>
+        <label for="csSocialTone">トーン(任意)</label>
+        <input type="text" id="csSocialTone" placeholder="例: 親しみやすく元気なトーン">
+      </div>
+
+      <div id="csFormQA" class="cs-form-group" hidden>
+        <label for="csQAFocus">重視するテーマ</label>
+        <input type="text" id="csQAFocus" placeholder="例: 働きがい、職場の雰囲気、キャリアパス">
+      </div>
+
+      <button type="button" class="btn-primary" id="csGenBtn" onclick="generateContent()">生成する</button>
+    </div>
+
+    <div class="cs-output" id="csOutput">
+      <div class="cs-output-empty">企業とタイプを選んで「生成する」をクリック</div>
+    </div>
+  </div>
+
+  <div class="cs-saved-section">
+    <p class="section-title">保存済みコンテンツ</p>
+    <div class="cs-saved-list" id="csSavedList">
+      <p class="cs-empty-note">企業を選択してください</p>
+    </div>
+  </div>
+
+  </div>
+
+</div>
+
+<script>
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+  }
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+  updateThemeIcon();
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ===== 企業選択 =====
+  let csCompanies = [];
+
+  async function loadCompanies() {
+    const sel = document.getElementById("csCompanySelect");
+    try {
+      const res = await fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject()));
+      const raw = await res.json();
+      csCompanies = Array.isArray(raw) ? raw : [];
+    } catch (e) {
+      csCompanies = [];
+    }
+    if (csCompanies.length === 0) {
+      sel.innerHTML = '<option value="">企業が登録されていません</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">企業を選択...</option>' +
+      csCompanies.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  }
+
+  function getCompanyId() {
+    const v = document.getElementById("csCompanySelect").value;
+    return v ? parseInt(v, 10) : null;
+  }
+
+  function onCompanyChange() {
+    clearOutput();
+    loadSavedContent();
+  }
+
+  // ===== コンテンツタイプ切替 =====
+  let csCurrentType = "reels_script";
+
+  function selectContentType(type) {
+    csCurrentType = type;
+    document.querySelectorAll(".cs-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.type === type));
+    document.getElementById("csFormReels").hidden = type !== "reels_script";
+    document.getElementById("csFormSocial").hidden = type !== "social_post";
+    document.getElementById("csFormSocialTone").hidden = type !== "social_post";
+    document.getElementById("csFormQA").hidden = type !== "interview_qa";
+    clearOutput();
+  }
+
+  // ===== 生成 =====
+  let csCurrentResult = null;
+
+  function clearOutput() {
+    csCurrentResult = null;
+    document.getElementById("csOutput").innerHTML =
+      '<div class="cs-output-empty">企業とタイプを選んで「生成する」をクリック</div>';
+  }
+
+  async function generateContent() {
+    const companyId = getCompanyId();
+    if (!companyId) { showToast("企業を選択してください", "error"); return; }
+
+    let params = {};
+    if (csCurrentType === "reels_script") {
+      const theme = document.getElementById("csReelsTheme").value.trim();
+      if (!theme) { showToast("テーマを入力してください", "error"); return; }
+      params = { theme };
+    } else if (csCurrentType === "social_post") {
+      const tone = document.getElementById("csSocialTone").value.trim();
+      params = { platform: document.getElementById("csSocialPlatform").value, tone: tone || undefined };
+    } else {
+      const focusArea = document.getElementById("csQAFocus").value.trim();
+      if (!focusArea) { showToast("重視するテーマを入力してください", "error"); return; }
+      params = { focus_area: focusArea };
+    }
+
+    const btn = document.getElementById("csGenBtn");
+    btn.disabled = true;
+    btn.textContent = "生成中...";
+    document.getElementById("csOutput").innerHTML =
+      '<div class="cs-output-loading"><div class="loading-dots"><span></span><span></span><span></span></div>Claude が生成しています...</div>';
+
+    try {
+      const res = await fetch("/api/crm?action=generate-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, content_type: csCurrentType, params }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "生成に失敗しました");
+
+      csCurrentResult = data;
+      renderOutput(csCurrentType, data);
+    } catch (err) {
+      document.getElementById("csOutput").innerHTML =
+        `<div class="cs-output-error">エラー: ${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "生成する";
+    }
+  }
+
+  function renderOutput(type, data) {
+    const out = document.getElementById("csOutput");
+    let html = "";
+
+    if (type === "reels_script") {
+      html += `<div class="cs-block"><div class="cs-block-label">フック</div><div class="cs-block-body">${esc(data.hook)}</div></div>`;
+      html += data.scenes.map((s, i) => `
+        <div class="cs-block">
+          <div class="cs-block-label">シーン${i + 1}${s.duration_sec ? `（${esc(s.duration_sec)}秒）` : ""}</div>
+          <div class="cs-block-body"><strong>映像:</strong> ${esc(s.description)}\n<strong>セリフ:</strong> ${esc(s.dialogue)}</div>
+        </div>`).join("");
+      html += `<div class="cs-block"><div class="cs-block-label">キャプション</div><div class="cs-block-body">${esc(data.caption)}</div></div>`;
+    } else if (type === "social_post") {
+      html += `<div class="cs-block"><div class="cs-block-label">投稿文</div><div class="cs-block-body">${esc(data.text)}</div></div>`;
+      html += `<div class="cs-hashtags">${data.hashtags.map(h => `<span class="cs-hashtag">#${esc(h.replace(/^#/, ""))}</span>`).join("")}</div>`;
+    } else if (type === "interview_qa") {
+      html += `<ol class="cs-qa-list">${data.questions.map(q => `
+        <li class="cs-qa-item">
+          <div class="cs-qa-question">${esc(q.question)}</div>
+          <div class="cs-qa-purpose">意図: ${esc(q.purpose)}</div>
+        </li>`).join("")}</ol>`;
+    }
+
+    html += `<div class="cs-output-actions">
+      <button type="button" class="btn-secondary" onclick="generateContent()">再生成</button>
+      <button type="button" class="btn-primary" style="width:auto;" onclick="saveContent()">保存する</button>
+    </div>`;
+    out.innerHTML = html;
+  }
+
+  // ===== 保存 =====
+  async function saveContent() {
+    const companyId = getCompanyId();
+    if (!companyId || !csCurrentResult) return;
+    try {
+      const res = await fetch("/api/crm?action=saved-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_id: companyId, content_type: csCurrentType, content_data: csCurrentResult }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+      showToast("✓ 保存しました", "success");
+      loadSavedContent();
+    } catch (err) {
+      showToast("保存に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  const CONTENT_TYPE_LABELS = { reels_script: "Reels台本", social_post: "SNS投稿文", interview_qa: "取材Q&A" };
+
+  function savedContentPreview(item) {
+    const d = item.content_data || {};
+    if (item.content_type === "reels_script") return d.hook || "";
+    if (item.content_type === "social_post") return d.text || "";
+    if (item.content_type === "interview_qa") return (d.questions || []).map(q => q.question).join(" / ");
+    return "";
+  }
+
+  async function loadSavedContent() {
+    const companyId = getCompanyId();
+    const listEl = document.getElementById("csSavedList");
+    if (!companyId) {
+      listEl.innerHTML = '<p class="cs-empty-note">企業を選択してください</p>';
+      return;
+    }
+    listEl.innerHTML = '<p class="cs-empty-note">読み込み中...</p>';
+    try {
+      const res = await fetch("/api/crm?action=saved-content&company_id=" + companyId);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      if (!Array.isArray(data) || data.length === 0) {
+        listEl.innerHTML = '<p class="cs-empty-note">保存済みコンテンツはありません</p>';
+        return;
+      }
+      listEl.innerHTML = data.map(item => `
+        <div class="cs-saved-item">
+          <div class="cs-saved-item-header">
+            <span class="cs-saved-item-type">${esc(CONTENT_TYPE_LABELS[item.content_type] || item.content_type)}</span>
+            <span class="cs-saved-item-date">${esc(new Date(item.created_at).toLocaleString("ja-JP"))}</span>
+            <button type="button" class="cs-saved-item-delete" onclick="deleteSavedContent(${item.id})">削除</button>
+          </div>
+          <div class="cs-saved-item-preview">${esc(savedContentPreview(item))}</div>
+        </div>
+      `).join("");
+    } catch (err) {
+      listEl.innerHTML = `<p class="cs-empty-note" style="color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+    }
+  }
+
+  async function deleteSavedContent(id) {
+    if (!confirm("このコンテンツを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=saved-content", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "削除に失敗しました");
+      loadSavedContent();
+    } catch (err) {
+      showToast("削除に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  // ===== プロジェクトガード =====
+  // この機能は群馬お仕事図鑑専用。ナビリンクの非表示はバイパス可能(URL直打ち)なため、
+  // ページ側でも現在のプロジェクトを確認し、LOCLE選択時はフォームへ到達させず案内のみ表示する。
+  // (データ側のガードはapi/crm.jsのhandleGenerateContent/handleSavedContentで別途行っている)
+  function switchToOzukanzukan() {
+    setCurrentProject("ozukanzukan");
+    window.location.href = addProjectParamToUrl("/content-studio.html", "ozukanzukan");
+  }
+
+  function initContentStudio() {
+    if (getCurrentProject() !== "ozukanzukan") {
+      document.getElementById("csMainContent").hidden = true;
+      document.getElementById("csProjectGuard").hidden = false;
+      return;
+    }
+    loadCompanies();
+  }
+
+  initContentStudio();
+</script>
+</body>
+</html>

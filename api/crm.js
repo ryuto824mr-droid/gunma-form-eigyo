@@ -10,6 +10,7 @@ const { sql, getSettings } = require("../lib/db");
 const submitFormHandler = require("./submit-form");
 const sendEmailHandler = require("./send-email");
 const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
+const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -33,8 +34,10 @@ module.exports = async function handler(req, res) {
     case "generate-message": return handleGenerateMessage(req, res);
     case "followup-suggestions": return handleFollowUpSuggestions(req, res);
     case "generate-followup": return handleGenerateFollowUp(req, res);
+    case "generate-content": return handleGenerateContent(req, res);
+    case "saved-content": return handleSavedContent(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content）を指定してください" });
   }
 };
 
@@ -229,6 +232,16 @@ async function handleDbSetup(req, res) {
           ALTER TABLE message_variants ADD CONSTRAINT message_variants_project_check CHECK (project IN ('ozukanzukan', 'locle'));
         END IF;
       END $$;
+    `);
+    // generated_contentテーブル追加（群馬お仕事図鑑向け台本・コンテンツ生成機能の保存用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS generated_content (
+        id           SERIAL PRIMARY KEY,
+        company_id   INTEGER NOT NULL REFERENCES companies(id),
+        content_type TEXT NOT NULL,
+        content_data JSONB NOT NULL,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
     `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
@@ -1639,4 +1652,119 @@ async function handleGenerateFollowUp(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `AIフォローアップ文面生成エラー: ${err.message}` });
   }
+}
+
+// ==================== generate-content ====================
+
+const CONTENT_TYPES = ["reels_script", "social_post", "interview_qa"];
+
+async function handleGenerateContent(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
+  }
+
+  const { company_id, content_type, params } = req.body || {};
+  const companyId = parseInt(company_id, 10);
+  if (!companyId || isNaN(companyId)) {
+    return res.status(400).json({ error: "有効なcompany_idを指定してください" });
+  }
+  if (!CONTENT_TYPES.includes(content_type)) {
+    return res.status(400).json({ error: "有効なcontent_type（reels_script, social_post, interview_qa）を指定してください" });
+  }
+
+  try {
+    const [company] = await sql`SELECT name, company_info, project FROM companies WHERE id = ${companyId}`;
+    if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+    if (company.project !== "ozukanzukan") {
+      return res.status(400).json({ error: "この機能は「群馬お仕事図鑑」の企業でのみ利用できます" });
+    }
+
+    const p = params && typeof params === "object" ? params : {};
+    let result;
+    if (content_type === "reels_script") {
+      result = await generateReelsScript({ companyName: company.name, companyInfo: company.company_info, theme: p.theme });
+    } else if (content_type === "social_post") {
+      result = await generateSocialPost({ companyName: company.name, companyInfo: company.company_info, platform: p.platform, tone: p.tone });
+    } else {
+      result = await generateInterviewQA({ companyName: company.name, companyInfo: company.company_info, focusArea: p.focus_area });
+    }
+
+    if (result.configured === false) {
+      return res.status(400).json({ error: "AI機能が設定されていません" });
+    }
+
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ error: `AIコンテンツ生成エラー: ${err.message}` });
+  }
+}
+
+// ==================== saved-content ====================
+
+async function handleSavedContent(req, res) {
+  if (req.method === "GET") {
+    const companyId = parseInt(req.query.company_id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なcompany_idが必要です" });
+    }
+    try {
+      const rows = await sql`
+        SELECT gc.*, c.name AS company_name
+        FROM generated_content gc
+        JOIN companies c ON c.id = gc.company_id
+        WHERE gc.company_id = ${companyId}
+        ORDER BY gc.created_at DESC
+      `;
+      return res.status(200).json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { company_id, content_type, content_data } = req.body || {};
+    const companyId = parseInt(company_id, 10);
+    if (!companyId || isNaN(companyId)) {
+      return res.status(400).json({ error: "有効なcompany_idが必要です" });
+    }
+    if (!CONTENT_TYPES.includes(content_type)) {
+      return res.status(400).json({ error: "有効なcontent_type（reels_script, social_post, interview_qa）を指定してください" });
+    }
+    if (!content_data || typeof content_data !== "object") {
+      return res.status(400).json({ error: "content_data（オブジェクト）が必要です" });
+    }
+    try {
+      const [company] = await sql`SELECT project FROM companies WHERE id = ${companyId}`;
+      if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+      if (company.project !== "ozukanzukan") {
+        return res.status(400).json({ error: "この機能は「群馬お仕事図鑑」の企業でのみ利用できます" });
+      }
+
+      const [created] = await sql`
+        INSERT INTO generated_content (company_id, content_type, content_data)
+        VALUES (${companyId}, ${content_type}, ${JSON.stringify(content_data)})
+        RETURNING *
+      `;
+      return res.status(201).json(created);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const contentId = parseInt(id, 10);
+    if (!contentId || isNaN(contentId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM generated_content WHERE id = ${contentId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "コンテンツが見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / DELETE のみ対応しています" });
 }

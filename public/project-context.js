@@ -141,6 +141,13 @@ function initProjectBadge() {
     homeLink.href = addProjectParamToUrl("/home.html", project);
   }
 
+  // 「コンテンツ制作」機能は群馬お仕事図鑑専用のため、ナビリンク・ホームの機能カードとも
+  // class="content-studio-only" を付けた要素すべてをozukanzukan選択時のみ表示する
+  var contentStudioEls = document.querySelectorAll(".content-studio-only");
+  for (var i = 0; i < contentStudioEls.length; i++) {
+    contentStudioEls[i].hidden = project !== "ozukanzukan";
+  }
+
   var badge = document.getElementById("projectBadge");
   if (!badge) return;
   badge.textContent = getProjectLabel(project);
