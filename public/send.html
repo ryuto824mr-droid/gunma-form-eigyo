@@ -710,6 +710,10 @@
         <label for="variantSelect">バリアント</label>
         <select id="variantSelect"><option value="">読み込み中...</option></select>
       </div>
+      <div class="select-group">
+        <label for="senderSelect">送信者</label>
+        <select id="senderSelect"><option value="">デフォルト（環境変数）</option></select>
+      </div>
       <button class="btn-generate" onclick="generateDraft()">
         <i data-lucide="file-text"></i>下書き生成
       </button>
@@ -907,6 +911,7 @@
   let companies = [];
   let variants  = [];
   let attachments = [];
+  let senderAccounts = [];
   let logs      = [];
   let scheduledSends = [];
   let currentDraft = null;
@@ -941,12 +946,13 @@
   async function init() {
     updateProjectDisplay();
     try {
-      const [cRes, vRes, lRes, sRes, aRes] = await Promise.all([
+      const [cRes, vRes, lRes, sRes, aRes, senderRes] = await Promise.all([
         fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject())),
         fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject())),
         fetch(sendLogsUrl()),
         fetch("/api/analytics?action=scheduled-sends"),
         fetch("/api/crm?action=attachments"),
+        fetch("/api/crm?action=sender-accounts"),
       ]);
       const rawCompanies = await cRes.json();
       companies      = Array.isArray(rawCompanies) ? rawCompanies : [];
@@ -954,6 +960,8 @@
       logs           = await lRes.json();
       scheduledSends = sRes.ok ? await sRes.json() : [];
       attachments    = aRes.ok ? await aRes.json() : [];
+      const rawSenderAccounts = senderRes.ok ? await senderRes.json() : [];
+      senderAccounts = Array.isArray(rawSenderAccounts) ? rawSenderAccounts.filter(a => a.is_active) : [];
 
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
@@ -1000,6 +1008,26 @@
       variants.map(v =>
         `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`
       ).join("");
+
+    // 登録済みの送信者アカウント(有効なもののみ)があれば、最初に登録されたものを
+    // デフォルト選択にする。登録が無い場合は環境変数のデフォルトアカウントのみ表示する。
+    const senderEl = document.getElementById("senderSelect");
+    if (senderAccounts.length > 0) {
+      senderEl.innerHTML =
+        senderAccounts.map((a, i) =>
+          `<option value="${a.id}"${i === 0 ? " selected" : ""}>${esc(a.display_name)}（${esc(a.email)}）</option>`
+        ).join("") + '<option value="">デフォルト（環境変数）</option>';
+    } else {
+      senderEl.innerHTML = '<option value="">デフォルト（環境変数）</option>';
+    }
+  }
+
+  // 送信者セレクトの選択値をsender_idとして返す。「デフォルト（環境変数）」選択時や
+  // 送信者アカウントが1件も登録されていない場合は空文字を返し、送信APIには渡さない
+  // (サーバー側で未指定として扱われ、環境変数のデフォルトアカウントから送信される)
+  function getSelectedSenderId() {
+    const v = document.getElementById("senderSelect").value;
+    return v ? parseInt(v, 10) : "";
   }
 
   function generateDraft() {
@@ -1261,6 +1289,7 @@
           company_id: companyId, variant_id: variantId,
           force: document.getElementById("forceCheck").checked,
           attachment_id: variant?.attachment_id || null,
+          sender_id: getSelectedSenderId(),
         }),
       });
       const data = await res.json();
@@ -1351,7 +1380,11 @@
       const res = await fetch("/api/send-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force, attachment_id: variant?.attachment_id || null }),
+        body: JSON.stringify({
+          company_id: companyId, variant_id: variantId, force,
+          attachment_id: variant?.attachment_id || null,
+          sender_id: getSelectedSenderId(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "メール送信エラー");

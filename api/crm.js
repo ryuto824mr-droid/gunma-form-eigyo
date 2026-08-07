@@ -36,8 +36,9 @@ module.exports = async function handler(req, res) {
     case "generate-followup": return handleGenerateFollowUp(req, res);
     case "generate-content": return handleGenerateContent(req, res);
     case "saved-content": return handleSavedContent(req, res);
+    case "sender-accounts": return handleSenderAccounts(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts）を指定してください" });
   }
 };
 
@@ -241,6 +242,17 @@ async function handleDbSetup(req, res) {
         content_type TEXT NOT NULL,
         content_data JSONB NOT NULL,
         created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // sender_accountsテーブル追加（複数Gmailアカウントからの送信切り替え機能用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS sender_accounts (
+        id            SERIAL PRIMARY KEY,
+        display_name  TEXT NOT NULL,
+        email         TEXT NOT NULL UNIQUE,
+        refresh_token TEXT NOT NULL,
+        is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
@@ -1767,4 +1779,88 @@ async function handleSavedContent(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / DELETE のみ対応しています" });
+}
+
+// ==================== sender-accounts ====================
+//
+// 複数Gmailアカウントからの送信切り替え機能用。refresh_tokenは機密情報のため
+// GET一覧には含めない(id/display_name/email/is_active/created_atのみ返す)。
+
+async function handleSenderAccounts(req, res) {
+  if (req.method === "GET") {
+    try {
+      const rows = await sql`
+        SELECT id, display_name, email, is_active, created_at
+        FROM sender_accounts
+        ORDER BY created_at ASC
+      `;
+      return res.status(200).json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { display_name, email, refresh_token } = req.body || {};
+    if (!display_name || typeof display_name !== "string" || !display_name.trim()) {
+      return res.status(400).json({ error: "display_name（文字列）が必要です" });
+    }
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "email（文字列）が必要です" });
+    }
+    if (!refresh_token || typeof refresh_token !== "string" || !refresh_token.trim()) {
+      return res.status(400).json({ error: "refresh_token（文字列）が必要です" });
+    }
+    try {
+      const [created] = await sql`
+        INSERT INTO sender_accounts (display_name, email, refresh_token)
+        VALUES (${display_name.trim()}, ${email.trim()}, ${refresh_token.trim()})
+        RETURNING id, display_name, email, is_active, created_at
+      `;
+      return res.status(201).json(created);
+    } catch (err) {
+      if (err.message?.includes("duplicate key")) {
+        return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
+      }
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { id, is_active } = req.body || {};
+    const accountId = parseInt(id, 10);
+    if (!accountId || isNaN(accountId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    if (is_active === undefined) {
+      return res.status(400).json({ error: "is_activeが必要です" });
+    }
+    try {
+      const [updated] = await sql`
+        UPDATE sender_accounts SET is_active = ${!!is_active} WHERE id = ${accountId}
+        RETURNING id, display_name, email, is_active, created_at
+      `;
+      if (!updated) return res.status(404).json({ error: "送信者アカウントが見つかりません" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const accountId = parseInt(id, 10);
+    if (!accountId || isNaN(accountId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM sender_accounts WHERE id = ${accountId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "送信者アカウントが見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
 }

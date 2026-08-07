@@ -8,10 +8,18 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force, tags, attachment_id } = req.body || {};
+  const { company_id, variant_id, force, tags, attachment_id, sender_id } = req.body || {};
   const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
+  }
+  // sender_id未指定時はundefinedのままsendEmail()等に渡す(環境変数のデフォルトアカウントを使う)
+  let senderId;
+  if (sender_id !== undefined && sender_id !== null && sender_id !== "") {
+    senderId = parseInt(sender_id, 10);
+    if (!senderId || isNaN(senderId)) {
+      return res.status(400).json({ error: "有効なsender_idを指定してください" });
+    }
   }
 
   const settings = await getSettings();
@@ -99,7 +107,7 @@ module.exports = async function handler(req, res) {
   // メール送信
   let result;
   try {
-    result = await sendEmail({ to: toEmail, subject, body, attachment });
+    result = await sendEmail({ to: toEmail, subject, body, attachment, senderId });
   } catch (err) {
     await sql`
       INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
@@ -116,9 +124,9 @@ module.exports = async function handler(req, res) {
 
   // 送信済みラベルを付与(失敗しても送信自体は成功として扱う)
   try {
-    const labelId = await ensureLabel(SENT_LABEL_NAME);
+    const labelId = await ensureLabel(SENT_LABEL_NAME, senderId);
     if (labelId && result.messageId) {
-      await addLabelToMessage(result.messageId, labelId);
+      await addLabelToMessage(result.messageId, labelId, senderId);
     }
   } catch (err) {
     console.error("送信済みラベル付与に失敗しました:", err.message);

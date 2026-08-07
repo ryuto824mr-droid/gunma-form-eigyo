@@ -256,6 +256,20 @@
     background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px;
   }
 
+  /* 送信者アカウント */
+  .sender-status-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .sender-status-badge.active   { background: var(--green-50); color: var(--green-700); }
+  .sender-status-badge.inactive { background: var(--gray-100); color: var(--gray-500); }
+  .btn-row-toggle {
+    padding: 4px 8px; font-size: 11px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; transition: all 150ms; margin-right: 6px;
+  }
+  .btn-row-toggle:hover { background: var(--gray-50); }
+
   /* A/B tests */
   .ab-status-badge {
     display: inline-block; padding: 2px 8px; border-radius: 4px;
@@ -738,6 +752,20 @@
         <button class="btn-add" onclick="saveSettings()"><i data-lucide="save"></i>保存</button>
       </div>
     </div>
+
+    <div class="panel-toolbar" style="margin-top:32px;">
+      <div>
+        <h2>送信者アカウント</h2>
+        <p class="panel-desc">複数のGmailアカウントを登録して、送信時に送信者を選べます</p>
+      </div>
+      <button class="btn-add" onclick="openSenderAccountModal()"><i data-lucide="plus"></i>送信者を追加</button>
+    </div>
+    <div class="crm-table-wrap">
+      <table class="crm-table">
+        <thead><tr><th>表示名</th><th>メールアドレス</th><th>状態</th><th></th></tr></thead>
+        <tbody id="senderAccountsBody"><tr class="empty-row"><td colspan="4">読み込み中...</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
 </div>
@@ -944,6 +972,37 @@
   </div>
 </div>
 
+<!-- 送信者アカウント追加モーダル -->
+<div class="modal-overlay" id="senderAccountModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>送信者を追加</h3>
+      <button class="modal-close" onclick="closeSenderAccountModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-form-grid">
+        <div class="form-group full">
+          <label for="senderNameInput">表示名 <span style="color:#dc2626">*</span></label>
+          <input type="text" id="senderNameInput" placeholder="例: 松崎 流空" />
+        </div>
+        <div class="form-group full">
+          <label for="senderEmailInput">メールアドレス <span style="color:#dc2626">*</span></label>
+          <input type="email" id="senderEmailInput" placeholder="example@gmail.com" />
+        </div>
+        <div class="form-group full">
+          <label for="senderRefreshTokenInput">リフレッシュトークン <span style="color:#dc2626">*</span></label>
+          <textarea id="senderRefreshTokenInput" placeholder="Google OAuthで取得したリフレッシュトークンを貼り付け" style="min-height:70px;"></textarea>
+          <p class="settings-note" style="margin-top:6px;">リフレッシュトークンの取得方法は別途ご案内します。ここには取得済みの値をそのまま貼り付けてください。</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal-cancel" onclick="closeSenderAccountModal()">キャンセル</button>
+      <button class="btn-modal-submit" id="senderAccountSubmitBtn" onclick="createSenderAccount()">追加</button>
+    </div>
+  </div>
+</div>
+
 <!-- A/Bテスト詳細モーダル -->
 <div class="modal-overlay" id="abTestDetailModal">
   <div class="modal-box">
@@ -969,6 +1028,7 @@
   let abTests = [];
   let settings = {};
   let attachments = [];
+  let senderAccounts = [];
 
   const STAGE_ORDER  = ["lead", "contacted", "proposal", "negotiation", "won", "lost"];
   const STAGE_LABELS = { lead: "リード", contacted: "コンタクト済み", proposal: "提案中", negotiation: "交渉中", won: "成約", lost: "失注" };
@@ -1000,7 +1060,7 @@
     await loadCompanies();
     await Promise.all([
       loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
-      loadVariants(), loadAbTests(), loadSettings(), loadAttachments(),
+      loadVariants(), loadAbTests(), loadSettings(), loadAttachments(), loadSenderAccounts(),
     ]);
     lucide.createIcons();
   }
@@ -1937,6 +1997,113 @@
       showToast("設定を保存しました", "success");
     } catch (err) {
       showToast("保存エラー: " + esc(err.message), "error");
+    }
+  }
+
+  // ==================== 送信者アカウント ====================
+
+  async function loadSenderAccounts() {
+    try {
+      const res = await fetch("/api/crm?action=sender-accounts");
+      const raw = await res.json();
+      senderAccounts = Array.isArray(raw) ? raw : [];
+      renderSenderAccounts();
+    } catch (err) {
+      document.getElementById("senderAccountsBody").innerHTML =
+        `<tr class="empty-row"><td colspan="4">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderSenderAccounts() {
+    const body = document.getElementById("senderAccountsBody");
+    if (!senderAccounts.length) {
+      body.innerHTML = '<tr class="empty-row"><td colspan="4">送信者アカウントが登録されていません</td></tr>';
+      return;
+    }
+    body.innerHTML = senderAccounts.map(a => `
+      <tr>
+        <td>${esc(a.display_name)}</td>
+        <td>${esc(a.email)}</td>
+        <td><span class="sender-status-badge ${a.is_active ? "active" : "inactive"}">${a.is_active ? "有効" : "無効"}</span></td>
+        <td>
+          <button class="btn-row-toggle" onclick="toggleSenderAccountActive(${a.id}, ${a.is_active})">${a.is_active ? "無効にする" : "有効にする"}</button>
+          <button class="btn-row-delete" onclick="deleteSenderAccount(${a.id})">削除</button>
+        </td>
+      </tr>`).join("");
+  }
+
+  function openSenderAccountModal() {
+    document.getElementById("senderNameInput").value = "";
+    document.getElementById("senderEmailInput").value = "";
+    document.getElementById("senderRefreshTokenInput").value = "";
+    document.getElementById("senderAccountModal").classList.add("open");
+  }
+  function closeSenderAccountModal() {
+    document.getElementById("senderAccountModal").classList.remove("open");
+  }
+
+  async function createSenderAccount() {
+    const display_name = document.getElementById("senderNameInput").value.trim();
+    const email = document.getElementById("senderEmailInput").value.trim();
+    const refresh_token = document.getElementById("senderRefreshTokenInput").value.trim();
+    const btn = document.getElementById("senderAccountSubmitBtn");
+
+    if (!display_name) { showToast("表示名を入力してください", "error"); return; }
+    if (!email) { showToast("メールアドレスを入力してください", "error"); return; }
+    if (!refresh_token) { showToast("リフレッシュトークンを入力してください", "error"); return; }
+
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=sender-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name, email, refresh_token }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "追加エラー"), "error"); return; }
+      senderAccounts.push(data);
+      renderSenderAccounts();
+      closeSenderAccountModal();
+      showToast("送信者アカウントを追加しました", "success");
+    } catch (err) {
+      showToast("追加エラー: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function toggleSenderAccountActive(id, currentActive) {
+    try {
+      const res = await fetch("/api/crm?action=sender-accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_active: !currentActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "更新エラー"), "error"); return; }
+      const idx = senderAccounts.findIndex(a => a.id === id);
+      if (idx !== -1) senderAccounts[idx] = data;
+      renderSenderAccounts();
+    } catch (err) {
+      showToast("更新エラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function deleteSenderAccount(id) {
+    if (!confirm("この送信者アカウントを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=sender-accounts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(esc(data.error || "削除エラー"), "error"); return; }
+      senderAccounts = senderAccounts.filter(a => a.id !== id);
+      renderSenderAccounts();
+      showToast("送信者アカウントを削除しました", "info");
+    } catch (err) {
+      showToast("削除エラー: " + esc(err.message), "error");
     }
   }
 
