@@ -717,16 +717,6 @@
   }
   .search-query-preview strong { color: var(--gray-600, #475569); }
 
-  /* Discover tabs (LOCLE / お仕事図鑑) */
-  .discover-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--gray-200); }
-  .discover-tab {
-    padding: 8px 16px; font-size: 13px; font-weight: 600; font-family: inherit;
-    background: none; border: none; border-bottom: 2px solid transparent;
-    color: var(--gray-500); cursor: pointer; transition: all 150ms; margin-bottom: -1px;
-  }
-  .discover-tab:hover { color: var(--gray-900); }
-  .discover-tab.active[data-project="locle"] { color: var(--green-700); border-bottom-color: var(--green-500); }
-  .discover-tab.active[data-project="ozukanzukan"] { color: #c2410c; border-bottom-color: #f97316; }
   .search-form-field-wide { grid-column: 1 / -1; }
   .search-appeal-checkboxes { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 2px; }
   .search-appeal-checkboxes label {
@@ -1046,10 +1036,6 @@
 
   <section class="discover-section">
     <h2>企業を自動検索</h2>
-    <div class="discover-tabs">
-      <button type="button" class="discover-tab active" data-project="locle" onclick="switchDiscoverTab('locle')">LOCLE</button>
-      <button type="button" class="discover-tab" data-project="ozukanzukan" onclick="switchDiscoverTab('ozukanzukan')">群馬お仕事図鑑</button>
-    </div>
     <div class="search-form-grid" id="searchFormLocle">
       <div class="search-form-field">
         <label for="searchIndustry">業種</label>
@@ -3063,17 +3049,16 @@
   }
 
   let lastSearchAutoTags = [];
-  let activeDiscoverProject = getCurrentProject();
   let lastSearchProject = getCurrentProject();
-  switchDiscoverTab(activeDiscoverProject);
+  initDiscoverForm();
 
-  function switchDiscoverTab(project) {
-    activeDiscoverProject = project;
+  // 検索フォームは個別のタブ切り替えUIを持たず、常に現在のプロジェクト
+  // (getCurrentProject() = app.html/home.htmlで選択済みのプロジェクト)に応じて
+  // LOCLE用/お仕事図鑑用のどちらか一方のフォームだけを表示する
+  function initDiscoverForm() {
+    const project = getCurrentProject();
     document.getElementById("searchFormLocle").hidden = project !== "locle";
     document.getElementById("searchFormOzukanzukan").hidden = project !== "ozukanzukan";
-    document.querySelectorAll(".discover-tab").forEach(btn => {
-      btn.classList.toggle("active", btn.dataset.project === project);
-    });
     updateSearchQueryPreview();
   }
 
@@ -3082,7 +3067,7 @@
   }
 
   function getSearchParams() {
-    if (activeDiscoverProject === "ozukanzukan") {
+    if (getCurrentProject() === "ozukanzukan") {
       return {
         project:      "ozukanzukan",
         industry:     document.getElementById("searchIndustryOz").value,
@@ -3206,7 +3191,7 @@
     const resultEl = document.getElementById("discoverResult");
     if (!hasAnySearchParam(params)) return;
 
-    lastSearchProject  = activeDiscoverProject;
+    lastSearchProject  = getCurrentProject();
     lastSearchAutoTags = buildAutoTags(params);
 
     btn.disabled = true;
