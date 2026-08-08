@@ -75,15 +75,49 @@
 
   .container { max-width: 880px; margin: 0 auto; padding: 48px 20px; }
 
-  /* Home welcome intro */
-  .home-welcome { margin-bottom: 32px; }
-  .home-welcome h1 {
-    font-size: 24px; font-weight: 800; color: var(--green-700);
-    margin: 0 0 4px; letter-spacing: -0.02em;
+  /* Home hero(プロジェクトカラーのグラデーション背景) */
+  .home-hero {
+    position: relative; overflow: hidden; border-radius: var(--radius-lg);
+    padding: 52px 24px 44px; margin-bottom: 40px; text-align: center;
+    background: linear-gradient(135deg, var(--green-900) 0%, var(--green-700) 40%, var(--green-500) 70%, var(--green-400) 100%);
+    box-shadow: 0 16px 36px rgba(var(--green-900-rgb), 0.28);
   }
-  .home-welcome p { font-size: 14px; color: var(--gray-500); margin: 0; }
+  #heroParticleCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .home-hero-inner { position: relative; z-index: 1; }
+  .home-hero-title {
+    font-size: clamp(26px, 4vw, 36px); font-weight: 800; color: white;
+    margin: 0 0 10px; letter-spacing: -0.02em;
+    opacity: 0; animation: heroTextFadeIn 0.7s ease 0.1s forwards;
+  }
+  .home-hero-desc {
+    font-size: 14px; color: rgba(255,255,255,0.82); margin: 0 0 32px;
+    opacity: 0; animation: heroTextFadeIn 0.7s ease 0.3s forwards;
+  }
+  @keyframes heroTextFadeIn { to { opacity: 1; } }
 
-  /* Summary cards */
+  .hero-summary-cards { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .hero-summary-card {
+    background: var(--white); border-radius: var(--radius-lg);
+    padding: 22px 32px; min-width: 150px; text-align: center;
+    box-shadow: 0 14px 30px rgba(0,0,0,0.18);
+    opacity: 0; transform: translateY(14px);
+    animation: heroCardFadeIn 0.6s ease forwards;
+  }
+  .hero-summary-card:nth-child(1) { animation-delay: 0.5s; }
+  .hero-summary-card:nth-child(2) { animation-delay: 0.65s; }
+  .hero-summary-card:nth-child(3) { animation-delay: 0.8s; }
+  @keyframes heroCardFadeIn { to { opacity: 1; transform: translateY(0); } }
+  .hero-summary-card .card-label {
+    font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
+  }
+  .hero-summary-card .card-value {
+    font-size: 36px; font-weight: 700; color: var(--green-700);
+    line-height: 1; letter-spacing: -0.03em;
+  }
+  .hero-summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+
+  /* Summary cards(要フォローアップ・期限切れタスクの2枚。hero外に残す) */
   .summary-cards { display: flex; gap: 16px; margin-bottom: 40px; flex-wrap: wrap; }
   .summary-card {
     flex: 1; min-width: 140px; background: var(--white);
@@ -129,6 +163,7 @@
   /* Follow-up dashboard */
   .followup-section {
     background: var(--white); border: 1px solid var(--gray-100);
+    border-left: 3px solid var(--green-500);
     border-radius: var(--radius-lg); padding: 24px 28px;
     margin-bottom: 40px; box-shadow: var(--shadow-sm);
   }
@@ -162,7 +197,14 @@
     font-size: 11px; font-weight: 700; margin-left: 8px; vertical-align: middle;
     background: var(--green-50); color: var(--green-600);
   }
-  .section-count-badge.has-items { background: var(--green-700); color: white; }
+  .section-count-badge.has-items {
+    background: var(--green-700); color: white;
+    animation: badgePulse 2.2s ease-in-out infinite;
+  }
+  @keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.08); }
+  }
 
   /* 5件を超える場合の「もっと見る」トグル */
   .btn-list-toggle {
@@ -257,7 +299,17 @@
     display: flex; flex-direction: column; gap: 12px;
     transition: all 200ms ease;
     color: inherit;
+    opacity: 0;
   }
+  .feature-card.in-view { animation: fadeInUp 0.5s ease forwards; }
+  .feature-card:nth-child(1).in-view { animation-delay: 0s; }
+  .feature-card:nth-child(2).in-view { animation-delay: 0.1s; }
+  .feature-card:nth-child(3).in-view { animation-delay: 0.2s; }
+  .feature-card:nth-child(4).in-view { animation-delay: 0.3s; }
+  .feature-card:nth-child(5).in-view { animation-delay: 0.4s; }
+  .feature-card:nth-child(6).in-view { animation-delay: 0.5s; }
+  .feature-card:nth-child(7).in-view { animation-delay: 0.6s; }
+  .feature-card:nth-child(8).in-view { animation-delay: 0.7s; }
   .feature-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md); border-color: var(--green-300);
@@ -327,6 +379,9 @@
     .summary-cards { flex-direction: column; }
     .summary-card { min-width: unset; }
     .feature-grid { grid-template-columns: 1fr; }
+    .home-hero { padding: 36px 16px 32px; }
+    .hero-summary-cards { flex-direction: column; align-items: center; }
+    .hero-summary-card { width: 100%; max-width: 280px; }
   }
 
   /* Toast notifications */
@@ -453,10 +508,33 @@
 
 <div class="container">
 
-  <div class="home-welcome">
-    <h1 id="homeProjectHeading">ダッシュボード</h1>
-    <p id="homeProjectDesc"></p>
-  </div>
+  <section class="home-hero" id="homeHero">
+    <canvas id="heroParticleCanvas"></canvas>
+    <div class="home-hero-inner">
+      <h1 id="homeProjectHeading" class="home-hero-title">ダッシュボード</h1>
+      <p id="homeProjectDesc" class="home-hero-desc"></p>
+      <div class="hero-summary-cards">
+        <div class="hero-summary-card">
+          <div class="card-label">登録企業数</div>
+          <div class="card-value" id="statCompanies">
+            <span style="font-size:20px;color:var(--gray-300)">…</span>
+          </div>
+        </div>
+        <div class="hero-summary-card">
+          <div class="card-label">送信済み</div>
+          <div class="card-value" id="statSent">
+            <span style="font-size:20px;color:var(--gray-300)">…</span>
+          </div>
+        </div>
+        <div class="hero-summary-card">
+          <div class="card-label">全体反応率</div>
+          <div class="card-value" id="statRate">
+            <span style="font-size:20px;color:var(--gray-300)">…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div class="usage-reminder" id="usageReminder" hidden>
     <span class="usage-reminder-icon">📅</span>
@@ -470,24 +548,6 @@
   </div>
 
   <div class="summary-cards">
-    <div class="summary-card">
-      <div class="card-label">登録企業数</div>
-      <div class="card-value" id="statCompanies">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-label">送信済み</div>
-      <div class="card-value" id="statSent">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <div class="card-label">全体反応率</div>
-      <div class="card-value" id="statRate">
-        <span style="font-size:20px;color:var(--gray-300)">…</span>
-      </div>
-    </div>
     <div class="summary-card">
       <div class="card-label">要フォローアップ</div>
       <div class="card-value" id="statFollowUp">
@@ -694,6 +754,58 @@
     document.title = `${label} - ホーム`;
   }
   renderHomeIntro();
+
+  // ===== ヒーローエリアのパーティクル背景(軽量版・ヒーロー内に限定) =====
+  // ページ全体には適用せず、#homeHero内のcanvasのみに描画する。パーティクル数は30個未満に抑え、
+  // requestAnimationFrameで描画する(indexページのcanvas演出を参考にしつつ軽量化したもの)。
+  (function initHeroParticles() {
+    try {
+      const canvas = document.getElementById("heroParticleCanvas");
+      const hero = document.getElementById("homeHero");
+      if (!canvas || !hero || !canvas.getContext) return;
+      const ctx = canvas.getContext("2d");
+      let particles = [];
+      let w, h;
+
+      function resize() {
+        w = canvas.width = hero.offsetWidth;
+        h = canvas.height = hero.offsetHeight;
+      }
+      function makeParticles() {
+        const count = Math.min(26, Math.max(10, Math.floor((w * h) / 9000)));
+        particles = Array.from({ length: count }, () => ({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.6 + 0.6,
+          vy: -(Math.random() * 0.22 + 0.05),
+          vx: (Math.random() - 0.5) * 0.12,
+          o: Math.random() * 0.35 + 0.15,
+        }));
+      }
+      const particleColor = getProjectColor(getCurrentProject());
+      function tick() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = particleColor;
+        particles.forEach(p => {
+          p.y += p.vy;
+          p.x += p.vx;
+          if (p.y < -6) p.y = h + 6;
+          if (p.x < -6) p.x = w + 6;
+          if (p.x > w + 6) p.x = -6;
+          ctx.globalAlpha = p.o;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(tick);
+      }
+      resize();
+      makeParticles();
+      tick();
+      window.addEventListener("resize", () => { resize(); makeParticles(); });
+    } catch (e) {}
+  })();
 
   function animateCount(el, target, isFloat = false) {
     const duration = 600;
@@ -918,6 +1030,31 @@
     localStorage.setItem("locle_tour_done", "1");
   }
   if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
+
+  // ===== 機能一覧カードのフェードイン =====
+  // 画面内に入ったカードから順にfadeInUpさせる。IntersectionObserver未対応環境や
+  // 万一発火しなかった場合でも必ず表示されるよう、フォールバックを用意する
+  // (機能カードが消えたままになるのを防ぐため)。
+  function initFeatureCardReveal() {
+    const cards = document.querySelectorAll(".feature-grid .feature-card");
+    if (!cards.length) return;
+    if (!("IntersectionObserver" in window)) {
+      cards.forEach(c => c.classList.add("in-view"));
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in-view");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    cards.forEach(c => observer.observe(c));
+    // 安全策: 何らかの理由でobserverが発火しなかった場合に備え、一定時間後に強制表示する
+    setTimeout(() => cards.forEach(c => c.classList.add("in-view")), 2000);
+  }
+  initFeatureCardReveal();
 
   lucide.createIcons();
   loadStats();
