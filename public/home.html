@@ -73,10 +73,10 @@
   }
   .project-badge-nav:hover { opacity: 0.85; }
 
-  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
+  .container { max-width: 880px; margin: 0 auto; padding: 48px 20px; }
 
   /* Home welcome intro */
-  .home-welcome { margin-bottom: 28px; }
+  .home-welcome { margin-bottom: 32px; }
   .home-welcome h1 {
     font-size: 24px; font-weight: 800; color: var(--green-700);
     margin: 0 0 4px; letter-spacing: -0.02em;
@@ -84,55 +84,67 @@
   .home-welcome p { font-size: 14px; color: var(--gray-500); margin: 0; }
 
   /* Summary cards */
-  .summary-cards { display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap; }
+  .summary-cards { display: flex; gap: 16px; margin-bottom: 40px; flex-wrap: wrap; }
   .summary-card {
     flex: 1; min-width: 140px; background: var(--white);
     border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
-    padding: 24px 28px; box-shadow: var(--shadow-sm); text-align: center;
+    padding: 26px 28px; box-shadow: var(--shadow-sm); text-align: center;
     position: relative; overflow: hidden;
     transition: transform 200ms ease, box-shadow 200ms ease;
   }
   .summary-card::before {
-    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: var(--green-500);
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--green-400), var(--green-700));
   }
-  .summary-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(var(--green-500-rgb), 0.14), 0 3px 6px rgba(0,0,0,0.04);
+  }
   .summary-card .card-label {
     font-size: 11px; color: var(--gray-400); margin-bottom: 10px;
     text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;
   }
   .summary-card .card-value {
-    font-size: 36px; font-weight: 700; color: var(--green-700);
+    font-size: 40px; font-weight: 700; color: var(--green-700);
     line-height: 1; letter-spacing: -0.03em;
   }
   .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
 
   .usage-reminder {
-    background: #fffbeb; border: 1px solid #fcd34d; border-radius: var(--radius-md);
-    padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #92400e;
-    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: #fffbeb; border: 1px solid #fcd34d; border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 16px; font-size: 13px; color: #92400e;
+    display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;
   }
   .usage-reminder[hidden] { display: none; }
+  .usage-reminder-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+  .usage-reminder-body { flex: 1; min-width: 220px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .usage-reminder-body p { margin: 0; line-height: 1.7; }
   .usage-reminder a { color: #92400e; font-weight: 600; text-decoration: underline; }
   .usage-reminder button {
-    margin-left: auto; padding: 4px 10px; font-size: 12px; border-radius: var(--radius-sm);
+    padding: 5px 12px; font-size: 12px; border-radius: 999px;
     border: 1px solid #fcd34d; background: white; color: #92400e; cursor: pointer;
+    flex-shrink: 0; align-self: flex-start;
   }
 
   /* Follow-up dashboard */
   .followup-section {
     background: var(--white); border: 1px solid var(--gray-100);
     border-radius: var(--radius-lg); padding: 24px 28px;
-    margin-bottom: 32px; box-shadow: var(--shadow-sm);
+    margin-bottom: 40px; box-shadow: var(--shadow-sm);
   }
-  .followup-section h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .followup-section h2 {
+    margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--gray-700);
+    display: flex; align-items: center;
+  }
   .followup-empty { font-size: 13px; color: var(--green-700); padding: 8px 0; margin: 0; }
   .followup-alert { font-size: 13px; font-weight: 700; color: #ea580c; margin: 0 0 12px; }
-  .followup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .followup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
   .followup-item {
-    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
     border: 1px solid var(--gray-200); border-radius: var(--radius-md); font-size: 13px;
+    transition: background 150ms ease;
   }
+  .followup-item:hover { background: var(--gray-50); }
   .followup-item-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   .followup-item-company { font-weight: 600; color: var(--gray-900); }
   .followup-item-meta { font-size: 12px; color: var(--gray-500); }
@@ -143,13 +155,23 @@
   }
   .followup-item-link:hover { background: var(--green-50); }
 
-  /* 未返信フォローアップ候補 */
-  .followup-count-badge {
+  /* セクション見出しの件数バッジ(0件=緑チェック、1件以上=プロジェクトカラーの数字) */
+  .section-count-badge {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
-    background: #ea580c; color: white; font-size: 11px; font-weight: 700;
-    margin-left: 8px; vertical-align: middle;
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; margin-left: 8px; vertical-align: middle;
+    background: var(--green-50); color: var(--green-600);
   }
+  .section-count-badge.has-items { background: var(--green-700); color: white; }
+
+  /* 5件を超える場合の「もっと見る」トグル */
+  .btn-list-toggle {
+    display: block; margin: 12px auto 0; padding: 6px 18px; font-size: 12px; font-weight: 600;
+    color: var(--green-700); background: var(--green-50); border: 1px solid var(--green-200);
+    border-radius: 999px; cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .btn-list-toggle:hover { background: var(--green-100); }
+
   .btn-followup-suggest {
     padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: var(--radius-sm);
     border: 1px solid var(--green-500); color: var(--green-700); background: var(--white);
@@ -227,13 +249,13 @@
   }
 
   /* Feature cards */
-  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 28px; }
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 32px; }
   .feature-card {
     background: var(--white); border: 1px solid var(--gray-100);
     border-radius: var(--radius-lg); padding: 28px;
-    box-shadow: var(--shadow-sm); cursor: pointer; text-decoration: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); cursor: pointer; text-decoration: none;
     display: flex; flex-direction: column; gap: 12px;
-    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+    transition: all 200ms ease;
     color: inherit;
   }
   .feature-card:hover {
@@ -246,14 +268,15 @@
   .feature-icon {
     width: 48px; height: 48px; border-radius: 50%;
     background: var(--green-50); display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    flex-shrink: 0; transition: background 200ms ease;
   }
   .feature-icon svg { width: 22px; height: 22px; color: var(--green-700); }
   .feature-arrow-icon {
     width: 16px; height: 16px; color: var(--gray-300);
-    transition: color 200ms ease; flex-shrink: 0; margin-top: 4px;
+    transition: color 200ms ease, transform 200ms ease; flex-shrink: 0; margin-top: 4px;
   }
-  .feature-card:hover .feature-arrow-icon { color: var(--green-500); }
+  .feature-card:hover .feature-icon { background: var(--green-100); }
+  .feature-card:hover .feature-arrow-icon { color: var(--green-500); transform: translateX(3px); }
   .feature-name { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: -0.01em; }
   .feature-desc { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
 
@@ -436,10 +459,13 @@
   </div>
 
   <div class="usage-reminder" id="usageReminder" hidden>
-    📅 月末が近づいています。Brave/Google Cloudの公式ダッシュボードで
-    実際の利用回数を確認して、アプリ内の表示と一致しているか確認しましょう。
-    <a href="https://api.search.brave.com" target="_blank">Brave確認</a> /
-    <a href="https://console.cloud.google.com/apis/dashboard?project=gunma-saas" target="_blank">Google Places確認</a>
+    <span class="usage-reminder-icon">📅</span>
+    <div class="usage-reminder-body">
+      <p>月末が近づいています。Brave/Google Cloudの公式ダッシュボードで
+      実際の利用回数を確認して、アプリ内の表示と一致しているか確認しましょう。
+      <a href="https://api.search.brave.com" target="_blank">Brave確認</a> /
+      <a href="https://console.cloud.google.com/apis/dashboard?project=gunma-saas" target="_blank">Google Places確認</a></p>
+    </div>
     <button onclick="dismissUsageReminder()">今月は確認済み ✓</button>
   </div>
 
@@ -477,10 +503,8 @@
   </div>
 
   <section class="followup-section" id="staleFollowupSection">
-    <h2>📮 未返信フォローアップ候補<span class="followup-count-badge" id="staleFollowupCountBadge" hidden>0</span></h2>
-    <div id="staleFollowupList">
-      <p class="followup-empty">読み込み中...</p>
-    </div>
+    <h2>📮 未返信フォローアップ候補</h2>
+    <p class="followup-empty">読み込み中...</p>
   </section>
 
   <section class="followup-section" id="followupSection">
@@ -756,72 +780,116 @@
     try { return new Date(v).toISOString().slice(0, 10); } catch { return null; }
   }
 
+  // ===== セクション見出しの件数バッジ・「もっと見る」展開の共通ヘルパー =====
+  // 0件は常に緑のチェックマーク(意味色として固定)、1件以上はプロジェクトカラーの数字バッジにする
+  function renderSectionCountBadge(count) {
+    return count === 0
+      ? `<span class="section-count-badge">✓</span>`
+      : `<span class="section-count-badge has-items">${count}</span>`;
+  }
+
+  const EXPAND_LIMIT = 5;
+  const expandedSections = new Set();
+
+  function buildExpandableListHtml(itemsHtml, sectionKey) {
+    const total = itemsHtml.length;
+    const isExpanded = expandedSections.has(sectionKey);
+    const visibleCount = (total > EXPAND_LIMIT && !isExpanded) ? EXPAND_LIMIT : total;
+    const visible = itemsHtml.slice(0, visibleCount).join("");
+    let toggle = "";
+    if (total > EXPAND_LIMIT) {
+      toggle = isExpanded
+        ? `<button type="button" class="btn-list-toggle" onclick="toggleSectionExpand('${sectionKey}')">閉じる</button>`
+        : `<button type="button" class="btn-list-toggle" onclick="toggleSectionExpand('${sectionKey}')">もっと見る（あと${total - EXPAND_LIMIT}件）</button>`;
+    }
+    return `<ul class="followup-list">${visible}</ul>${toggle}`;
+  }
+
+  function toggleSectionExpand(sectionKey) {
+    if (expandedSections.has(sectionKey)) expandedSections.delete(sectionKey);
+    else expandedSections.add(sectionKey);
+    if (sectionKey === "todayFollowup") renderFollowupSection();
+    else if (sectionKey === "tasks") renderTaskSection();
+    else if (sectionKey === "staleFollowup") renderStaleFollowupSection();
+  }
+
+  let cachedFollowUps = [];
+  let cachedOverdueTasks = [];
+
   function renderFollowups(companies) {
     const todayStr = todayDateStr();
-    const followUps = companies.filter(c =>
+    cachedFollowUps = companies.filter(c =>
       c.action_status === "follow_up" &&
       c.next_action_date &&
       toDateStr(c.next_action_date) <= todayStr
     );
-
-    const section = document.getElementById("followupSection");
-    if (followUps.length === 0) {
-      section.innerHTML = `
-        <h2>今日のフォローアップ</h2>
-        <p class="followup-empty">今日のフォローアップはありません ✓</p>`;
-    } else {
-      const items = followUps.map(c => `
-        <li class="followup-item">
-          <div class="followup-item-info">
-            <span class="followup-item-company">${esc(c.name)}</span>
-            <span class="followup-item-meta">${esc(c.next_action || "（内容未設定）")} / 予定日: ${esc(toDateStr(c.next_action_date))}</span>
-          </div>
-          <a class="followup-item-link" href="/companies.html">企業リストへ</a>
-        </li>`).join("");
-      section.innerHTML = `
-        <h2>今日のフォローアップ</h2>
-        <p class="followup-alert">🔔 ${followUps.length}件のフォローアップがあります</p>
-        <ul class="followup-list">${items}</ul>`;
-    }
+    renderFollowupSection();
 
     const followUpCardEl = document.getElementById("statFollowUp");
     if (followUpCardEl) {
-      const color = followUps.length === 0 ? "var(--green-700)" : "#ea580c";
-      followUpCardEl.innerHTML = `<span style="color:${color}">${followUps.length}</span><span class="card-unit">件</span>`;
+      const color = cachedFollowUps.length === 0 ? "var(--green-700)" : "#ea580c";
+      followUpCardEl.innerHTML = `<span style="color:${color}">${cachedFollowUps.length}</span><span class="card-unit">件</span>`;
     }
+  }
+
+  function renderFollowupSection() {
+    const section = document.getElementById("followupSection");
+    const badge = renderSectionCountBadge(cachedFollowUps.length);
+    if (cachedFollowUps.length === 0) {
+      section.innerHTML = `
+        <h2>今日のフォローアップ${badge}</h2>
+        <p class="followup-empty">今日のフォローアップはありません ✓</p>`;
+      return;
+    }
+    const itemsHtml = cachedFollowUps.map(c => `
+      <li class="followup-item">
+        <div class="followup-item-info">
+          <span class="followup-item-company">${esc(c.name)}</span>
+          <span class="followup-item-meta">${esc(c.next_action || "（内容未設定）")} / 予定日: ${esc(toDateStr(c.next_action_date))}</span>
+        </div>
+        <a class="followup-item-link" href="/companies.html">企業リストへ</a>
+      </li>`);
+    section.innerHTML = `
+      <h2>今日のフォローアップ${badge}</h2>
+      <p class="followup-alert">🔔 ${cachedFollowUps.length}件のフォローアップがあります</p>
+      ${buildExpandableListHtml(itemsHtml, "todayFollowup")}`;
   }
 
   function renderTasksSummary(tasks) {
     const todayStr = todayDateStr();
-    const overdueTasks = tasks.filter(t =>
+    cachedOverdueTasks = tasks.filter(t =>
       !t.done && t.due_date && toDateStr(t.due_date) <= todayStr
     );
-
-    const section = document.getElementById("taskSection");
-    if (overdueTasks.length === 0) {
-      section.innerHTML = `
-        <h2>未完了タスク</h2>
-        <p class="followup-empty">期限切れのタスクはありません ✓</p>`;
-    } else {
-      const items = overdueTasks.map(t => `
-        <li class="followup-item">
-          <div class="followup-item-info">
-            <span class="followup-item-company">${esc(t.title)}</span>
-            <span class="followup-item-meta">${esc(t.company_name || "（企業未設定）")} / 期限: ${esc(toDateStr(t.due_date))}</span>
-          </div>
-          <a class="followup-item-link" href="/crm.html">CRMへ</a>
-        </li>`).join("");
-      section.innerHTML = `
-        <h2>未完了タスク</h2>
-        <p class="followup-alert">⏰ ${overdueTasks.length}件の期限切れタスクがあります</p>
-        <ul class="followup-list">${items}</ul>`;
-    }
+    renderTaskSection();
 
     const overdueCardEl = document.getElementById("statOverdueTasks");
     if (overdueCardEl) {
-      const color = overdueTasks.length === 0 ? "var(--green-700)" : "#dc2626";
-      overdueCardEl.innerHTML = `<span style="color:${color}">${overdueTasks.length}</span><span class="card-unit">件</span>`;
+      const color = cachedOverdueTasks.length === 0 ? "var(--green-700)" : "#dc2626";
+      overdueCardEl.innerHTML = `<span style="color:${color}">${cachedOverdueTasks.length}</span><span class="card-unit">件</span>`;
     }
+  }
+
+  function renderTaskSection() {
+    const section = document.getElementById("taskSection");
+    const badge = renderSectionCountBadge(cachedOverdueTasks.length);
+    if (cachedOverdueTasks.length === 0) {
+      section.innerHTML = `
+        <h2>未完了タスク${badge}</h2>
+        <p class="followup-empty">期限切れのタスクはありません ✓</p>`;
+      return;
+    }
+    const itemsHtml = cachedOverdueTasks.map(t => `
+      <li class="followup-item">
+        <div class="followup-item-info">
+          <span class="followup-item-company">${esc(t.title)}</span>
+          <span class="followup-item-meta">${esc(t.company_name || "（企業未設定）")} / 期限: ${esc(toDateStr(t.due_date))}</span>
+        </div>
+        <a class="followup-item-link" href="/crm.html">CRMへ</a>
+      </li>`);
+    section.innerHTML = `
+      <h2>未完了タスク${badge}</h2>
+      <p class="followup-alert">⏰ ${cachedOverdueTasks.length}件の期限切れタスクがあります</p>
+      ${buildExpandableListHtml(itemsHtml, "tasks")}`;
   }
 
   // Welcome Tour
@@ -889,36 +957,41 @@
   let currentFollowUp = null; // { companyId, companyName, channel, subject, body } モーダルで生成中/生成済みの内容
 
   async function loadFollowUpSuggestions() {
-    const listEl  = document.getElementById("staleFollowupList");
-    const badgeEl = document.getElementById("staleFollowupCountBadge");
+    const section = document.getElementById("staleFollowupSection");
     try {
       const res = await fetch("/api/crm?action=followup-suggestions&project=" + encodeURIComponent(getCurrentProject()));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "取得に失敗しました");
       staleFollowups = Array.isArray(data) ? data : [];
     } catch (err) {
-      listEl.innerHTML = `<p class="followup-empty" style="color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+      section.innerHTML = `
+        <h2>📮 未返信フォローアップ候補</h2>
+        <p class="followup-empty" style="color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
       return;
     }
+    renderStaleFollowupSection();
+  }
 
+  function renderStaleFollowupSection() {
+    const section = document.getElementById("staleFollowupSection");
+    const badge = renderSectionCountBadge(staleFollowups.length);
     if (staleFollowups.length === 0) {
-      badgeEl.hidden = true;
-      listEl.innerHTML = `<p class="followup-empty">未返信のフォローアップ候補はありません ✓</p>`;
+      section.innerHTML = `
+        <h2>📮 未返信フォローアップ候補${badge}</h2>
+        <p class="followup-empty">未返信のフォローアップ候補はありません ✓</p>`;
       return;
     }
-
-    badgeEl.hidden = false;
-    badgeEl.textContent = staleFollowups.length;
-
-    const items = staleFollowups.map(c => `
+    const itemsHtml = staleFollowups.map(c => `
       <li class="followup-item">
         <div class="followup-item-info">
           <span class="followup-item-company">${esc(c.company_name)}</span>
           <span class="followup-item-meta">${c.days_since}日経過・最終送信バリアント: ${esc(c.last_variant_name || "不明")}</span>
         </div>
         <button type="button" class="btn-followup-suggest" onclick="openFollowUpModal(${c.company_id})">AIでフォロー文面を提案</button>
-      </li>`).join("");
-    listEl.innerHTML = `<ul class="followup-list">${items}</ul>`;
+      </li>`);
+    section.innerHTML = `
+      <h2>📮 未返信フォローアップ候補${badge}</h2>
+      ${buildExpandableListHtml(itemsHtml, "staleFollowup")}`;
   }
 
   async function openFollowUpModal(companyId) {
