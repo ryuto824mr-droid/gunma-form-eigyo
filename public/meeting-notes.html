@@ -99,6 +99,23 @@
   }
   .mn-raw-textarea { min-height: 200px; resize: vertical; line-height: 1.7; }
 
+  .mn-textarea-row { display: flex; gap: 8px; align-items: flex-start; }
+  .mn-textarea-row .mn-raw-textarea { flex: 1; }
+  .mn-mic-btn {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid var(--gray-200); background: var(--white); cursor: pointer;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: all 150ms;
+  }
+  .mn-mic-btn:hover { border-color: var(--green-500); }
+  .mn-mic-btn.recording { background: #fee2e2; border-color: #dc2626; animation: mnMicPulse 1s infinite; }
+  @keyframes mnMicPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
+    50%      { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+  }
+  .mn-recording-status { font-size: 12px; color: #dc2626; font-weight: 600; margin: 8px 0 0; }
+  .mn-interim-preview { font-size: 13px; color: var(--gray-400); font-style: italic; margin: 6px 0 0; line-height: 1.6; }
+
   .mn-form-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 
   .btn-primary {
@@ -278,6 +295,7 @@
     .mn-filter-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
     .modal-box { background: #1e293b; color: #f1f5f9; }
     .mn-detail-raw-text { background: #0f172a; }
+    .mn-mic-btn:not(.recording) { background: #1e293b; border-color: #334155; }
   }
   html.dark {
     --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
@@ -295,6 +313,7 @@
   html.dark .mn-filter-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
   html.dark .modal-box { background: #1e293b; color: #f1f5f9; }
   html.dark .mn-detail-raw-text { background: #0f172a; }
+  html.dark .mn-mic-btn:not(.recording) { background: #1e293b; border-color: #334155; }
 </style>
 </head>
 <body>
@@ -348,7 +367,12 @@
     </div>
     <div class="mn-form-group full">
       <label for="mnRawText">議事録本文</label>
-      <textarea id="mnRawText" class="mn-raw-textarea" oninput="invalidatePreview()" placeholder="会議中のメモ・発言録などをそのまま貼り付けてください"></textarea>
+      <div class="mn-textarea-row">
+        <textarea id="mnRawText" class="mn-raw-textarea" oninput="invalidatePreview()" placeholder="会議中のメモ・発言録などをそのまま貼り付けてください"></textarea>
+        <button type="button" class="mn-mic-btn" id="mnMicBtn" onclick="toggleMeetingVoiceInput()" title="音声入力">🎤</button>
+      </div>
+      <p class="mn-recording-status" id="mnRecordingStatus" hidden>🔴 録音中... もう一度タップで停止</p>
+      <p class="mn-interim-preview" id="mnInterimPreview" hidden></p>
     </div>
     <div class="mn-form-actions">
       <button type="button" class="btn-secondary" id="mnSummarizeBtn" onclick="summarizePreview()">要約してAIでTodo抽出</button>
@@ -729,7 +753,124 @@
     }
   }
 
+  // ===== 議事録本文のリアルタイム音声入力 =====
+  // work-logs.htmlの音声入力実装(エラー種別ごとのメッセージ出し分け、start/stopの
+  // try/catchガード)を踏襲しつつ、長時間の会議録音に対応するためcontinuous:trueで
+  // 動作させ、ブラウザが録音を意図せず打ち切った場合は自動的に再開する。
+  let mnRecognition = null;
+  let mnIsRecording = false;
+
+  const MN_SPEECH_ERROR_MESSAGES = {
+    "not-allowed":       "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
+    "permission-denied": "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
+    "no-speech":         "音声が検出されませんでした。もう一度お試しください。",
+    "audio-capture":     "マイクが見つかりませんでした。マイクが接続されているか確認してください。",
+    "network":           "ネットワークエラーにより音声入力に失敗しました。",
+    "aborted":           "音声入力が中断されました。",
+  };
+
+  function updateInterimPreview(text) {
+    const el = document.getElementById("mnInterimPreview");
+    if (text) {
+      el.textContent = text;
+      el.hidden = false;
+    } else {
+      el.textContent = "";
+      el.hidden = true;
+    }
+  }
+
+  function initMeetingSpeechRecognition() {
+    const micBtn = document.getElementById("mnMicBtn");
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      micBtn.hidden = true;
+      return;
+    }
+    mnRecognition = new SpeechRecognitionCtor();
+    mnRecognition.lang = "ja-JP";
+    mnRecognition.continuous = true;
+    mnRecognition.interimResults = true;
+
+    mnRecognition.onresult = (event) => {
+      let finalTranscript = "";
+      let interimTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+      if (finalTranscript.trim()) {
+        const ta = document.getElementById("mnRawText");
+        ta.value = ta.value.trim() ? `${ta.value.trim()} ${finalTranscript.trim()}` : finalTranscript.trim();
+        invalidatePreview();
+      }
+      updateInterimPreview(interimTranscript);
+    };
+
+    mnRecognition.onend = () => {
+      if (mnIsRecording) {
+        // 録音継続中にブラウザ側が意図せずセッションを終了させた場合は自動的に再開する
+        try {
+          mnRecognition.start();
+          return;
+        } catch (e) {
+          // 再開自体に失敗した場合のみ録音状態を終了させる(下へフォールスルー)
+        }
+      }
+      mnIsRecording = false;
+      micBtn.classList.remove("recording");
+      document.getElementById("mnRecordingStatus").hidden = true;
+      updateInterimPreview("");
+    };
+
+    mnRecognition.onerror = (event) => {
+      // "no-speech"は継続録音中(発話の合間の無音)によく発生する無害なタイムアウトのため、
+      // 録音自体は止めず、後続のonendでの自動再開に任せる
+      if (event.error === "no-speech" && mnIsRecording) return;
+
+      mnIsRecording = false;
+      micBtn.classList.remove("recording");
+      document.getElementById("mnRecordingStatus").hidden = true;
+      updateInterimPreview("");
+      showToast(MN_SPEECH_ERROR_MESSAGES[event.error] || "音声入力に失敗しました", "error");
+    };
+  }
+
+  function toggleMeetingVoiceInput() {
+    if (!mnRecognition) return;
+    const micBtn = document.getElementById("mnMicBtn");
+    const statusEl = document.getElementById("mnRecordingStatus");
+
+    if (mnIsRecording) {
+      // onendの自動再開ロジックが働かないよう、stop()を呼ぶ前に明示的な停止であることを示しておく
+      mnIsRecording = false;
+      try {
+        mnRecognition.stop();
+      } catch (e) {
+        micBtn.classList.remove("recording");
+        statusEl.hidden = true;
+      }
+    } else {
+      try {
+        mnRecognition.start();
+        mnIsRecording = true;
+        micBtn.classList.add("recording");
+        statusEl.hidden = false;
+      } catch (e) {
+        mnIsRecording = false;
+        micBtn.classList.remove("recording");
+        statusEl.hidden = true;
+        showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
+      }
+    }
+  }
+
   document.getElementById("mnDate").value = todayStr();
+  initMeetingSpeechRecognition();
   loadNotes();
   initScrollReveal();
 </script>
