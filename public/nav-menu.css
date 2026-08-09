@@ -21,7 +21,10 @@
 .nav-drawer-overlay.open { display: block; opacity: 1; }
 
 .nav-drawer {
-  position: fixed; top: 0; right: 0; bottom: 0; width: 280px; max-width: 85vw;
+  /* .page-headerがposition:sticky; top:0; height:56pxのため、topを0のままにすると
+     ドロワー自身の閉じるボタン(.nav-drawer-header)がヘッダー右側の☰ボタンと
+     同じ位置に重なってしまう。ヘッダー分だけ下にずらして開閉ボタン同士の衝突を避ける。 */
+  position: fixed; top: 56px; right: 0; bottom: 0; width: 280px; max-width: 85vw;
   background: var(--white); z-index: 1001; box-shadow: -4px 0 24px rgba(0,0,0,0.18);
   transform: translateX(100%); transition: transform 200ms ease;
   display: flex; flex-direction: column; overflow-y: auto;
