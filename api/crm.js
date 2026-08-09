@@ -12,7 +12,7 @@ const sendEmailHandler = require("./send-email");
 const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
-const { summarizeMeeting } = require("../lib/meeting-summarizer");
+const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -43,8 +43,9 @@ module.exports = async function handler(req, res) {
     case "parse-work-log":  return handleParseWorkLog(req, res);
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
+    case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -276,6 +277,9 @@ async function handleDbSetup(req, res) {
         created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // meeting_notes.labeled_text/speakers_detected追加（話者分離機能用）
+    await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS labeled_text TEXT");
+    await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS speakers_detected JSONB DEFAULT '[]'");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -2091,6 +2095,24 @@ async function handleParseWorkLog(req, res) {
 
 const MEETING_TYPES = ["1on1", "全体定例", "other"];
 
+// meeting_notes.meeting_dateはPostgresのDATE型だが、neonドライバはTIMESTAMP等と同じ
+// パーサーで処理するためJSのDateオブジェクトとして返る(文字列ではない)。ここで比較や
+// キーとして"YYYY-MM-DD"文字列が必要な箇所は、必ずこの関数を通して復元してから使う。
+// toISOString()等のUTC変換は使わない: DATE型は時刻情報を持たずローカル深夜0時として
+// 構築されるため、UTCとローカルのタイムゾーンが異なる環境では日付が1日ズレてしまう。
+// ドライバ自身がローカルタイムでDateオブジェクトを構築しているため、取り出す側も
+// getFullYear()/getMonth()/getDate()というローカルgetterを使えば、実行環境の
+// タイムゾーンに関わらず往復で元の日付と一致する。
+function toDateKey(value) {
+  if (value instanceof Date) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return value; // 既に文字列の場合はそのまま返す
+}
+
 // プレビュー用: 保存はせず、要約・Todo抽出結果だけを返す
 // (public/meeting-notes.htmlの「要約してAIでTodo抽出」ボタンから呼ばれる)
 async function handleSummarizeMeetingPreview(req, res) {
@@ -2119,6 +2141,7 @@ async function handleMeetingNotes(req, res) {
       let notes = await sql`
         SELECT * FROM meeting_notes WHERE project = ${project} ORDER BY created_at DESC
       `;
+      notes = notes.map(n => ({ ...n, meeting_date: toDateKey(n.meeting_date) }));
       const { from, to, meeting_type } = req.query;
       if (from) notes = notes.filter(n => n.meeting_date >= from);
       if (to) notes = notes.filter(n => n.meeting_date <= to);
@@ -2144,34 +2167,37 @@ async function handleMeetingNotes(req, res) {
     const date = meeting_date || todayJst();
 
     // 事前にプレビュー(?action=summarize-meeting)で生成済みのsummary/todosがあればそれをそのまま使い、
-    // 無ければここで要約する(AI未設定/失敗時はsummary=null, todos=[]のまま保存し、後からPATCHで手動編集できるようにする)
-    let summary = null;
-    let todosRaw = [];
+    // 無ければここで要約する(AI未設定/失敗時はsummary=null, todos=[]のまま保存し、後からPATCHで手動編集できるようにする)。
+    // 話者分離(identifySpeakers)はプレビューの仕組みが無いため常にここで並行実行する。
+    const summaryPromise = (preSummary !== undefined || preTodos !== undefined)
+      ? Promise.resolve({
+          summary: typeof preSummary === "string" ? preSummary : null,
+          todosRaw: Array.isArray(preTodos) ? preTodos.filter(t => typeof t === "string") : [],
+        })
+      : summarizeMeeting({ rawText: raw_text, meetingType: type })
+          .then(result => (result.configured === false
+            ? { summary: null, todosRaw: [] }
+            : { summary: result.summary, todosRaw: result.todos }))
+          .catch(() => ({ summary: null, todosRaw: [] })); // AI要約に失敗しても議事録自体の保存は継続する
 
-    if (preSummary !== undefined || preTodos !== undefined) {
-      summary = typeof preSummary === "string" ? preSummary : null;
-      todosRaw = Array.isArray(preTodos) ? preTodos.filter(t => typeof t === "string") : [];
-    } else {
-      try {
-        const result = await summarizeMeeting({ rawText: raw_text, meetingType: type });
-        if (result.configured !== false) {
-          summary = result.summary;
-          todosRaw = result.todos;
-        }
-      } catch {
-        // AI要約に失敗しても議事録自体の保存は継続する
-      }
-    }
+    const speakersPromise = identifySpeakers({ rawText: raw_text })
+      .then(result => (result.configured === false
+        ? { labeledText: null, speakersDetected: [] }
+        : { labeledText: result.labeled_text, speakersDetected: result.speakers_detected }))
+      .catch(() => ({ labeledText: null, speakersDetected: [] })); // 話者分離に失敗しても議事録自体の保存は継続する
 
-    const todos = todosRaw.map(t => ({ text: t, done: false }));
+    const [{ summary, todosRaw }, { labeledText, speakersDetected }] =
+      await Promise.all([summaryPromise, speakersPromise]);
+
+    const todos = todosRaw.map(t => ({ text: t, done: false, due_date: null }));
 
     try {
       const [created] = await sql`
-        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date)
-        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date})
+        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date, labeled_text, speakers_detected)
+        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date}, ${labeledText}, ${JSON.stringify(speakersDetected)})
         RETURNING *
       `;
-      return res.status(201).json(created);
+      return res.status(201).json({ ...created, meeting_date: toDateKey(created.meeting_date) });
     } catch (err) {
       return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
     }
@@ -2197,7 +2223,7 @@ async function handleMeetingNotes(req, res) {
         WHERE id = ${noteId}
         RETURNING *
       `;
-      return res.status(200).json(updated);
+      return res.status(200).json({ ...updated, meeting_date: toDateKey(updated.meeting_date) });
     } catch (err) {
       return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
     }
@@ -2219,4 +2245,61 @@ async function handleMeetingNotes(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
+}
+
+// ==================== calendar-events (議事録カレンダー: 月単位でmeeting_notes/todosを日付ごとに集計) ====================
+
+async function handleCalendarEvents(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETメソッドのみ対応しています" });
+  }
+  const project = req.query.project;
+  if (project !== "locle" && project !== "ozukanzukan") {
+    return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
+  }
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!year || !month || month < 1 || month > 12) {
+    return res.status(400).json({ error: "有効なyear, monthが必要です" });
+  }
+
+  const pad = n => String(n).padStart(2, "0");
+  const from = `${year}-${pad(month)}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const to = `${year}-${pad(month)}-${pad(lastDay)}`;
+
+  try {
+    // todosの期日はmeeting_dateとは別月にまたがりうるため、project全体を取得したうえで
+    // JS側で「開催日が対象月」「Todo期日が対象月」をそれぞれ別軸で振り分ける
+    const notes = await sql`
+      SELECT id, title, meeting_type, meeting_date, summary, todos
+      FROM meeting_notes WHERE project = ${project}
+    `;
+
+    const notesByDate = {};
+    const todosByDate = {};
+
+    notes.forEach(n => {
+      const dateKey = toDateKey(n.meeting_date);
+      if (dateKey >= from && dateKey <= to) {
+        if (!notesByDate[dateKey]) notesByDate[dateKey] = [];
+        notesByDate[dateKey].push({
+          id: n.id, title: n.title, meeting_type: n.meeting_type, summary: n.summary,
+        });
+      }
+
+      const todos = Array.isArray(n.todos) ? n.todos : [];
+      todos.forEach(t => {
+        if (!t.due_date || t.due_date < from || t.due_date > to) return;
+        if (!todosByDate[t.due_date]) todosByDate[t.due_date] = [];
+        todosByDate[t.due_date].push({
+          note_id: n.id, note_title: n.title, text: t.text, done: !!t.done,
+        });
+      });
+    });
+
+    return res.status(200).json({ notes_by_date: notesByDate, todos_by_date: todosByDate });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
 }

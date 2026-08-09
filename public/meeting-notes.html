@@ -148,6 +148,44 @@
   .mn-preview-empty { font-size: 13px; color: var(--gray-400); font-style: italic; padding-left: 0 !important; }
   .mn-preview-empty::before { content: none !important; }
 
+  .mn-cal-header { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 14px; }
+  .mn-cal-nav-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--gray-200);
+    background: var(--white); color: var(--gray-700); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; transition: all 150ms;
+  }
+  .mn-cal-nav-btn:hover { border-color: var(--green-500); color: var(--green-700); }
+  .mn-cal-month-label { font-size: 15px; font-weight: 700; color: var(--gray-900); min-width: 110px; text-align: center; }
+
+  .mn-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+  .mn-cal-weekdays span { text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-400); padding: 4px 0; }
+
+  .mn-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .mn-cal-cell {
+    min-height: 64px; border: 1px solid var(--gray-100); border-radius: var(--radius-sm);
+    padding: 4px 6px; font-size: 12px; color: var(--gray-700); cursor: pointer;
+    display: flex; flex-direction: column; gap: 2px; transition: all 150ms;
+  }
+  .mn-cal-cell:hover { border-color: var(--green-500); background: var(--green-50); }
+  .mn-cal-cell.other-month { opacity: 0.35; cursor: default; }
+  .mn-cal-cell.other-month:hover { border-color: var(--gray-100); background: none; }
+  .mn-cal-cell.today { border-color: var(--green-500); border-width: 2px; }
+  .mn-cal-cell.selected { background: var(--green-50); border-color: var(--green-500); }
+  .mn-cal-date-num { font-weight: 600; }
+  .mn-cal-marker { font-size: 11px; padding: 1px 5px; border-radius: 999px; display: inline-flex; align-items: center; gap: 2px; width: fit-content; }
+  .mn-cal-marker.notes { background: var(--green-100); color: var(--green-800); }
+  .mn-cal-marker.todos { background: #dbeafe; color: #1e3a8a; }
+
+  .mn-cal-day-panel { margin-top: 18px; padding: 16px; background: var(--gray-50); border-radius: var(--radius-md); border-left: 3px solid var(--green-500); }
+  .mn-cal-day-panel-title { font-size: 13px; font-weight: 700; color: var(--gray-900); margin: 0 0 10px; }
+  .mn-cal-day-note-item, .mn-cal-day-todo-item {
+    font-size: 13px; color: var(--gray-700); padding: 8px 10px; background: var(--white);
+    border-radius: var(--radius-sm); margin-bottom: 6px; transition: all 150ms;
+  }
+  .mn-cal-day-note-item { cursor: pointer; }
+  .mn-cal-day-note-item:hover { box-shadow: var(--shadow-sm); }
+  .mn-cal-day-todo-item.done { text-decoration: line-through; color: var(--gray-400); }
+
   .mn-filters { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; }
   .mn-filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
   .mn-filter-btn {
@@ -218,13 +256,16 @@
   .mn-delete-btn:hover { background: #fff5f5; }
 
   .mn-detail-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .mn-detail-speakers { font-size: 12px; color: var(--green-700); font-weight: 600; background: var(--green-50); padding: 6px 10px; border-radius: var(--radius-sm); margin: 0 0 12px; }
   .mn-detail-date { font-size: 12px; color: var(--gray-400); }
   .mn-detail-section-label { font-size: 11px; font-weight: 700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
   .mn-detail-section-label:first-of-type { margin-top: 0; }
   .mn-detail-summary { font-size: 13px; color: var(--gray-700); line-height: 1.8; white-space: pre-wrap; }
   .mn-detail-todos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .mn-todo-item label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--gray-700); cursor: pointer; }
+  .mn-todo-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .mn-todo-item label { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--gray-700); cursor: pointer; flex: 1; min-width: 0; }
   .mn-todo-item input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; width: auto; }
+  .mn-todo-due-input { width: auto; flex-shrink: 0; font-size: 12px; padding: 4px 6px; }
   .mn-todo-done { text-decoration: line-through; color: var(--gray-400); }
   .mn-detail-raw { margin-top: 18px; border-top: 1px solid var(--gray-100); padding-top: 14px; }
   .mn-detail-raw summary { font-size: 12px; font-weight: 600; color: var(--gray-500); cursor: pointer; }
@@ -387,6 +428,24 @@
   </div>
 
   <div class="mn-section reveal-on-scroll">
+    <p class="mn-section-title">カレンダー</p>
+    <div class="mn-cal-header">
+      <button type="button" class="mn-cal-nav-btn" onclick="changeCalendarMonth(-1)">←</button>
+      <span class="mn-cal-month-label" id="mnCalMonthLabel"></span>
+      <button type="button" class="mn-cal-nav-btn" onclick="changeCalendarMonth(1)">→</button>
+    </div>
+    <div class="mn-cal-weekdays">
+      <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+    </div>
+    <div class="mn-cal-grid" id="mnCalGrid"></div>
+
+    <div class="mn-cal-day-panel" id="mnCalDayPanel" hidden>
+      <p class="mn-cal-day-panel-title" id="mnCalDayPanelTitle"></p>
+      <div id="mnCalDayPanelBody"></div>
+    </div>
+  </div>
+
+  <div class="mn-section reveal-on-scroll">
     <p class="mn-section-title">議事録一覧</p>
     <div class="mn-filters">
       <div class="mn-filter-group">
@@ -394,11 +453,6 @@
         <button type="button" class="mn-filter-btn" data-type="1on1" onclick="setTypeFilter('1on1')">1on1</button>
         <button type="button" class="mn-filter-btn" data-type="全体定例" onclick="setTypeFilter('全体定例')">全体定例</button>
         <button type="button" class="mn-filter-btn" data-type="other" onclick="setTypeFilter('other')">その他</button>
-      </div>
-      <div class="mn-filter-group">
-        <button type="button" class="mn-filter-btn active" data-period="all" onclick="setPeriodFilter('all')">全期間</button>
-        <button type="button" class="mn-filter-btn" data-period="this" onclick="setPeriodFilter('this')">今月</button>
-        <button type="button" class="mn-filter-btn" data-period="last" onclick="setPeriodFilter('last')">先月</button>
       </div>
     </div>
     <div class="mn-list" id="mnList">
@@ -421,6 +475,8 @@
         <span class="mn-detail-date" id="mnDetailDate"></span>
       </div>
 
+      <p class="mn-detail-speakers" id="mnDetailSpeakers" hidden></p>
+
       <p class="mn-detail-section-label">要約</p>
       <div class="mn-detail-summary" id="mnDetailSummary"></div>
 
@@ -428,7 +484,7 @@
       <ul class="mn-detail-todos" id="mnDetailTodos"></ul>
 
       <details class="mn-detail-raw">
-        <summary>元の議事録本文</summary>
+        <summary id="mnDetailRawTextLabel">元の議事録本文</summary>
         <pre class="mn-detail-raw-text" id="mnDetailRawText"></pre>
       </details>
     </div>
@@ -597,7 +653,6 @@
   // ===== 議事録一覧 =====
   let allNotes = [];
   let typeFilter = "";
-  let periodFilter = "all";
 
   async function loadNotes() {
     const listEl = document.getElementById("mnList");
@@ -613,29 +668,10 @@
     renderList();
   }
 
-  function getMonthRange(which) {
-    const today = todayStr();
-    const [y, m] = today.split("-").map(Number);
-    let year = y, month = m;
-    if (which === "last") {
-      month -= 1;
-      if (month === 0) { month = 12; year -= 1; }
-    }
-    const pad = n => String(n).padStart(2, "0");
-    const from = `${year}-${pad(month)}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const to = which === "this" ? today : `${year}-${pad(month)}-${pad(lastDay)}`;
-    return { from, to };
-  }
-
   function renderList() {
     const listEl = document.getElementById("mnList");
     let filtered = allNotes;
     if (typeFilter) filtered = filtered.filter(n => n.meeting_type === typeFilter);
-    if (periodFilter !== "all") {
-      const { from, to } = getMonthRange(periodFilter);
-      filtered = filtered.filter(n => n.meeting_date >= from && n.meeting_date <= to);
-    }
 
     if (filtered.length === 0) {
       listEl.innerHTML = '<p class="mn-empty-note">議事録がありません</p>';
@@ -664,12 +700,111 @@
     });
     renderList();
   }
-  function setPeriodFilter(period) {
-    periodFilter = period;
-    document.querySelectorAll(".mn-filter-btn[data-period]").forEach(b => {
-      b.classList.toggle("active", b.dataset.period === period);
-    });
-    renderList();
+
+  // ===== カレンダー =====
+  let calendarYear, calendarMonth; // month: 1〜12
+  let calendarNotesByDate = {};
+  let calendarTodosByDate = {};
+  let selectedCalendarDate = null;
+
+  function initCalendarDefaults() {
+    const [y, m] = todayStr().split("-").map(Number);
+    calendarYear = y;
+    calendarMonth = m;
+  }
+
+  async function loadCalendar() {
+    const grid = document.getElementById("mnCalGrid");
+    try {
+      const res = await fetch(`/api/crm?action=calendar-events&project=${encodeURIComponent(getCurrentProject())}&year=${calendarYear}&month=${calendarMonth}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      calendarNotesByDate = data.notes_by_date || {};
+      calendarTodosByDate = data.todos_by_date || {};
+    } catch (err) {
+      grid.innerHTML = `<p class="mn-empty-note" style="color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+      return;
+    }
+    renderCalendar();
+  }
+
+  function changeCalendarMonth(delta) {
+    calendarMonth += delta;
+    if (calendarMonth < 1) { calendarMonth = 12; calendarYear -= 1; }
+    if (calendarMonth > 12) { calendarMonth = 1; calendarYear += 1; }
+    selectedCalendarDate = null;
+    document.getElementById("mnCalDayPanel").hidden = true;
+    loadCalendar();
+  }
+
+  function renderCalendar() {
+    document.getElementById("mnCalMonthLabel").textContent = `${calendarYear}年${calendarMonth}月`;
+
+    const pad = n => String(n).padStart(2, "0");
+    const startWeekday = new Date(calendarYear, calendarMonth - 1, 1).getDay(); // 0=日
+    const daysInMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+    const daysInPrevMonth = new Date(calendarYear, calendarMonth - 1, 0).getDate();
+
+    const today = todayStr();
+    const cells = [];
+
+    for (let i = startWeekday - 1; i >= 0; i--) {
+      cells.push({ day: daysInPrevMonth - i, otherMonth: true, dateKey: null });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ day: d, otherMonth: false, dateKey: `${calendarYear}-${pad(calendarMonth)}-${pad(d)}` });
+    }
+    let nextDay = 1;
+    while (cells.length % 7 !== 0) {
+      cells.push({ day: nextDay++, otherMonth: true, dateKey: null });
+    }
+
+    const grid = document.getElementById("mnCalGrid");
+    grid.innerHTML = cells.map(c => {
+      if (c.otherMonth) {
+        return `<div class="mn-cal-cell other-month"><span class="mn-cal-date-num">${c.day}</span></div>`;
+      }
+      const notes = calendarNotesByDate[c.dateKey] || [];
+      const todos = calendarTodosByDate[c.dateKey] || [];
+      const classes = ["mn-cal-cell"];
+      if (c.dateKey === today) classes.push("today");
+      if (c.dateKey === selectedCalendarDate) classes.push("selected");
+      const markers = [];
+      if (notes.length > 0) markers.push(`<span class="mn-cal-marker notes">📝${notes.length}</span>`);
+      if (todos.length > 0) markers.push(`<span class="mn-cal-marker todos">✓${todos.length}</span>`);
+      return `<div class="${classes.join(" ")}" onclick="selectCalendarDate('${c.dateKey}')">
+        <span class="mn-cal-date-num">${c.day}</span>
+        ${markers.join("")}
+      </div>`;
+    }).join("");
+  }
+
+  function selectCalendarDate(dateKey) {
+    selectedCalendarDate = dateKey;
+    renderCalendar();
+
+    const notes = calendarNotesByDate[dateKey] || [];
+    const todos = calendarTodosByDate[dateKey] || [];
+    const panel = document.getElementById("mnCalDayPanel");
+    document.getElementById("mnCalDayPanelTitle").textContent = dateKey;
+
+    const body = document.getElementById("mnCalDayPanelBody");
+    if (notes.length === 0 && todos.length === 0) {
+      body.innerHTML = '<p class="mn-empty-note">この日の議事録・Todoはありません</p>';
+    } else {
+      let html = "";
+      notes.forEach(n => {
+        html += `<div class="mn-cal-day-note-item" onclick="openDetailModal(${n.id})">
+          📝 <strong>${esc(n.title)}</strong>（${esc(typeLabel(n.meeting_type))}）
+          ${n.summary ? `<div style="margin-top:4px;color:var(--gray-500);">${esc(n.summary)}</div>` : ""}
+        </div>`;
+      });
+      todos.forEach(t => {
+        html += `<div class="mn-cal-day-todo-item ${t.done ? "done" : ""}">✓ ${esc(t.text)}（${esc(t.note_title)}）</div>`;
+      });
+      body.innerHTML = html;
+    }
+    panel.hidden = false;
   }
 
   // ===== 詳細モーダル =====
@@ -685,7 +820,20 @@
     badge.className = "mn-type-badge " + typeBadgeClass(note.meeting_type);
     document.getElementById("mnDetailDate").textContent = note.meeting_date;
     document.getElementById("mnDetailSummary").textContent = note.summary || "(要約なし)";
-    document.getElementById("mnDetailRawText").textContent = note.raw_text;
+
+    const speakersEl = document.getElementById("mnDetailSpeakers");
+    const speakers = Array.isArray(note.speakers_detected) ? note.speakers_detected : [];
+    if (speakers.length > 0) {
+      speakersEl.textContent = `検出された話者: ${speakers.join("、")}`;
+      speakersEl.hidden = false;
+    } else {
+      speakersEl.hidden = true;
+    }
+
+    // 話者ラベル付き本文があれば、そちらの方が読みやすいため元の本文の代わりに表示する
+    document.getElementById("mnDetailRawTextLabel").textContent = note.labeled_text ? "話者ラベル付き本文" : "元の議事録本文";
+    document.getElementById("mnDetailRawText").textContent = note.labeled_text || note.raw_text;
+
     renderDetailTodos();
     document.getElementById("mnDetailModal").classList.add("open");
   }
@@ -703,6 +851,7 @@
           <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTodoDone(${i})">
           <span class="${t.done ? "mn-todo-done" : ""}">${esc(t.text)}</span>
         </label>
+        <input type="date" class="mn-todo-due-input" value="${t.due_date || ""}" onchange="updateTodoDueDate(${i}, this.value)" title="期日">
       </li>`).join("");
   }
 
@@ -710,6 +859,17 @@
     const todos = (Array.isArray(currentDetailNote.todos) ? currentDetailNote.todos : []).map(t => ({ ...t }));
     if (!todos[index]) return;
     todos[index].done = !todos[index].done;
+    await saveDetailTodos(todos);
+  }
+
+  async function updateTodoDueDate(index, value) {
+    const todos = (Array.isArray(currentDetailNote.todos) ? currentDetailNote.todos : []).map(t => ({ ...t }));
+    if (!todos[index]) return;
+    todos[index].due_date = value || null;
+    await saveDetailTodos(todos, "✓ 期日を更新しました");
+  }
+
+  async function saveDetailTodos(todos, successMessage) {
     try {
       const res = await fetch("/api/crm?action=meeting-notes", {
         method: "PATCH",
@@ -723,6 +883,7 @@
       if (idx >= 0) allNotes[idx] = data;
       renderDetailTodos();
       renderList();
+      if (successMessage) showToast(successMessage, "success");
     } catch (err) {
       showToast("更新に失敗しました: " + esc(err.message), "error");
       renderDetailTodos();
@@ -872,6 +1033,8 @@
   document.getElementById("mnDate").value = todayStr();
   initMeetingSpeechRecognition();
   loadNotes();
+  initCalendarDefaults();
+  loadCalendar();
   initScrollReveal();
 </script>
 </body>
