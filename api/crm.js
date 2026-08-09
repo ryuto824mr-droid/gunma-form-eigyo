@@ -12,6 +12,7 @@ const sendEmailHandler = require("./send-email");
 const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
+const { summarizeMeeting } = require("../lib/meeting-summarizer");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -40,8 +41,10 @@ module.exports = async function handler(req, res) {
     case "sender-accounts": return handleSenderAccounts(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
     case "parse-work-log":  return handleParseWorkLog(req, res);
+    case "meeting-notes":     return handleMeetingNotes(req, res);
+    case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting）を指定してください" });
   }
 };
 
@@ -256,6 +259,21 @@ async function handleDbSetup(req, res) {
         refresh_token TEXT NOT NULL,
         is_active     BOOLEAN NOT NULL DEFAULT TRUE,
         created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // meeting_notesテーブル追加（議事録まとめ機能用。company_idに紐づかないためproject列で直接分離する）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS meeting_notes (
+        id           SERIAL PRIMARY KEY,
+        project      TEXT NOT NULL DEFAULT 'locle'
+                        CONSTRAINT meeting_notes_project_check CHECK (project IN ('ozukanzukan', 'locle')),
+        title        TEXT NOT NULL,
+        meeting_type TEXT NOT NULL DEFAULT 'other',
+        raw_text     TEXT NOT NULL,
+        summary      TEXT,
+        todos        JSONB DEFAULT '[]',
+        meeting_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
@@ -2067,4 +2085,138 @@ async function handleParseWorkLog(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `解析エラー: ${err.message}` });
   }
+}
+
+// ==================== meeting-notes (議事録まとめ: プロジェクトごとに完全分離) ====================
+
+const MEETING_TYPES = ["1on1", "全体定例", "other"];
+
+// プレビュー用: 保存はせず、要約・Todo抽出結果だけを返す
+// (public/meeting-notes.htmlの「要約してAIでTodo抽出」ボタンから呼ばれる)
+async function handleSummarizeMeetingPreview(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
+  }
+  const { raw_text, meeting_type } = req.body || {};
+  if (!raw_text || typeof raw_text !== "string" || !raw_text.trim()) {
+    return res.status(400).json({ error: "raw_text（文字列）が必要です" });
+  }
+  try {
+    const result = await summarizeMeeting({ rawText: raw_text, meetingType: meeting_type });
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ error: `要約エラー: ${err.message}` });
+  }
+}
+
+async function handleMeetingNotes(req, res) {
+  if (req.method === "GET") {
+    const project = req.query.project;
+    if (project !== "locle" && project !== "ozukanzukan") {
+      return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
+    }
+    try {
+      let notes = await sql`
+        SELECT * FROM meeting_notes WHERE project = ${project} ORDER BY created_at DESC
+      `;
+      const { from, to, meeting_type } = req.query;
+      if (from) notes = notes.filter(n => n.meeting_date >= from);
+      if (to) notes = notes.filter(n => n.meeting_date <= to);
+      if (meeting_type) notes = notes.filter(n => n.meeting_type === meeting_type);
+      return res.status(200).json(notes);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { project, title, meeting_type, raw_text, meeting_date, summary: preSummary, todos: preTodos } = req.body || {};
+    if (project !== "locle" && project !== "ozukanzukan") {
+      return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
+    }
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "title（文字列）が必要です" });
+    }
+    if (!raw_text || typeof raw_text !== "string" || !raw_text.trim()) {
+      return res.status(400).json({ error: "raw_text（文字列）が必要です" });
+    }
+    const type = MEETING_TYPES.includes(meeting_type) ? meeting_type : "other";
+    const date = meeting_date || todayJst();
+
+    // 事前にプレビュー(?action=summarize-meeting)で生成済みのsummary/todosがあればそれをそのまま使い、
+    // 無ければここで要約する(AI未設定/失敗時はsummary=null, todos=[]のまま保存し、後からPATCHで手動編集できるようにする)
+    let summary = null;
+    let todosRaw = [];
+
+    if (preSummary !== undefined || preTodos !== undefined) {
+      summary = typeof preSummary === "string" ? preSummary : null;
+      todosRaw = Array.isArray(preTodos) ? preTodos.filter(t => typeof t === "string") : [];
+    } else {
+      try {
+        const result = await summarizeMeeting({ rawText: raw_text, meetingType: type });
+        if (result.configured !== false) {
+          summary = result.summary;
+          todosRaw = result.todos;
+        }
+      } catch {
+        // AI要約に失敗しても議事録自体の保存は継続する
+      }
+    }
+
+    const todos = todosRaw.map(t => ({ text: t, done: false }));
+
+    try {
+      const [created] = await sql`
+        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date)
+        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date})
+        RETURNING *
+      `;
+      return res.status(201).json(created);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { id, summary, todos, title } = req.body || {};
+    const noteId = parseInt(id, 10);
+    if (!noteId || isNaN(noteId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [current] = await sql`SELECT * FROM meeting_notes WHERE id = ${noteId}`;
+      if (!current) return res.status(404).json({ error: "議事録が見つかりません" });
+
+      const newTitle   = title   !== undefined ? title   : current.title;
+      const newSummary = summary !== undefined ? summary : current.summary;
+      const newTodos   = todos   !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
+
+      const [updated] = await sql`
+        UPDATE meeting_notes
+        SET title = ${newTitle}, summary = ${newSummary}, todos = ${newTodos}
+        WHERE id = ${noteId}
+        RETURNING *
+      `;
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const noteId = parseInt(id, 10);
+    if (!noteId || isNaN(noteId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM meeting_notes WHERE id = ${noteId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "議事録が見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
 }
