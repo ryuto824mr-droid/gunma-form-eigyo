@@ -112,6 +112,38 @@
   }
   .btn-primary:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
 
+  .wl-status-display {
+    font-size: 13px; color: var(--gray-500); text-align: center;
+    margin: 0 0 16px; padding: 8px; background: var(--gray-50); border-radius: var(--radius-sm);
+  }
+
+  .wl-clock-buttons { display: flex; gap: 12px; margin-bottom: 20px; }
+  .wl-clock-btn {
+    flex: 1; padding: 18px; font-size: 16px; font-weight: 700; font-family: inherit;
+    border-radius: var(--radius-lg); cursor: pointer; transition: all 150ms;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .wl-clock-btn.clock-in { background: var(--green-50); color: var(--green-700); border: 2px solid var(--green-500); }
+  .wl-clock-btn.clock-in:hover:not(:disabled) { background: var(--green-100); transform: translateY(-1px); }
+  .wl-clock-btn.clock-out { background: #fff5f5; color: #dc2626; border: 2px solid #fca5a5; }
+  .wl-clock-btn.clock-out:hover:not(:disabled) { background: #fee2e2; transform: translateY(-1px); }
+  .wl-clock-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .wl-chat-input-row { display: flex; gap: 8px; align-items: flex-start; }
+  .wl-chat-input-row textarea { flex: 1; min-height: 90px; }
+  .wl-mic-btn {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid var(--gray-200); background: var(--white); cursor: pointer;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: all 150ms;
+  }
+  .wl-mic-btn:hover { border-color: var(--green-500); }
+  .wl-mic-btn.recording { background: #fee2e2; border-color: #dc2626; animation: micPulse 1s infinite; }
+  @keyframes micPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
+    50%      { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+  }
+
   .wl-team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
   .wl-team-card { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-md); padding: 14px 16px; }
   .wl-team-card.empty { opacity: 0.6; }
@@ -201,6 +233,8 @@
     input::placeholder, textarea::placeholder { color: #475569 !important; }
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
+    .wl-status-display { background: #1e293b; }
+    .wl-mic-btn { background: #1e293b; border-color: #334155; }
   }
   html.dark {
     --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
@@ -216,6 +250,8 @@
   html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
   html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
   html.dark .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
+  html.dark .wl-status-display { background: #1e293b; }
+  html.dark .wl-mic-btn { background: #1e293b; border-color: #334155; }
 </style>
 </head>
 <body>
@@ -262,28 +298,23 @@
         <label for="wlNameOther">氏名（その他）</label>
         <input type="text" id="wlNameOther" placeholder="氏名を入力" oninput="onOtherNameInput()">
       </div>
-      <div class="wl-form-group">
-        <label for="wlClockIn">出勤時刻</label>
-        <input type="time" id="wlClockIn">
-      </div>
-      <div class="wl-form-group">
-        <label for="wlClockOut">退勤時刻</label>
-        <input type="time" id="wlClockOut">
-      </div>
-      <div class="wl-form-group full">
-        <label for="wlTasksDone">やったこと</label>
-        <textarea id="wlTasksDone" placeholder="例: LOCLE-企業リサーチ20社、お仕事図鑑-Reels台本3本作成"></textarea>
-      </div>
-      <div class="wl-form-group full">
-        <label for="wlTasksRemaining">残タスク</label>
-        <textarea id="wlTasksRemaining" placeholder="例: LOCLE-A社への返信、お仕事図鑑-SNS投稿の下書き確認"></textarea>
-      </div>
-      <div class="wl-form-group full">
-        <label for="wlMemo">メモ（任意）</label>
-        <textarea id="wlMemo" placeholder="共有事項など、あれば自由に記入してください"></textarea>
+    </div>
+
+    <p class="wl-status-display" id="wlStatusDisplay">本日: 未出勤</p>
+
+    <div class="wl-clock-buttons">
+      <button type="button" class="wl-clock-btn clock-in" id="wlClockInBtn" onclick="clockAction('in')">🟢 出勤</button>
+      <button type="button" class="wl-clock-btn clock-out" id="wlClockOutBtn" onclick="clockAction('out')">🔴 退勤</button>
+    </div>
+
+    <div class="wl-form-group full">
+      <label for="wlChatText">今日やったこと・残タスクを話してください</label>
+      <div class="wl-chat-input-row">
+        <textarea id="wlChatText" placeholder="例: LOCLE企業リサーチを20社やりました。お仕事図鑑のReels台本も3本作成済みです。残りはA社への返信とSNS投稿の下書き確認です。"></textarea>
+        <button type="button" class="wl-mic-btn" id="wlMicBtn" onclick="toggleVoiceInput()" title="音声入力">🎤</button>
       </div>
     </div>
-    <button type="button" class="btn-primary" id="wlSubmitBtn" onclick="submitWorkLog()">記録する</button>
+    <button type="button" class="btn-primary" id="wlChatSubmitBtn" onclick="submitChatRecord()">記録する</button>
   </div>
 
   <div class="wl-section reveal-on-scroll">
@@ -384,18 +415,19 @@
 
   const FIXED_MEMBERS = ["りゅうと", "宮田", "岡田"];
 
-  // ===== 本日の稼働記録フォーム =====
+  // ===== 本日の稼働記録 =====
   let todayLogs = [];
   let currentEditId = null;
 
   function onNameSelectChange() {
     const isOther = document.getElementById("wlNameSelect").value === "__other__";
     document.getElementById("wlNameOtherGroup").hidden = !isOther;
-    syncFormWithSelectedUser();
+    document.getElementById("wlChatText").value = ""; // 氏名切り替え時のみクリア(他人の入力欄に書き続ける事故を防ぐ)
+    refreshCurrentUserState();
   }
 
   function onOtherNameInput() {
-    syncFormWithSelectedUser();
+    refreshCurrentUserState();
   }
 
   function getSelectedUserName() {
@@ -404,62 +436,181 @@
     return sel;
   }
 
-  // 選択中の氏名に本日分の記録が既に存在する場合はフォームに反映し、更新モードに切り替える
-  function syncFormWithSelectedUser() {
+  // 選択中の氏名に本日分の記録が既に存在する場合、その状態を出退勤表示・currentEditIdに反映する。
+  // loadTodayLogs()完了後にも呼ばれるため、入力中のチャット欄はここではクリアしない
+  // (出勤ボタンを押しただけでチャット欄の下書きが消えてしまうのを防ぐため)。
+  function refreshCurrentUserState() {
     const name = getSelectedUserName();
     const existing = name ? todayLogs.find(l => l.user_name === name) : null;
-
-    document.getElementById("wlClockIn").value = existing && existing.clock_in ? fmtTime(existing.clock_in) : "";
-    document.getElementById("wlClockOut").value = existing && existing.clock_out ? fmtTime(existing.clock_out) : "";
-    document.getElementById("wlTasksDone").value = existing ? (existing.tasks_done || "") : "";
-    document.getElementById("wlTasksRemaining").value = existing ? (existing.tasks_remaining || "") : "";
-    document.getElementById("wlMemo").value = existing ? (existing.memo || "") : "";
-
     currentEditId = existing ? existing.id : null;
-    document.getElementById("wlSubmitBtn").textContent = existing ? "更新する" : "記録する";
+    updateStatusDisplay(existing);
   }
 
-  async function submitWorkLog() {
+  function updateStatusDisplay(existing) {
+    const el = document.getElementById("wlStatusDisplay");
+    if (!existing || (!existing.clock_in && !existing.clock_out)) {
+      el.textContent = "本日: 未出勤";
+      return;
+    }
+    const inText = existing.clock_in ? `出勤 ${fmtTime(existing.clock_in)}` : "出勤未記録";
+    const outText = existing.clock_out ? `退勤 ${fmtTime(existing.clock_out)}` : "退勤未記録";
+    const hoursText = existing.work_hours != null ? `（${Number(existing.work_hours).toFixed(2)}時間）` : "";
+    el.textContent = `本日: ${inText} / ${outText} ${hoursText}`;
+  }
+
+  function nowHm() {
+    return new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  // 🟢出勤・🔴退勤ボタン: ワンタップで現在時刻を記録する。既存レコードがあればPATCHで
+  // その項目だけを更新し(他方のclock_in/outは維持)、無ければPOSTで新規作成する。
+  async function clockAction(type) {
     const userName = getSelectedUserName();
     if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
 
-    const clockIn        = document.getElementById("wlClockIn").value || null;
-    const clockOut        = document.getElementById("wlClockOut").value || null;
-    const tasksDone       = document.getElementById("wlTasksDone").value.trim() || null;
-    const tasksRemaining = document.getElementById("wlTasksRemaining").value.trim() || null;
-    const memo             = document.getElementById("wlMemo").value.trim() || null;
-
-    const btn = document.getElementById("wlSubmitBtn");
+    const btn = document.getElementById(type === "in" ? "wlClockInBtn" : "wlClockOutBtn");
     btn.disabled = true;
     try {
-      let res;
-      if (currentEditId) {
-        res = await fetch("/api/crm?action=work-logs", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: currentEditId, clock_in: clockIn, clock_out: clockOut,
-            tasks_done: tasksDone, tasks_remaining: tasksRemaining, memo,
-          }),
-        });
-      } else {
-        res = await fetch("/api/crm?action=work-logs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            user_name: userName, date: todayStr(), clock_in: clockIn, clock_out: clockOut,
-            tasks_done: tasksDone, tasks_remaining: tasksRemaining, memo,
-          }),
-        });
-      }
+      const timeValue = nowHm();
+      const body = currentEditId
+        ? { id: currentEditId }
+        : { user_name: userName, date: todayStr() };
+      if (type === "in") body.clock_in = timeValue; else body.clock_out = timeValue;
+
+      const res = await fetch("/api/crm?action=work-logs", {
+        method: currentEditId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "保存に失敗しました");
-      showToast("✓ 記録しました", "success");
+      showToast(type === "in" ? `🟢 出勤（${timeValue}）を記録しました` : `🔴 退勤（${timeValue}）を記録しました`, "success");
       await loadTodayLogs();
     } catch (err) {
-      showToast("保存に失敗しました: " + esc(err.message), "error");
+      showToast("記録に失敗しました: " + esc(err.message), "error");
     } finally {
       btn.disabled = false;
+    }
+  }
+
+  // ===== チャット風入力(AI解析) =====
+  let recognition = null;
+  let isRecording = false;
+
+  // ブラウザによってはマイク許可拒否時にonerror/onendが確実に発火しない既知の実装差異があるため、
+  // toggleVoiceInput側のtry/catchと合わせて二重に状態をリセットできるようにしている
+  const SPEECH_ERROR_MESSAGES = {
+    "not-allowed":      "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
+    "permission-denied": "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
+    "no-speech":        "音声が検出されませんでした。もう一度お試しください。",
+    "audio-capture":     "マイクが見つかりませんでした。マイクが接続されているか確認してください。",
+    "network":            "ネットワークエラーにより音声入力に失敗しました。",
+    "aborted":            "音声入力が中断されました。",
+  };
+
+  function initSpeechRecognition() {
+    const micBtn = document.getElementById("wlMicBtn");
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) {
+      micBtn.hidden = true;
+      return;
+    }
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = "ja-JP";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const ta = document.getElementById("wlChatText");
+      ta.value = ta.value.trim() ? `${ta.value.trim()} ${transcript}` : transcript;
+    };
+    recognition.onend = () => {
+      isRecording = false;
+      micBtn.classList.remove("recording");
+    };
+    recognition.onerror = (event) => {
+      isRecording = false;
+      micBtn.classList.remove("recording");
+      showToast(SPEECH_ERROR_MESSAGES[event.error] || "音声入力に失敗しました", "error");
+    };
+  }
+
+  function toggleVoiceInput() {
+    if (!recognition) return;
+    const micBtn = document.getElementById("wlMicBtn");
+    if (isRecording) {
+      try {
+        recognition.stop();
+      } catch (e) {
+        // 実際のエンジン状態とisRecordingがずれてstop()が失敗した場合の保険:
+        // 強制的にUIをリセットし、ボタンが「録音中」表示のまま固まらないようにする
+        isRecording = false;
+        micBtn.classList.remove("recording");
+      }
+    } else {
+      try {
+        recognition.start();
+        isRecording = true;
+        micBtn.classList.add("recording");
+      } catch (e) {
+        isRecording = false;
+        micBtn.classList.remove("recording");
+        showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
+      }
+    }
+  }
+
+  // 「記録する」: AI(Claude)にテキストを解析させ、tasks_done/tasks_remainingを
+  // 整形させたうえでそのままwork-logsに保存する(退勤発言が検出されればclock_outも記録)
+  async function submitChatRecord() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    const text = document.getElementById("wlChatText").value.trim();
+    if (!text) { showToast("内容を入力してください", "error"); return; }
+
+    const existing = todayLogs.find(l => l.user_name === userName);
+    const btn = document.getElementById("wlChatSubmitBtn");
+    btn.disabled = true;
+    btn.textContent = "解析中...";
+    try {
+      const parseRes = await fetch("/api/crm?action=parse-work-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          existing_tasks_done: existing ? existing.tasks_done : "",
+          existing_tasks_remaining: existing ? existing.tasks_remaining : "",
+        }),
+      });
+      const parsed = await parseRes.json();
+      if (!parseRes.ok) throw new Error(parsed.error || "解析に失敗しました");
+      if (parsed.configured === false) {
+        showToast("AI解析機能が設定されていません（ANTHROPIC_API_KEY未設定）。管理者にご確認ください。", "warning");
+        return;
+      }
+
+      const saveBody = existing
+        ? { id: existing.id, tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining }
+        : { user_name: userName, date: todayStr(), tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining };
+      if (parsed.detected_clock_out) saveBody.clock_out = parsed.detected_clock_out;
+
+      const saveRes = await fetch("/api/crm?action=work-logs", {
+        method: existing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saveBody),
+      });
+      const saved = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saved.error || "保存に失敗しました");
+
+      document.getElementById("wlChatText").value = "";
+      showToast(`記録しました: ${esc(truncate(parsed.tasks_done || "", 60))}`, "success");
+      await loadTodayLogs();
+    } catch (err) {
+      showToast("記録に失敗しました: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "記録する";
     }
   }
 
@@ -476,7 +627,7 @@
       return;
     }
     renderTeamStatus();
-    syncFormWithSelectedUser();
+    refreshCurrentUserState();
   }
 
   function renderTeamStatus() {
@@ -575,6 +726,7 @@
     }
   }
 
+  initSpeechRecognition();
   loadTodayLogs();
   initScrollReveal();
 </script>

@@ -11,6 +11,7 @@ const submitFormHandler = require("./submit-form");
 const sendEmailHandler = require("./send-email");
 const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
+const { parseWorkLogText } = require("../lib/work-log-parser");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -38,8 +39,9 @@ module.exports = async function handler(req, res) {
     case "saved-content": return handleSavedContent(req, res);
     case "sender-accounts": return handleSenderAccounts(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
+    case "parse-work-log":  return handleParseWorkLog(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log）を指定してください" });
   }
 };
 
@@ -2043,4 +2045,26 @@ async function handleWorkLogs(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / PATCHのみ対応しています" });
+}
+
+// ==================== parse-work-log (稼働ログのAIチャット解析) ====================
+
+async function handleParseWorkLog(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
+  }
+  const { text, existing_tasks_done, existing_tasks_remaining } = req.body || {};
+  if (!text || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "text（文字列）が必要です" });
+  }
+  try {
+    const result = await parseWorkLogText({
+      text,
+      existingTasksDone: existing_tasks_done,
+      existingTasksRemaining: existing_tasks_remaining,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ error: `解析エラー: ${err.message}` });
+  }
 }
