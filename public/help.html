@@ -46,7 +46,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -72,6 +82,7 @@
 
   /* Layout */
   .help-layout {
+    animation: fadeInUp 0.4s ease-out;
     display: flex;
     gap: 32px;
     align-items: flex-start;
@@ -158,7 +169,7 @@
   .faq-item {
     border: 1px solid var(--gray-200); border-radius: var(--radius-md);
     padding: 16px 20px; margin-bottom: 12px;
-    transition: border-color 150ms;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
   }
   .faq-item:last-child { margin-bottom: 0; }
   .faq-item:hover { border-color: var(--green-100); }
@@ -321,7 +332,7 @@
   <!-- Main -->
   <main class="help-main">
 
-    <section class="help-section" id="intro">
+    <section class="help-section reveal-on-scroll" id="intro">
       <h2>はじめに</h2>
       <p>LOCLE営業ツールは「企業リサーチ → フォーム/メール送信 → CRM管理 → 反応分析」を一気通貫で自動化するツールです。</p>
       <p><strong>基本的な使い方の流れ：</strong></p>
@@ -347,7 +358,7 @@
       <p>さらにその下には「未完了タスク」一覧が表示され、CRMのタスクタブに登録したタスクのうち期限が今日以前で未完了のものが、タスク内容・関連企業・期限とともに一覧表示されます（対象がない場合は「期限切れのタスクはありません ✓」と表示されます）。</p>
     </section>
 
-    <section class="help-section" id="companies">
+    <section class="help-section reveal-on-scroll" id="companies">
       <h2>企業リストページ</h2>
 
       <p class="sub-h3"><i data-lucide="plus-circle"></i>企業の追加方法</p>
@@ -439,7 +450,7 @@
       </ul>
     </section>
 
-    <section class="help-section" id="variants">
+    <section class="help-section reveal-on-scroll" id="variants">
       <h2>メッセージ管理ページ</h2>
 
       <p class="sub-h3"><i data-lucide="file-text"></i>バリアントの作成方法</p>
@@ -467,7 +478,7 @@
       <p>あらかじめ<a href="#crm">CRMページの「添付ファイル」タブ</a>でファイル（3MB以下）をアップロードしておくと、バリアント作成フォームの「添付ファイル」セレクトから紐付けられます。添付ファイルを紐付けたバリアントでメールを送信すると、そのファイルが自動的に添付されます（対応チャネルはメールのみです）。</p>
     </section>
 
-    <section class="help-section" id="send">
+    <section class="help-section reveal-on-scroll" id="send">
       <h2>送信管理ページ</h2>
 
       <p class="sub-h3"><i data-lucide="file-text"></i>下書き生成の手順</p>
@@ -508,7 +519,7 @@
       <p>これによりGmail上で営業メールを送信状況・反応内容ごとに整理・検索しやすくなります。ラベルはツール側で自動的に作成されるため、事前準備は不要です。</p>
     </section>
 
-    <section class="help-section" id="crm">
+    <section class="help-section reveal-on-scroll" id="crm">
       <h2>CRMページ</h2>
       <p>CRMページ（<span class="code-inline">crm.html</span>）では、企業リサーチ・送信のあとの商談化・フォローアップを一元管理できます。8つのタブで構成されています。</p>
 
@@ -537,7 +548,7 @@
       <p>1日の送信上限・送信間隔・営業お断りサイトの自動スキップを設定します。詳しくは<a href="#settings">「設定」セクション</a>をご覧ください。</p>
     </section>
 
-    <section class="help-section" id="reports">
+    <section class="help-section reveal-on-scroll" id="reports">
       <h2>レポートページ</h2>
       <p>レポートページ（<span class="code-inline">reports.html</span>）では、送信からパイプラインまでの成果をまとめて確認できます。分析ページの「詳細レポートはこちら」リンクからも移動できます。</p>
       <ul>
@@ -549,7 +560,7 @@
       </ul>
     </section>
 
-    <section class="help-section" id="analytics">
+    <section class="help-section reveal-on-scroll" id="analytics">
       <h2>分析ページ</h2>
 
       <p class="sub-h3"><i data-lucide="bar-chart-2"></i>バリアント別集計の見方</p>
@@ -574,7 +585,7 @@
       <p>ページ上部の「詳細レポートはこちら」リンクと、サマリーカードの下にある月別送信数の簡易グラフから、より詳しい集計が見られる<a href="#reports">レポートページ</a>に移動できます。</p>
     </section>
 
-    <section class="help-section" id="settings">
+    <section class="help-section reveal-on-scroll" id="settings">
       <h2>設定</h2>
       <p>CRMページの「設定」タブ（<span class="code-inline">crm.html</span> → ⚙️ 設定）から、送信に関する以下の項目を調整できます。変更後は「保存」ボタンを押してください。保存すると画面右上に「設定を保存しました」という通知が表示されます。</p>
       <ul>
@@ -585,7 +596,7 @@
       <p>これらの設定は送信APIの内部でチェックされるため、送信管理ページ・企業リストページ・CRMのどこから送信しても共通して適用されます。</p>
     </section>
 
-    <section class="help-section" id="faq">
+    <section class="help-section reveal-on-scroll" id="faq">
       <h2>よくある質問</h2>
 
       <div class="faq-item">
@@ -711,6 +722,8 @@
     });
   }, { rootMargin: "-20% 0px -70% 0px" });
   sections.forEach(s => observer.observe(s));
+
+  initScrollReveal();
 </script>
 </body>
 </html>

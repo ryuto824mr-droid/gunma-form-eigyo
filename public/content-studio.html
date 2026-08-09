@@ -47,7 +47,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -316,13 +326,13 @@
 
   <div id="csMainContent">
 
-  <div class="cs-company-bar">
+  <div class="cs-company-bar reveal-on-scroll">
     <label for="csCompanySelect">企業</label>
     <select id="csCompanySelect" onchange="onCompanyChange()"><option value="">読み込み中...</option></select>
   </div>
 
   <div class="cs-layout">
-    <div class="cs-panel">
+    <div class="cs-panel reveal-on-scroll">
       <div class="cs-mode-tabs">
         <button type="button" class="cs-mode-btn active" data-type="reels_script" onclick="selectContentType('reels_script')">
           <span class="cs-mode-icon">📱</span>Reels台本
@@ -361,12 +371,12 @@
       <button type="button" class="btn-primary" id="csGenBtn" onclick="generateContent()">生成する</button>
     </div>
 
-    <div class="cs-output" id="csOutput">
+    <div class="cs-output reveal-on-scroll" id="csOutput">
       <div class="cs-output-empty">企業とタイプを選んで「生成する」をクリック</div>
     </div>
   </div>
 
-  <div class="cs-saved-section">
+  <div class="cs-saved-section reveal-on-scroll">
     <p class="section-title">保存済みコンテンツ</p>
     <div class="cs-saved-list" id="csSavedList">
       <p class="cs-empty-note">企業を選択してください</p>
@@ -640,6 +650,7 @@
   }
 
   initContentStudio();
+  initScrollReveal();
 </script>
 </body>
 </html>

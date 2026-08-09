@@ -167,6 +167,47 @@ function initProjectBadge() {
   };
 }
 
+// スクロールすると id="headerLogo" 等を含むヘッダー(.page-header)の影を強調する。
+// app.htmlは常に固定のダークヒーローなので対象外にしても実害はないが、
+// .page-headerが無いページでは何もしないため呼び出しても安全。
+function initHeaderScrollShadow() {
+  var header = document.querySelector(".page-header");
+  if (!header) return;
+  function onScroll() {
+    header.classList.toggle("scrolled", window.scrollY > 8);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+}
+
+// カード・セクション要素をスクロールで画面内に入ったタイミングでfadeInさせる共通ユーティリティ。
+// 対象は class="reveal-on-scroll" を付けた要素。IntersectionObserver未対応環境や、
+// 万一observerが発火しないケースでも必ず表示されるよう、一定時間後に強制表示するフォールバックを
+// 用意している(要素が消えたままになるのを防ぐため)。動的に描画されたカードを後から対象に
+// 加えたい場合は、描画後に再度この関数を呼び出せば良い(既にin-view済みの要素には影響しない)。
+function initScrollReveal() {
+  var els = document.querySelectorAll(".reveal-on-scroll:not(.in-view)");
+  if (!els.length) return;
+  if (typeof IntersectionObserver === "undefined") {
+    for (var i = 0; i < els.length; i++) els[i].classList.add("in-view");
+    return;
+  }
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("in-view");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  for (var j = 0; j < els.length; j++) observer.observe(els[j]);
+  setTimeout(function () {
+    var remaining = document.querySelectorAll(".reveal-on-scroll:not(.in-view)");
+    for (var k = 0; k < remaining.length; k++) remaining[k].classList.add("in-view");
+  }, 2500);
+}
+
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", initProjectBadge);
+  document.addEventListener("DOMContentLoaded", initHeaderScrollShadow);
 }

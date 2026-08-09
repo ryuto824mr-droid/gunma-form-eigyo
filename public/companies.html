@@ -54,7 +54,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -175,7 +185,7 @@
   input[type="text"], input[type="url"], input[type="email"] {
     padding: 8px 12px; font-size: 14px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    background: var(--white); color: var(--gray-900); transition: border-color 150ms;
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms ease, box-shadow 150ms ease;
   }
   input[type="text"]:focus, input[type="url"]:focus, input[type="email"]:focus {
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
@@ -696,7 +706,7 @@
   .search-form-field input[type="text"] {
     width: 100%; padding: 8px 12px; font-size: 14px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    background: var(--white); color: var(--gray-900); transition: border-color 150ms;
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms ease, box-shadow 150ms ease;
   }
   .search-form-field select:focus,
   .search-form-field input[type="text"]:focus {
@@ -1034,7 +1044,7 @@
     <button onclick="dismissUsageReminder()">今月は確認済み ✓</button>
   </div>
 
-  <section class="discover-section">
+  <section class="discover-section reveal-on-scroll">
     <h2>企業を自動検索</h2>
     <div class="search-form-grid" id="searchFormLocle">
       <div class="search-form-field">
@@ -1246,7 +1256,7 @@
     <div id="discoverResult"></div>
   </section>
 
-  <section class="add-section">
+  <section class="add-section reveal-on-scroll">
     <h2>企業を追加</h2>
     <div class="add-row">
       <input type="text" name="name" id="inputName" placeholder="企業名" />
@@ -1259,7 +1269,7 @@
     <div class="add-msg" id="addMsg"></div>
   </section>
 
-  <section class="import-section">
+  <section class="import-section reveal-on-scroll">
     <h2>CSVで一括インポート</h2>
     <div class="import-row">
       <input type="file" id="csvFile" accept=".csv" />
@@ -1271,7 +1281,7 @@
     <div class="import-msg" id="importMsg"></div>
   </section>
 
-  <section class="import-section">
+  <section class="import-section reveal-on-scroll">
     <h2>URLを一括貼り付け</h2>
     <textarea class="bulk-paste-area" id="bulkPasteArea" placeholder="https://example1.co.jp&#10;https://example2.co.jp&#10;..."></textarea>
     <div class="bulk-paste-row">
@@ -1283,7 +1293,7 @@
     <div class="bulk-paste-msg" id="bulkPasteMsg"></div>
   </section>
 
-  <section class="table-section">
+  <section class="table-section reveal-on-scroll">
     <div class="bulk-toolbar">
       <h2>登録企業一覧<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
       <span class="tooltip-wrap">
@@ -4068,6 +4078,7 @@
   // ===== End Spotlight Tour =====
 
   lucide.createIcons();
+  initScrollReveal();
   startTour([
     { targetSelector: ".add-section",      title: "企業を追加する",         description: "企業名とURLを入力して追加します。追加するとすぐ自動でリサーチが始まります。CSVで一括インポートも可能です。",        position: "bottom" },
     { targetSelector: "#bulkBtn",          title: "一括リサーチ",           description: "未リサーチの企業を全社まとめて自動解析します。まとめて登録してからこのボタンを押すのがおすすめです。",              position: "bottom" },

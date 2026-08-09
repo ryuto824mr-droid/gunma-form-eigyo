@@ -48,7 +48,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -87,7 +97,7 @@
   input[type="url"] {
     width: 100%; padding: 8px 12px; font-size: 14px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    transition: border-color 150ms; background: var(--white); color: var(--gray-900);
+    transition: border-color 150ms ease, box-shadow 150ms ease; background: var(--white); color: var(--gray-900);
   }
   input[type="url"]:focus {
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
@@ -251,7 +261,7 @@
   </nav>
 </header>
 <div class="main-content">
-  <div class="page-card">
+  <div class="page-card reveal-on-scroll">
     <h2>フォーム解析テスト</h2>
     <p>企業サイトのURLを入力すると、お問い合わせフォームを探してフィールド構成と自動化可否を判定します。</p>
     <input type="url" id="urlInput" placeholder="https://example.co.jp" />
@@ -340,6 +350,7 @@
   });
 
   lucide.createIcons();
+  initScrollReveal();
 </script>
 </body>
 </html>

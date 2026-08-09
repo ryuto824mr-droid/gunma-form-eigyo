@@ -47,7 +47,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -106,7 +116,10 @@
     cursor: pointer; font-size: 13px; font-family: inherit; font-weight: 600;
     transition: all 150ms; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
   }
-  .btn-add:hover { background: linear-gradient(135deg, var(--green-600), var(--green-800)); transform: translateY(-1px); }
+  .btn-add:hover {
+    background: linear-gradient(135deg, var(--green-600), var(--green-800));
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--green-500-rgb), 0.4);
+  }
   .btn-add svg { width: 14px; height: 14px; }
 
   /* Pipeline summary bar */
@@ -175,6 +188,7 @@
   }
   .crm-table td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
   .crm-table tr:last-child td { border-bottom: none; }
+  .crm-table tbody tr:hover td { background: var(--green-50); transition: background 100ms ease; }
   .crm-table .empty-row td { text-align: center; color: var(--gray-400); padding: 24px; }
   .btn-row-delete {
     padding: 4px 8px; font-size: 11px; border-radius: var(--radius-sm);
@@ -336,7 +350,7 @@
   .form-group textarea {
     padding: 8px 12px; font-size: 14px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    background: var(--white); color: var(--gray-900); transition: border-color 150ms; width: 100%;
+    background: var(--white); color: var(--gray-900); transition: border-color 150ms ease, box-shadow 150ms ease; width: 100%;
   }
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
@@ -578,7 +592,7 @@
   </div>
 
   <!-- パイプライン -->
-  <section class="crm-panel active" id="panel-pipeline">
+  <section class="crm-panel active reveal-on-scroll" id="panel-pipeline">
     <div class="panel-toolbar">
       <div>
         <h2>パイプライン</h2>
@@ -604,7 +618,7 @@
   </section>
 
   <!-- コンタクト -->
-  <section class="crm-panel" id="panel-contacts">
+  <section class="crm-panel reveal-on-scroll" id="panel-contacts">
     <div class="panel-toolbar">
       <div>
         <h2>コンタクト</h2>
@@ -629,7 +643,7 @@
   </section>
 
   <!-- 活動履歴 -->
-  <section class="crm-panel" id="panel-activities">
+  <section class="crm-panel reveal-on-scroll" id="panel-activities">
     <div class="panel-toolbar">
       <div>
         <h2>活動履歴</h2>
@@ -641,7 +655,7 @@
   </section>
 
   <!-- タスク -->
-  <section class="crm-panel" id="panel-tasks">
+  <section class="crm-panel reveal-on-scroll" id="panel-tasks">
     <div class="panel-toolbar">
       <div>
         <h2>タスク</h2>
@@ -661,7 +675,7 @@
   </section>
 
   <!-- 除外ドメイン -->
-  <section class="crm-panel" id="panel-excluded">
+  <section class="crm-panel reveal-on-scroll" id="panel-excluded">
     <div class="panel-toolbar">
       <div>
         <h2>除外ドメイン</h2>
@@ -682,7 +696,7 @@
   </section>
 
   <!-- A/Bテスト -->
-  <section class="crm-panel" id="panel-abtests">
+  <section class="crm-panel reveal-on-scroll" id="panel-abtests">
     <div class="panel-toolbar">
       <div>
         <h2>A/Bテスト</h2>
@@ -699,7 +713,7 @@
   </section>
 
   <!-- 添付ファイル -->
-  <section class="crm-panel" id="panel-attachments">
+  <section class="crm-panel reveal-on-scroll" id="panel-attachments">
     <div class="panel-toolbar">
       <div>
         <h2>添付ファイル</h2>
@@ -720,7 +734,7 @@
   </section>
 
   <!-- 設定 -->
-  <section class="crm-panel" id="panel-settings">
+  <section class="crm-panel reveal-on-scroll" id="panel-settings">
     <div class="panel-toolbar">
       <div>
         <h2>設定</h2>
@@ -1063,6 +1077,7 @@
       loadVariants(), loadAbTests(), loadSettings(), loadAttachments(), loadSenderAccounts(),
     ]);
     lucide.createIcons();
+    initScrollReveal();
   }
 
   async function loadVariants() {
@@ -1136,11 +1151,27 @@
     return `¥${Math.round(amount / 10000).toLocaleString()}万円`;
   }
 
+  // 数値をカウントアップさせながら表示する共通ヘルパー。formatFnは(現在値, 最終フレームか)を受け取り
+  // 表示テキストを返す。最終フレームでは丸め誤差の無いtargetそのものを渡すため、
+  // 完了後の表示は非アニメーション時と完全に同じ文字列になる。
+  function animateNumber(el, target, formatFn) {
+    const duration = 600;
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const isFinal = t >= 1;
+      el.textContent = formatFn(isFinal ? target : target * eased, isFinal);
+      if (!isFinal) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   function renderPipelineSummary() {
     if (!pipelineStats) return;
-    document.getElementById("summaryTotalPipeline").textContent = formatManYen(pipelineStats.total_pipeline);
-    document.getElementById("summaryWonCount").textContent = `${pipelineStats.won_count}件`;
-    document.getElementById("summaryWinRate").textContent = `${pipelineStats.win_rate}%`;
+    animateNumber(document.getElementById("summaryTotalPipeline"), pipelineStats.total_pipeline, (v) => formatManYen(v));
+    animateNumber(document.getElementById("summaryWonCount"), pipelineStats.won_count, (v) => `${Math.round(v)}件`);
+    animateNumber(document.getElementById("summaryWinRate"), pipelineStats.win_rate, (v, isFinal) => `${isFinal ? v : v.toFixed(1)}%`);
   }
 
   function renderKanban() {

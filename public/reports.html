@@ -47,7 +47,17 @@
     border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
     padding: 0 24px; display: flex; align-items: center; gap: 16px;
     height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
   }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  /* スクロールで画面内に入ったカード・セクションをfadeInさせる共通クラス */
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
   .page-header h1 {
     margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
     flex-shrink: 0; display: flex; align-items: center; gap: 6px;
@@ -312,7 +322,7 @@
   </div>
 
   <!-- セクション1: 送信パフォーマンス -->
-  <section class="stat-section" id="section-sends">
+  <section class="stat-section reveal-on-scroll" id="section-sends">
     <h2>送信パフォーマンス</h2>
     <p class="section-sub">過去6ヶ月の月別送信数・反応数</p>
     <div class="report-row">
@@ -337,7 +347,7 @@
   </section>
 
   <!-- セクション2: チャネル別内訳 -->
-  <section class="stat-section">
+  <section class="stat-section reveal-on-scroll">
     <h2>チャネル別内訳</h2>
     <p class="section-sub">フォーム送信とメール送信の比率</p>
     <div class="report-row">
@@ -349,7 +359,7 @@
   </section>
 
   <!-- セクション3: バリアント別パフォーマンス -->
-  <section class="stat-section">
+  <section class="stat-section reveal-on-scroll">
     <h2>バリアント別パフォーマンス</h2>
     <p class="section-sub">反応率の高い上位5件</p>
     <div class="chart-wrap"><canvas id="variantChart"></canvas></div>
@@ -357,7 +367,7 @@
   </section>
 
   <!-- セクション4: パイプライン価値 -->
-  <section class="stat-section" id="section-pipeline">
+  <section class="stat-section reveal-on-scroll" id="section-pipeline">
     <h2>パイプライン価値</h2>
     <p class="section-sub">ステージ別の商談金額合計</p>
     <div class="report-row">
@@ -378,7 +388,7 @@
   </section>
 
   <!-- セクション5: 月次トレンド -->
-  <section class="stat-section">
+  <section class="stat-section reveal-on-scroll">
     <h2>月次トレンド</h2>
     <p class="section-sub">過去6ヶ月の成約・失注の推移</p>
     <div class="report-row">
@@ -395,7 +405,7 @@
   </section>
 
   <!-- セクション6: 反応の詳細分析 -->
-  <section class="stat-section" id="section-response-detail">
+  <section class="stat-section reveal-on-scroll" id="section-response-detail">
     <h2>反応の詳細分析</h2>
     <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向</p>
 
@@ -445,6 +455,19 @@
   let weekdayChartInstance = null;
   let hourChartInstance = null;
   let lastReportData = null;
+
+  function animateCount(el, target, isFloat = false, suffix = "") {
+    const duration = 600;
+    const start = performance.now();
+    function step(now) {
+      const t     = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const cur   = target * eased;
+      el.textContent = (isFloat ? cur.toFixed(1) : Math.round(cur)) + suffix;
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
 
   const BASE_TITLE = document.title;
 
@@ -724,7 +747,7 @@
     }
     canvas.hidden = false;
     emptyEl.hidden = true;
-    avgEl.textContent = `${Number(avgResponseDays || 0).toFixed(1)}日`;
+    animateCount(avgEl, Number(avgResponseDays || 0), true, "日");
 
     const labels = ["興味あり", "質問", "お断り", "その他"];
     const values = [stats.interested, stats.question, stats.declined, stats.other];
@@ -992,6 +1015,7 @@
   // ===== End Spotlight Tour =====
 
   lucide.createIcons();
+  initScrollReveal();
   updateProjectDisplay();
   loadReports();
   startTour([
