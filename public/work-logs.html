@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>稼働管理 - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<script src="/project-context.js"></script>
+<script>applyProjectTheme();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .container { animation: fadeInUp 0.4s ease-out; max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+
+  .page-header {
+    background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+    border-bottom: none; box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+    transition: box-shadow 200ms ease;
+  }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  #headerLogo, .project-badge-nav { opacity: 0; animation: headerFadeIn 0.5s ease 0.1s forwards; }
+  @keyframes headerFadeIn { to { opacity: 1; } }
+
+  .reveal-on-scroll { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal-on-scroll.in-view { opacity: 1; transform: translateY(0); }
+
+  input, select, textarea { transition: border-color 150ms ease, box-shadow 150ms ease; }
+  .page-header h1 {
+    margin: 0; font-size: 15px; font-weight: 600; color: var(--white);
+    flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; flex-wrap: wrap; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav a.active {
+    color: white; font-weight: 600;
+    background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
+  }
+  .project-badge-nav {
+    border: none; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    color: white; cursor: pointer; font-family: inherit; white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15); transition: opacity 150ms;
+  }
+  .project-badge-nav:hover { opacity: 0.85; }
+
+  .wl-lead { font-size: 13px; color: var(--gray-500); margin: 0 0 20px; }
+
+  .wl-section { background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; box-shadow: var(--shadow-sm); }
+  .wl-section-title { font-size: 18px; font-weight: 700; color: var(--gray-900); border-left: 3px solid var(--green-500); padding-left: 12px; margin: 0 0 18px; }
+
+  .wl-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .wl-form-group { display: flex; flex-direction: column; gap: 6px; }
+  .wl-form-group.full { grid-column: 1 / -1; }
+  .wl-form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .wl-form-group input, .wl-form-group select, .wl-form-group textarea {
+    padding: 9px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); width: 100%;
+  }
+  .wl-form-group textarea { resize: vertical; min-height: 70px; }
+  .wl-form-group input:focus, .wl-form-group select:focus, .wl-form-group textarea:focus {
+    outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
+  }
+
+  .btn-primary {
+    padding: 10px 22px; background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
+    color: var(--white); border: none; border-radius: var(--radius-sm);
+    cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+    transition: all 150ms ease;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--green-600), var(--green-800));
+    transform: translateY(-1px); box-shadow: 0 6px 16px rgba(var(--green-500-rgb), 0.4);
+  }
+  .btn-primary:disabled { background: var(--gray-300); box-shadow: none; cursor: not-allowed; transform: none; }
+
+  .wl-team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .wl-team-card { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-md); padding: 14px 16px; }
+  .wl-team-card.empty { opacity: 0.6; }
+  .wl-team-name { font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
+  .wl-team-time { font-size: 13px; color: var(--gray-700); }
+  .wl-team-hours { font-size: 12px; color: var(--green-700); font-weight: 700; margin: 4px 0; }
+  .wl-team-tasks { font-size: 12px; color: var(--gray-500); line-height: 1.6; white-space: pre-wrap; }
+  .wl-team-empty { font-size: 13px; color: var(--gray-400); font-style: italic; margin-top: 4px; }
+
+  .wl-summary-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .wl-summary-controls .wl-form-group { min-width: 200px; margin: 0; }
+  .wl-period-toggle { display: flex; gap: 6px; }
+  .wl-period-btn {
+    padding: 8px 18px; font-size: 13px; border: 1px solid var(--gray-200);
+    background: var(--white); color: var(--gray-700); border-radius: 999px;
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .wl-period-btn.active { background: var(--green-500); border-color: var(--green-500); color: white; font-weight: 600; }
+
+  .wl-summary-table-wrap { overflow-x: auto; }
+  .wl-summary-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px; }
+  .wl-summary-table th {
+    background: var(--gray-50); text-align: left; padding: 8px 12px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--gray-500); border-bottom: 2px solid var(--gray-200);
+  }
+  .wl-summary-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
+  .wl-summary-table .empty-row td { text-align: center; color: var(--gray-400); padding: 24px; }
+  .wl-summary-total { font-size: 14px; font-weight: 700; color: var(--green-700); margin-top: 12px; text-align: right; }
+
+  @media (max-width: 700px) {
+    .page-header { padding: 0 12px; }
+    .page-nav { overflow-x: auto; padding-bottom: 2px; }
+    .page-header h1 { font-size: 16px; }
+    .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
+    .container { padding: 16px 8px; }
+    .wl-section { padding: 18px 14px; }
+    .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
+  }
+
+  /* Toast notifications */
+  .toast-container {
+    position: fixed; top: 72px; right: 16px; z-index: 9999;
+    display: flex; flex-direction: column; gap: 8px; max-width: 360px;
+  }
+  .toast {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 12px 16px; border-radius: 10px; box-shadow: var(--shadow-lg);
+    font-size: 13px; line-height: 1.6; animation: slideInRight 0.3s ease;
+    pointer-events: auto;
+  }
+  .toast.success { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
+  .toast.error   { background: #fff5f5; border: 1px solid #fca5a5; color: #dc2626; }
+  .toast.warning { background: #fffbeb; border: 1px solid #fcd34d; color: #b45309; }
+  .toast.info    { background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-700); }
+  .toast-icon { flex-shrink: 0; font-size: 15px; }
+  .toast-body { flex: 1; }
+  .toast-title { font-weight: 600; margin-bottom: 2px; }
+  .toast-close { background: none; border: none; cursor: pointer; opacity: 0.5; font-size: 16px; padding: 0 0 0 8px; }
+  .toast-close:hover { opacity: 1; }
+
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: background 150ms; flex-shrink: 0; margin-left: 6px;
+  }
+  .btn-theme-toggle:hover { background: rgba(255,255,255,0.28); }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+      --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+      --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+    }
+    body { background: #0f172a; }
+    .page-header { border-bottom-color: #334155; }
+    input, select, textarea { background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important; }
+    input::placeholder, textarea::placeholder { color: #475569 !important; }
+    .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+    .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
+  }
+  html.dark {
+    --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+    --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+    --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.22);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.26);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.4);
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .page-header { border-bottom-color: #334155; }
+  html.dark input, html.dark select, html.dark textarea { background: #1e293b !important; color: #f1f5f9 !important; border-color: #334155 !important; }
+  html.dark input::placeholder, html.dark textarea::placeholder { color: #475569 !important; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" id="headerLogo" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <button class="project-badge-nav" id="projectBadge" title="クリックしてプロジェクトを切り替え"></button>
+  <nav class="page-nav">
+    <a href="/home.html" id="navHomeLink">ホーム</a>
+    <a href="/companies.html">企業リスト</a>
+    <a href="/variants.html">メッセージ管理</a>
+    <a href="/send.html">送信管理</a>
+    <a href="/analytics.html">分析</a>
+    <a href="/crm.html">CRM</a>
+    <a href="/work-logs.html" class="active">稼働管理</a>
+    <a href="/content-studio.html" class="content-studio-only" hidden>コンテンツ制作</a>
+    <a href="/reports.html">レポート</a>
+    <a href="/help.html">ヘルプ</a>
+    <a href="/index.html" target="_blank">デモ</a>
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+
+  <p class="wl-section-title" style="border:none; padding:0; font-size:20px;">稼働管理</p>
+  <p class="wl-lead">出退勤・稼働時間はLOCLE / 群馬お仕事図鑑に関わらず、1日1レコードで共通管理します。</p>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">本日の稼働記録</p>
+    <div class="wl-form-grid">
+      <div class="wl-form-group">
+        <label for="wlNameSelect">氏名</label>
+        <select id="wlNameSelect" onchange="onNameSelectChange()">
+          <option value="りゅうと">りゅうと</option>
+          <option value="宮田">宮田</option>
+          <option value="岡田">岡田</option>
+          <option value="__other__">その他</option>
+        </select>
+      </div>
+      <div class="wl-form-group" id="wlNameOtherGroup" hidden>
+        <label for="wlNameOther">氏名（その他）</label>
+        <input type="text" id="wlNameOther" placeholder="氏名を入力" oninput="onOtherNameInput()">
+      </div>
+      <div class="wl-form-group">
+        <label for="wlClockIn">出勤時刻</label>
+        <input type="time" id="wlClockIn">
+      </div>
+      <div class="wl-form-group">
+        <label for="wlClockOut">退勤時刻</label>
+        <input type="time" id="wlClockOut">
+      </div>
+      <div class="wl-form-group full">
+        <label for="wlTasksDone">やったこと</label>
+        <textarea id="wlTasksDone" placeholder="例: LOCLE-企業リサーチ20社、お仕事図鑑-Reels台本3本作成"></textarea>
+      </div>
+      <div class="wl-form-group full">
+        <label for="wlTasksRemaining">残タスク</label>
+        <textarea id="wlTasksRemaining" placeholder="例: LOCLE-A社への返信、お仕事図鑑-SNS投稿の下書き確認"></textarea>
+      </div>
+      <div class="wl-form-group full">
+        <label for="wlMemo">メモ（任意）</label>
+        <textarea id="wlMemo" placeholder="共有事項など、あれば自由に記入してください"></textarea>
+      </div>
+    </div>
+    <button type="button" class="btn-primary" id="wlSubmitBtn" onclick="submitWorkLog()">記録する</button>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">今日のチーム状況</p>
+    <div class="wl-team-grid" id="wlTeamGrid">
+      <p style="font-size:13px; color:var(--gray-400);">読み込み中...</p>
+    </div>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">月次サマリー</p>
+    <div class="wl-summary-controls">
+      <div class="wl-form-group">
+        <label for="wlSummaryUserSelect">ユーザー</label>
+        <select id="wlSummaryUserSelect" onchange="onSummaryUserSelectChange()">
+          <option value="">選択してください</option>
+          <option value="りゅうと">りゅうと</option>
+          <option value="宮田">宮田</option>
+          <option value="岡田">岡田</option>
+          <option value="__other__">その他</option>
+        </select>
+      </div>
+      <div class="wl-form-group" id="wlSummaryUserOtherGroup" hidden>
+        <label for="wlSummaryUserOther">氏名（その他）</label>
+        <input type="text" id="wlSummaryUserOther" placeholder="氏名を入力" oninput="loadSummary()">
+      </div>
+      <div class="wl-form-group">
+        <label>期間</label>
+        <div class="wl-period-toggle">
+          <button type="button" class="wl-period-btn active" id="wlPeriodThis" onclick="setSummaryPeriod('this')">今月</button>
+          <button type="button" class="wl-period-btn" id="wlPeriodLast" onclick="setSummaryPeriod('last')">先月</button>
+        </div>
+      </div>
+    </div>
+    <div class="wl-summary-table-wrap">
+      <table class="wl-summary-table">
+        <thead><tr><th>日付</th><th>出退勤</th><th>稼働時間</th><th>やったこと</th></tr></thead>
+        <tbody id="wlSummaryBody">
+          <tr class="empty-row"><td colspan="4">ユーザーを選択してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="wl-summary-total" id="wlSummaryTotal"></p>
+  </div>
+
+</div>
+
+<script>
+  // ===== Toast notifications =====
+  function showToast(message, type = "info", duration = 4000) {
+    const icons = { success: "✓", error: "✕", warning: "⚠", info: "ℹ" };
+    const container = document.getElementById("toastContainer") || (() => {
+      const el = document.createElement("div");
+      el.id = "toastContainer";
+      el.className = "toast-container";
+      document.body.appendChild(el);
+      return el;
+    })();
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <span class="toast-icon">${icons[type] || "ℹ"}</span>
+      <span class="toast-body">${message}</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">×</button>
+    `;
+    container.appendChild(toast);
+    if (duration > 0) setTimeout(() => toast.remove(), duration);
+  }
+
+  // ===== Dark mode toggle =====
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+    updateThemeIcon();
+  }
+  function updateThemeIcon() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (!btn) return;
+    btn.textContent = document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+  updateThemeIcon();
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function truncate(s, n) {
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+  function fmtTime(t) {
+    return t ? String(t).slice(0, 5) : "--:--";
+  }
+  function todayStr() {
+    return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
+  }
+
+  const FIXED_MEMBERS = ["りゅうと", "宮田", "岡田"];
+
+  // ===== 本日の稼働記録フォーム =====
+  let todayLogs = [];
+  let currentEditId = null;
+
+  function onNameSelectChange() {
+    const isOther = document.getElementById("wlNameSelect").value === "__other__";
+    document.getElementById("wlNameOtherGroup").hidden = !isOther;
+    syncFormWithSelectedUser();
+  }
+
+  function onOtherNameInput() {
+    syncFormWithSelectedUser();
+  }
+
+  function getSelectedUserName() {
+    const sel = document.getElementById("wlNameSelect").value;
+    if (sel === "__other__") return document.getElementById("wlNameOther").value.trim();
+    return sel;
+  }
+
+  // 選択中の氏名に本日分の記録が既に存在する場合はフォームに反映し、更新モードに切り替える
+  function syncFormWithSelectedUser() {
+    const name = getSelectedUserName();
+    const existing = name ? todayLogs.find(l => l.user_name === name) : null;
+
+    document.getElementById("wlClockIn").value = existing && existing.clock_in ? fmtTime(existing.clock_in) : "";
+    document.getElementById("wlClockOut").value = existing && existing.clock_out ? fmtTime(existing.clock_out) : "";
+    document.getElementById("wlTasksDone").value = existing ? (existing.tasks_done || "") : "";
+    document.getElementById("wlTasksRemaining").value = existing ? (existing.tasks_remaining || "") : "";
+    document.getElementById("wlMemo").value = existing ? (existing.memo || "") : "";
+
+    currentEditId = existing ? existing.id : null;
+    document.getElementById("wlSubmitBtn").textContent = existing ? "更新する" : "記録する";
+  }
+
+  async function submitWorkLog() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+
+    const clockIn        = document.getElementById("wlClockIn").value || null;
+    const clockOut        = document.getElementById("wlClockOut").value || null;
+    const tasksDone       = document.getElementById("wlTasksDone").value.trim() || null;
+    const tasksRemaining = document.getElementById("wlTasksRemaining").value.trim() || null;
+    const memo             = document.getElementById("wlMemo").value.trim() || null;
+
+    const btn = document.getElementById("wlSubmitBtn");
+    btn.disabled = true;
+    try {
+      let res;
+      if (currentEditId) {
+        res = await fetch("/api/crm?action=work-logs", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: currentEditId, clock_in: clockIn, clock_out: clockOut,
+            tasks_done: tasksDone, tasks_remaining: tasksRemaining, memo,
+          }),
+        });
+      } else {
+        res = await fetch("/api/crm?action=work-logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_name: userName, date: todayStr(), clock_in: clockIn, clock_out: clockOut,
+            tasks_done: tasksDone, tasks_remaining: tasksRemaining, memo,
+          }),
+        });
+      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+      showToast("✓ 記録しました", "success");
+      await loadTodayLogs();
+    } catch (err) {
+      showToast("保存に失敗しました: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ===== 今日のチーム状況 =====
+  async function loadTodayLogs() {
+    const grid = document.getElementById("wlTeamGrid");
+    try {
+      const res = await fetch("/api/crm?action=work-logs&date=" + todayStr());
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      todayLogs = Array.isArray(data) ? data : [];
+    } catch (err) {
+      grid.innerHTML = `<p style="font-size:13px; color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+      return;
+    }
+    renderTeamStatus();
+    syncFormWithSelectedUser();
+  }
+
+  function renderTeamStatus() {
+    const grid = document.getElementById("wlTeamGrid");
+    const extraNames = [...new Set(
+      todayLogs.map(l => l.user_name).filter(n => !FIXED_MEMBERS.includes(n))
+    )];
+    const members = FIXED_MEMBERS.concat(extraNames);
+
+    grid.innerHTML = members.map(name => {
+      const log = todayLogs.find(l => l.user_name === name);
+      if (!log) {
+        return `<div class="wl-team-card empty">
+          <div class="wl-team-name">${esc(name)}</div>
+          <div class="wl-team-empty">未入力</div>
+        </div>`;
+      }
+      const hours = log.work_hours != null ? `${Number(log.work_hours).toFixed(2)}時間` : "—";
+      return `<div class="wl-team-card">
+        <div class="wl-team-name">${esc(name)}</div>
+        <div class="wl-team-time">${fmtTime(log.clock_in)} 〜 ${fmtTime(log.clock_out)}</div>
+        <div class="wl-team-hours">${hours}</div>
+        <div class="wl-team-tasks">${esc(truncate(log.tasks_done || "未入力", 60))}</div>
+      </div>`;
+    }).join("");
+  }
+
+  // ===== 月次サマリー =====
+  let summaryPeriod = "this";
+
+  function onSummaryUserSelectChange() {
+    const isOther = document.getElementById("wlSummaryUserSelect").value === "__other__";
+    document.getElementById("wlSummaryUserOtherGroup").hidden = !isOther;
+    loadSummary();
+  }
+
+  function getSummaryUserName() {
+    const sel = document.getElementById("wlSummaryUserSelect").value;
+    if (sel === "__other__") return document.getElementById("wlSummaryUserOther").value.trim();
+    return sel;
+  }
+
+  function setSummaryPeriod(period) {
+    summaryPeriod = period;
+    document.getElementById("wlPeriodThis").classList.toggle("active", period === "this");
+    document.getElementById("wlPeriodLast").classList.toggle("active", period === "last");
+    loadSummary();
+  }
+
+  function getMonthRange(which) {
+    const today = todayStr();
+    const [y, m] = today.split("-").map(Number);
+    let year = y, month = m;
+    if (which === "last") {
+      month -= 1;
+      if (month === 0) { month = 12; year -= 1; }
+    }
+    const pad = n => String(n).padStart(2, "0");
+    const from = `${year}-${pad(month)}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const to = which === "this" ? today : `${year}-${pad(month)}-${pad(lastDay)}`;
+    return { from, to };
+  }
+
+  async function loadSummary() {
+    const userName = getSummaryUserName();
+    const tbody = document.getElementById("wlSummaryBody");
+    const totalEl = document.getElementById("wlSummaryTotal");
+    if (!userName) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">ユーザーを選択してください</td></tr>';
+      totalEl.textContent = "";
+      return;
+    }
+    const { from, to } = getMonthRange(summaryPeriod);
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">読み込み中...</td></tr>';
+    try {
+      const res = await fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      const logs = Array.isArray(data.logs) ? data.logs : [];
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">記録がありません</td></tr>';
+      } else {
+        tbody.innerHTML = logs.map(l => `
+          <tr>
+            <td>${esc(l.date)}</td>
+            <td>${fmtTime(l.clock_in)} 〜 ${fmtTime(l.clock_out)}</td>
+            <td>${l.work_hours != null ? Number(l.work_hours).toFixed(2) : "—"}</td>
+            <td>${esc(truncate(l.tasks_done || "", 40))}</td>
+          </tr>`).join("");
+      }
+      totalEl.textContent = `合計稼働時間: ${Number(data.total_hours || 0).toFixed(2)} 時間`;
+    } catch (err) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="4">エラー: ${esc(err.message)}</td></tr>`;
+      totalEl.textContent = "";
+    }
+  }
+
+  loadTodayLogs();
+  initScrollReveal();
+</script>
+</body>
+</html>
