@@ -30,7 +30,16 @@
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
-  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
+  /* プロジェクト未選択のニュートラルな画面のため、ライト/ダークモードの切り替えに関わらず
+     常にダークネイビー系の背景にする(index.htmlのデモLPと同じ演出だが、緑/オレンジどちらの
+     プロジェクトカラーにも寄らない中立色にしている) */
+  body {
+    font-family: "Inter", "Noto Sans JP", sans-serif;
+    background: linear-gradient(160deg, #0a0f1a 0%, #141c2e 100%);
+    margin: 0; color: var(--gray-900); line-height: 1.6; min-height: 100vh;
+  }
+
+  #appParticleCanvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 
   @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(16px); }
@@ -63,38 +72,76 @@
     background: rgba(255,255,255,0.15); border-bottom: 2px solid white; padding-bottom: 4px;
   }
 
-  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; }
+  .container { max-width: 880px; margin: 0 auto; padding: 40px 16px; position: relative; z-index: 1; }
 
-  /* Hero: ニュートラル(プロジェクトカラーに依存しない)デザイン */
-  .hero {
-    text-align: center; padding: 56px 24px 44px;
-    background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-700) 55%, var(--gray-500) 100%);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 4px 24px rgba(var(--gray-900-rgb), 0.35);
-    margin-bottom: 32px;
+  /* Hero: ニュートラル(プロジェクトカラーに依存しない)デザイン。
+     index.htmlのヒーロー演出(白いロゴボックス+大きなキャッチコピー)を踏襲しつつ、
+     ページ全体のダークネイビー背景に直接乗せる形にしている */
+  .hero { text-align: center; padding: 64px 24px 48px; }
+  .hero-logo-box {
+    background: white; padding: 10px 20px; border-radius: 10px;
+    display: inline-block; margin-bottom: 28px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    opacity: 0; animation: heroFadeIn 0.7s ease 0.1s forwards;
   }
-  .hero-logo {
-    font-size: 56px; line-height: 1; margin-bottom: 10px;
-  }
-  .hero-subtitle {
-    font-size: 22px; font-weight: 700; color: var(--white);
-    margin-bottom: 14px; letter-spacing: -0.01em;
+  .hero-logo-box img { height: 32px; display: block; }
+  .hero-title {
+    font-size: clamp(28px, 5vw, 44px); font-weight: 800; color: white;
+    letter-spacing: -0.02em; margin: 0 0 18px; line-height: 1.3;
+    opacity: 0; animation: heroFadeIn 0.7s ease 0.35s forwards;
   }
   .hero-copy {
     font-size: 14px; color: rgba(255,255,255,0.78); line-height: 1.8;
     max-width: 480px; margin: 0 auto;
+    opacity: 0; animation: heroFadeIn 0.7s ease 0.6s forwards;
   }
+  @keyframes heroFadeIn { to { opacity: 1; } }
 
   /* Project select */
   .project-select-section { margin-bottom: 12px; }
+  .project-select-title {
+    font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.92);
+    border-left: 3px solid rgba(255,255,255,0.35); padding-left: 12px;
+    margin: 0 0 16px;
+  }
   .project-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   @media (max-width: 600px) { .project-select-grid { grid-template-columns: 1fr; } }
   .project-card {
     position: relative; background: var(--white); border: 2px solid var(--gray-200);
-    border-radius: var(--radius-lg); padding: 20px; cursor: pointer; transition: all 150ms;
+    border-radius: var(--radius-lg); padding: 20px; cursor: pointer;
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
     box-shadow: var(--shadow-sm);
+    opacity: 0; transform: translateY(16px);
+    animation: cardFadeIn 0.6s ease forwards;
   }
-  .project-card:hover { box-shadow: var(--shadow-md); border-color: var(--gray-300); transform: translateY(-2px); }
+  .project-card:nth-child(1) { animation-delay: 0.2s; }
+  .project-card:nth-child(2) { animation-delay: 0.32s; }
+  @keyframes cardFadeIn { to { opacity: 1; transform: translateY(0); } }
+
+  /* 選択前でも「これは緑系」「これはオレンジ系」と直感的に分かるよう、
+     カード背景にうっすらとプロジェクトカラーのグラデーションを乗せる */
+  .project-card[data-project="locle"] {
+    background: linear-gradient(160deg, rgba(68,177,63,0.08) 0%, var(--white) 55%);
+  }
+  .project-card[data-project="locle"]:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(68,177,63,0.28), var(--shadow-md);
+    border-color: rgba(68,177,63,0.4);
+  }
+  .project-card[data-project="ozukanzukan"] {
+    background: linear-gradient(160deg, rgba(249,115,22,0.08) 0%, var(--white) 55%);
+  }
+  .project-card[data-project="ozukanzukan"]:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px rgba(249,115,22,0.28), var(--shadow-md);
+    border-color: rgba(249,115,22,0.4);
+  }
+  /* クリック時、home.htmlへ遷移する直前に一瞬「選択された」ような演出を入れる */
+  .project-card.selecting {
+    transform: scale(1.04) !important;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.25) !important;
+    transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+  }
   .project-card-check {
     position: absolute; top: 14px; right: 14px; width: 22px; height: 22px; border-radius: 50%;
     color: white; display: flex; align-items: center; justify-content: center;
@@ -119,8 +166,8 @@
     .page-header h1 { font-size: 16px; }
     .btn-theme-toggle { width: 24px; height: 24px; font-size: 12px; }
     .container { padding: 20px 8px; }
-    .hero { padding: 36px 16px 32px; }
-    .hero-logo { font-size: 44px; }
+    .hero { padding: 40px 16px 32px; }
+    .hero-logo-box img { height: 26px; }
   }
 
   /* Dark mode toggle */
@@ -173,6 +220,8 @@
 </head>
 <body>
 
+<canvas id="appParticleCanvas"></canvas>
+
 <header class="page-header">
   <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
     <img src="/logo.jpg" alt="LOCLE" class="logo-img" id="headerLogo" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
@@ -186,13 +235,13 @@
 <div class="container">
 
   <section class="hero">
-    <div class="hero-logo">🏢</div>
-    <div class="hero-subtitle">営業自動化ツール</div>
+    <div class="hero-logo-box"><img src="/logo.jpg" alt="LOCLE"></div>
+    <h1 class="hero-title">営業活動を、自動化する。</h1>
     <p class="hero-copy">企業リサーチからフォーム送信・反応分析まで、営業活動を一気通貫で自動化します。<br>まずは利用するプロジェクトを選択してください。</p>
   </section>
 
   <section class="project-select-section" id="project-select">
-    <p class="section-title" style="font-size:18px; font-weight:700; color:var(--gray-900); border-left:3px solid var(--gray-400); padding-left:12px; margin:0 0 16px;">プロジェクトを選択</p>
+    <p class="project-select-title">プロジェクトを選択</p>
     <div class="project-select-grid">
       <div class="project-card" data-project="locle" id="projectCardLocle" onclick="goToHome('locle')">
         <span class="project-card-check" id="projectCheckLocle">✓</span>
@@ -234,6 +283,55 @@
 
   updateThemeIcon();
 
+  // ===== パーティクル背景(index.htmlの演出を流用) =====
+  // プロジェクト未選択のニュートラルな画面のため、プロジェクトカラーではなく白い点にする
+  (function initParticles() {
+    try {
+      const canvas = document.getElementById("appParticleCanvas");
+      if (!canvas || !canvas.getContext) return;
+      const ctx = canvas.getContext("2d");
+      let particles = [];
+      let w, h;
+
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = document.documentElement.scrollHeight;
+      }
+      function makeParticles() {
+        const count = Math.min(110, Math.floor((w * h) / 26000));
+        particles = Array.from({ length: count }, () => ({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 1.8 + 0.6,
+          vy: -(Math.random() * 0.25 + 0.05),
+          vx: (Math.random() - 0.5) * 0.15,
+          o: Math.random() * 0.45 + 0.15,
+        }));
+      }
+      function tick() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "#ffffff";
+        particles.forEach(p => {
+          p.y += p.vy;
+          p.x += p.vx;
+          if (p.y < -10) p.y = h + 10;
+          if (p.x < -10) p.x = w + 10;
+          if (p.x > w + 10) p.x = -10;
+          ctx.globalAlpha = p.o;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(tick);
+      }
+      resize();
+      makeParticles();
+      tick();
+      window.addEventListener("resize", () => { resize(); makeParticles(); });
+    } catch (e) {}
+  })();
+
   // app.htmlは常にニュートラルな選択画面として振る舞うべきなので、
   // getCurrentProject()のようなURLパラメータ(?project=xxx)を読んで
   // localStorageへ自動保存する処理は使わない。ここではlocalStorageに
@@ -270,9 +368,17 @@
     });
   }
 
+  // カードクリック時、即座に遷移せず一瞬「選択された」演出(拡大+影)を見せてから
+  // home.htmlへ遷移する(0.3秒程度)。遷移先URL・渡すprojectは従来通り変更しない。
   function goToHome(project) {
-    setCurrentProject(project);
-    window.location.href = addProjectParamToUrl("/home.html", project);
+    var map = { locle: "Locle", ozukanzukan: "Ozukanzukan" };
+    var card = document.getElementById("projectCard" + (map[project] || ""));
+    if (card) card.classList.add("selecting");
+
+    setTimeout(function () {
+      setCurrentProject(project);
+      window.location.href = addProjectParamToUrl("/home.html", project);
+    }, 300);
   }
 
   renderProjectSelectUI();
