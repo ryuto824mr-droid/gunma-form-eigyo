@@ -578,7 +578,7 @@
   </section>
 
   <p class="section-title">機能一覧</p>
-  <div class="feature-grid">
+  <div class="feature-grid" id="featureGrid">
     <a href="/companies.html" class="feature-card">
       <div class="feature-card-header">
         <div class="feature-icon"><i data-lucide="building-2"></i></div>
@@ -692,7 +692,7 @@
 <div id="tourOverlay" class="tour-overlay" hidden>
   <div class="tour-backdrop" onclick="skipTour()"></div>
   <div class="tour-popup">
-    <div class="tour-step-badge" id="tourStepBadge">1 / 5</div>
+    <div class="tour-step-badge" id="tourStepBadge">1 / 3</div>
     <div class="tour-title" id="tourTitle"></div>
     <div class="tour-body" id="tourBody"></div>
     <div class="tour-actions">
@@ -1007,11 +1007,9 @@
 
   // Welcome Tour
   const tourSteps = [
-    { title: "LOCLE営業ツールへようこそ！", body: "5ステップで主要機能をご紹介します。企業リサーチからフォーム送信・反応分析まで一気通貫で自動化できます。", highlight: null },
-    { title: "① 企業リストに登録", body: "営業先企業のURL・名前を登録するとフォームを自動解析します。CSVでの一括インポートも可能です。", highlight: "nav-companies" },
-    { title: "② メッセージテンプレートを作成", body: "送信する文面テンプレート（バリアント）を登録します。{{company_name}} で企業名を自動差し込みできます。", highlight: "nav-variants" },
-    { title: "③ フォーム/メールで送信", body: "企業とテンプレートを選んで送信管理ページから送信。フォーム自動入力かメール直送が選べます。", highlight: "nav-send" },
-    { title: "④ 反応率を分析して改善", body: "分析ページでバリアント別・タグ別の反応率を確認して、より効果的な文面に改善できます。", highlight: "nav-analytics" }
+    { title: "① プロジェクトを選ぶ", body: "ヘッダーのプロジェクトバッジ（LOCLE / 群馬お仕事図鑑）をクリックすると、いつでも選び直せます。選んだプロジェクトのデータだけが企業リスト・CRM・分析などに表示されます。", highlight: "projectBadge" },
+    { title: "② ダッシュボードのサマリー", body: "登録企業数・送信済み件数・反応率がひと目でわかります。今日のフォローアップや期限切れタスクもこの下に表示されます。", highlight: "homeHero" },
+    { title: "③ 各機能へアクセス", body: "企業リスト・メッセージ管理・送信管理・CRM・分析など、主要機能にはここからアクセスできます（群馬お仕事図鑑選択時はコンテンツ制作も表示されます）。", highlight: "featureGrid" }
   ];
   let _tourStep = 0, _prevHL = null;
   function startTour() { _tourStep = 0; document.getElementById("tourOverlay").hidden = false; _showTourStep(); }
@@ -1022,15 +1020,19 @@
     document.getElementById("tourBody").textContent = s.body;
     document.getElementById("tourNextBtn").textContent = _tourStep === tourSteps.length - 1 ? "完了" : "次へ";
     if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
-    if (s.highlight) { const e = document.getElementById(s.highlight); if (e) e.classList.add("tour-highlight"); _prevHL = s.highlight; } else { _prevHL = null; }
+    if (s.highlight) {
+      const e = document.getElementById(s.highlight);
+      if (e) { e.classList.add("tour-highlight"); e.scrollIntoView({ behavior: "smooth", block: "center" }); }
+      _prevHL = s.highlight;
+    } else { _prevHL = null; }
   }
   function tourNext() { if (_tourStep < tourSteps.length - 1) { _tourStep++; _showTourStep(); } else { skipTour(); } }
   function skipTour() {
     if (_prevHL) { const e = document.getElementById(_prevHL); if (e) e.classList.remove("tour-highlight"); }
     document.getElementById("tourOverlay").hidden = true;
-    localStorage.setItem("locle_tour_done", "1");
+    localStorage.setItem("locle_tour_home", "1");
   }
-  if (!localStorage.getItem("locle_tour_done")) setTimeout(startTour, 500);
+  if (!localStorage.getItem("locle_tour_home")) setTimeout(startTour, 500);
 
   // ===== 機能一覧カードのフェードイン =====
   // 画面内に入ったカードから順にfadeInUpさせる。IntersectionObserver未対応環境や
