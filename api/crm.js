@@ -2249,13 +2249,47 @@ async function handleMeetingNotes(req, res) {
 
 // ==================== calendar-events (議事録カレンダー: 月単位でmeeting_notes/todosを日付ごとに集計) ====================
 
+// 指定プロジェクトの議事録・Todoを日付ごとに集計する(calendar.html/meeting-notes.html共通で使用)。
+// todosの期日はmeeting_dateとは別月にまたがりうるため、project全体を取得したうえで
+// JS側で「開催日が対象月」「Todo期日が対象月」をそれぞれ別軸で振り分ける。
+async function aggregateMeetingCalendar(project, from, to) {
+  const notes = await sql`
+    SELECT id, title, meeting_type, meeting_date, summary, todos
+    FROM meeting_notes WHERE project = ${project}
+  `;
+
+  const notesByDate = {};
+  const todosByDate = {};
+
+  notes.forEach(n => {
+    const dateKey = toDateKey(n.meeting_date);
+    if (dateKey >= from && dateKey <= to) {
+      if (!notesByDate[dateKey]) notesByDate[dateKey] = [];
+      notesByDate[dateKey].push({
+        id: n.id, title: n.title, meeting_type: n.meeting_type, summary: n.summary,
+      });
+    }
+
+    const todos = Array.isArray(n.todos) ? n.todos : [];
+    todos.forEach(t => {
+      if (!t.due_date || t.due_date < from || t.due_date > to) return;
+      if (!todosByDate[t.due_date]) todosByDate[t.due_date] = [];
+      todosByDate[t.due_date].push({
+        note_id: n.id, note_title: n.title, text: t.text, done: !!t.done,
+      });
+    });
+  });
+
+  return { notes_by_date: notesByDate, todos_by_date: todosByDate };
+}
+
+// LOCLE/群馬お仕事図鑑の議事録カレンダーと、プロジェクトを問わない出退勤記録を
+// まとめて1つのレスポンスで返す(calendar.htmlの統合表示用)。データ自体はプロジェクトごとに
+// 分離したクエリのまま実行し、表示側で統合できるよう{locle, ozukanzukan, work_logs_by_date}の
+// 形に整形するだけに留める(projectパラメータを受け取っても無視し、常に両方返す)。
 async function handleCalendarEvents(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETメソッドのみ対応しています" });
-  }
-  const project = req.query.project;
-  if (project !== "locle" && project !== "ozukanzukan") {
-    return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
   }
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
@@ -2269,36 +2303,24 @@ async function handleCalendarEvents(req, res) {
   const to = `${year}-${pad(month)}-${pad(lastDay)}`;
 
   try {
-    // todosの期日はmeeting_dateとは別月にまたがりうるため、project全体を取得したうえで
-    // JS側で「開催日が対象月」「Todo期日が対象月」をそれぞれ別軸で振り分ける
-    const notes = await sql`
-      SELECT id, title, meeting_type, meeting_date, summary, todos
-      FROM meeting_notes WHERE project = ${project}
-    `;
+    const [locle, ozukanzukan, workLogs] = await Promise.all([
+      aggregateMeetingCalendar("locle", from, to),
+      aggregateMeetingCalendar("ozukanzukan", from, to),
+      sql`SELECT user_name, date, clock_in, clock_out FROM work_logs WHERE date >= ${from} AND date <= ${to}`,
+    ]);
 
-    const notesByDate = {};
-    const todosByDate = {};
-
-    notes.forEach(n => {
-      const dateKey = toDateKey(n.meeting_date);
-      if (dateKey >= from && dateKey <= to) {
-        if (!notesByDate[dateKey]) notesByDate[dateKey] = [];
-        notesByDate[dateKey].push({
-          id: n.id, title: n.title, meeting_type: n.meeting_type, summary: n.summary,
-        });
-      }
-
-      const todos = Array.isArray(n.todos) ? n.todos : [];
-      todos.forEach(t => {
-        if (!t.due_date || t.due_date < from || t.due_date > to) return;
-        if (!todosByDate[t.due_date]) todosByDate[t.due_date] = [];
-        todosByDate[t.due_date].push({
-          note_id: n.id, note_title: n.title, text: t.text, done: !!t.done,
-        });
+    const workLogsByDate = {};
+    workLogs.forEach(w => {
+      // work_logs.dateもmeeting_notes.meeting_dateと同じDATE型のため、toDateKey()で
+      // ローカルgetter経由の"YYYY-MM-DD"に復元してからキーとして使う(タイムゾーン対策)
+      const dateKey = toDateKey(w.date);
+      if (!workLogsByDate[dateKey]) workLogsByDate[dateKey] = [];
+      workLogsByDate[dateKey].push({
+        user_name: w.user_name, clock_in: w.clock_in, clock_out: w.clock_out,
       });
     });
 
-    return res.status(200).json({ notes_by_date: notesByDate, todos_by_date: todosByDate });
+    return res.status(200).json({ locle, ozukanzukan, work_logs_by_date: workLogsByDate });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }
