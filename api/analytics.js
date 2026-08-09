@@ -165,13 +165,24 @@ module.exports = async function handler(req, res) {
 async function handleScheduledSends(req, res) {
   if (req.method === "GET") {
     try {
-      const rows = await sql`
-        SELECT ss.*, c.name AS company_name, mv.name AS variant_name
-        FROM scheduled_sends ss
-        JOIN companies c ON c.id = ss.company_id
-        JOIN message_variants mv ON mv.id = ss.variant_id
-        ORDER BY ss.scheduled_at ASC
-      `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+      const rows = hasProjectFilter
+        ? await sql`
+            SELECT ss.*, c.name AS company_name, mv.name AS variant_name
+            FROM scheduled_sends ss
+            JOIN companies c ON c.id = ss.company_id
+            JOIN message_variants mv ON mv.id = ss.variant_id
+            WHERE c.project = ${project}
+            ORDER BY ss.scheduled_at ASC
+          `
+        : await sql`
+            SELECT ss.*, c.name AS company_name, mv.name AS variant_name
+            FROM scheduled_sends ss
+            JOIN companies c ON c.id = ss.company_id
+            JOIN message_variants mv ON mv.id = ss.variant_id
+            ORDER BY ss.scheduled_at ASC
+          `;
       return res.status(200).json(rows);
     } catch (err) {
       return res.status(500).json({ error: `取得エラー: ${err.message}` });

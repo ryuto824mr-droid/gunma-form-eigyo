@@ -1858,7 +1858,7 @@
 
   async function loadAbTests() {
     try {
-      const res = await fetch("/api/crm?action=ab-tests");
+      const res = await fetch("/api/crm?action=ab-tests&project=" + encodeURIComponent(getCurrentProject()));
       const raw = await res.json();
       abTests = Array.isArray(raw) ? raw : [];
       renderAbTests();

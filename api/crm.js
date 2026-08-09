@@ -950,11 +950,20 @@ async function handleReports(req, res) {
     }));
 
     // 分類別内訳
-    const classificationRows = await sql`
-      SELECT classification, COUNT(*)::int AS count
-      FROM responses
-      GROUP BY classification
-    `;
+    const classificationRows = hasProjectFilter
+      ? await sql`
+          SELECT r.classification, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          JOIN companies c  ON c.id  = sl.company_id
+          WHERE c.project = ${project}
+          GROUP BY r.classification
+        `
+      : await sql`
+          SELECT classification, COUNT(*)::int AS count
+          FROM responses
+          GROUP BY classification
+        `;
     const classification_breakdown = { interested: 0, question: 0, declined: 0, other: 0 };
     classificationRows.forEach(r => {
       const key = ["interested", "question", "declined"].includes(r.classification) ? r.classification : "other";
@@ -962,23 +971,43 @@ async function handleReports(req, res) {
     });
 
     // 送信〜返信までの平均日数
-    const [{ avg_days }] = await sql`
-      SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
-      FROM responses r
-      JOIN send_logs sl ON sl.id = r.send_log_id
-    `;
+    const [{ avg_days }] = hasProjectFilter
+      ? await sql`
+          SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          JOIN companies c  ON c.id  = sl.company_id
+          WHERE c.project = ${project}
+        `
+      : await sql`
+          SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+        `;
     const response_time_avg_days = avg_days != null ? Math.round(Number(avg_days) * 10) / 10 : 0;
 
     // 曜日別反応率(送信日時基準、日本時間)
-    const weekdayRows = await sql`
-      SELECT
-        EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
-        COUNT(DISTINCT sl.id)::int                                    AS send_count,
-        COUNT(DISTINCT r.id)::int                                     AS response_count
-      FROM send_logs sl
-      LEFT JOIN responses r ON r.send_log_id = sl.id
-      GROUP BY 1
-    `;
+    const weekdayRows = hasProjectFilter
+      ? await sql`
+          SELECT
+            EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
+            COUNT(DISTINCT sl.id)::int                                    AS send_count,
+            COUNT(DISTINCT r.id)::int                                     AS response_count
+          FROM send_logs sl
+          JOIN companies c ON c.id = sl.company_id
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE c.project = ${project}
+          GROUP BY 1
+        `
+      : await sql`
+          SELECT
+            EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
+            COUNT(DISTINCT sl.id)::int                                    AS send_count,
+            COUNT(DISTINCT r.id)::int                                     AS response_count
+          FROM send_logs sl
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          GROUP BY 1
+        `;
     const weekdayMap = {};
     weekdayRows.forEach(r => { weekdayMap[r.dow] = r; });
     const weekday_response_rate = WEEKDAY_LABELS.map((label, i) => {
@@ -991,15 +1020,27 @@ async function handleReports(req, res) {
     });
 
     // 時間帯別反応率(送信日時基準、日本時間)
-    const hourRows = await sql`
-      SELECT
-        EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
-        COUNT(DISTINCT sl.id)::int                                     AS send_count,
-        COUNT(DISTINCT r.id)::int                                      AS response_count
-      FROM send_logs sl
-      LEFT JOIN responses r ON r.send_log_id = sl.id
-      GROUP BY 1
-    `;
+    const hourRows = hasProjectFilter
+      ? await sql`
+          SELECT
+            EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
+            COUNT(DISTINCT sl.id)::int                                     AS send_count,
+            COUNT(DISTINCT r.id)::int                                      AS response_count
+          FROM send_logs sl
+          JOIN companies c ON c.id = sl.company_id
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE c.project = ${project}
+          GROUP BY 1
+        `
+      : await sql`
+          SELECT
+            EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
+            COUNT(DISTINCT sl.id)::int                                     AS send_count,
+            COUNT(DISTINCT r.id)::int                                      AS response_count
+          FROM send_logs sl
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          GROUP BY 1
+        `;
     const hour_response_rate = HOUR_BUCKETS.map(b => {
       let send_count = 0, response_count = 0;
       hourRows.forEach(r => {
@@ -1071,13 +1112,24 @@ async function handleSettings(req, res) {
 async function handleAbTests(req, res) {
   if (req.method === "GET") {
     try {
-      const tests = await sql`
-        SELECT t.*, va.name AS variant_a_name, vb.name AS variant_b_name
-        FROM ab_tests t
-        JOIN message_variants va ON va.id = t.variant_a_id
-        JOIN message_variants vb ON vb.id = t.variant_b_id
-        ORDER BY t.created_at DESC
-      `;
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+      const tests = hasProjectFilter
+        ? await sql`
+            SELECT t.*, va.name AS variant_a_name, vb.name AS variant_b_name
+            FROM ab_tests t
+            JOIN message_variants va ON va.id = t.variant_a_id
+            JOIN message_variants vb ON vb.id = t.variant_b_id
+            WHERE va.project = ${project}
+            ORDER BY t.created_at DESC
+          `
+        : await sql`
+            SELECT t.*, va.name AS variant_a_name, vb.name AS variant_b_name
+            FROM ab_tests t
+            JOIN message_variants va ON va.id = t.variant_a_id
+            JOIN message_variants vb ON vb.id = t.variant_b_id
+            ORDER BY t.created_at DESC
+          `;
       return res.status(200).json(tests);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });

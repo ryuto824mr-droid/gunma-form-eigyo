@@ -960,7 +960,7 @@
         fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject())),
         fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject())),
         fetch(sendLogsUrl()),
-        fetch("/api/analytics?action=scheduled-sends"),
+        fetch("/api/analytics?action=scheduled-sends&project=" + encodeURIComponent(getCurrentProject())),
         fetch("/api/crm?action=attachments"),
         fetch("/api/crm?action=sender-accounts"),
       ]);
@@ -1499,7 +1499,7 @@
       });
       const data = await res.json();
       if (!res.ok) { showToast(esc(data.error || "予約エラー"), "error"); return; }
-      const sRes = await fetch("/api/analytics?action=scheduled-sends");
+      const sRes = await fetch("/api/analytics?action=scheduled-sends&project=" + encodeURIComponent(getCurrentProject()));
       scheduledSends = await sRes.json();
       renderScheduleList();
       closeScheduleModal();

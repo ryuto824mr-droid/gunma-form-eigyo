@@ -660,7 +660,7 @@
     const sel = document.getElementById("aiGenCompany");
     if (!sel) return;
     try {
-      const res = await fetch("/api/companies");
+      const res = await fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) throw new Error("取得失敗");
       const companiesList = await res.json();
       const options = companiesList

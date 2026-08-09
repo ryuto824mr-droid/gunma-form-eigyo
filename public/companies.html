@@ -1649,7 +1649,7 @@
 
   async function loadVariantsList() {
     try {
-      const res = await fetch("/api/variants");
+      const res = await fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject()));
       variants = await res.json();
       const select = document.getElementById("bulkSendVariant");
       if (select) {
@@ -1854,7 +1854,7 @@
 
   async function loadClusters() {
     try {
-      const res = await fetch("/api/crm?action=company-clusters");
+      const res = await fetch("/api/crm?action=company-clusters&project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) throw new Error("取得失敗");
       const data = await res.json();
       clusters = Array.isArray(data.clusters) ? data.clusters : [];

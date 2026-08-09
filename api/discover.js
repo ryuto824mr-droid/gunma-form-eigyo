@@ -125,6 +125,7 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {};
   const isOzukanzukan = body.project === "ozukanzukan";
+  const project = isOzukanzukan ? "ozukanzukan" : "locle";
 
   const params = isOzukanzukan
     ? mapOzukanzukanParams(body)
@@ -183,7 +184,7 @@ module.exports = async function handler(req, res) {
     let merged = mergeAndDedup([...filteredResults, ...placesResults]);
 
     // 5. 既に登録済みの企業(companies)を除外
-    const knownHostnames = await getKnownHostnames();
+    const knownHostnames = await getKnownHostnames(project);
     const beforeDuplicateFilterCount = merged.length;
     merged = merged.filter(r => !knownHostnames.has(getHostname(r.url)));
     const excludedDuplicateCount = beforeDuplicateFilterCount - merged.length;
@@ -218,8 +219,8 @@ function resolveResultCount(value) {
   return Math.min(n, MAX_RESULT_COUNT);
 }
 
-async function getKnownHostnames() {
-  const companyRows = await sql`SELECT url FROM companies`;
+async function getKnownHostnames(project) {
+  const companyRows = await sql`SELECT url FROM companies WHERE project = ${project}`;
   const known = new Set();
   companyRows.forEach(r => {
     const host = getHostname(r.url);

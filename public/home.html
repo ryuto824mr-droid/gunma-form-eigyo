@@ -822,11 +822,12 @@
 
   async function loadStats() {
     try {
+      const projectParam = "project=" + encodeURIComponent(getCurrentProject());
       const [cRes, lRes, aRes, tRes] = await Promise.all([
-        fetch("/api/companies"),
-        fetch("/api/send-logs"),
-        fetch("/api/analytics"),
-        fetch("/api/crm?action=tasks"),
+        fetch("/api/companies?" + projectParam),
+        fetch("/api/send-logs?" + projectParam),
+        fetch("/api/analytics?" + projectParam),
+        fetch("/api/crm?action=tasks&" + projectParam),
       ]);
       const rawCompanies = await cRes.json();
       const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
