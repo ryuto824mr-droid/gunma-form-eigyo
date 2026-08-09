@@ -4,28 +4,27 @@
 // 各ページの本文末尾(headerの後、既存のinitScrollReveal()等と同じ場所)で
 // initNavMenu("<ページキー>") を呼び出して使う。
 //
-// PC表示(600px以上): ホーム/企業リスト/送信管理は常時表示バーに残し、それ以外は
-// ☰クリックで開くドロワーにまとめる。
-// スマホ表示(600px未満): 常時表示バーの3リンクをCSSで隠し、ドロワー側に用意した
-// 同じ3リンク(nav-mobile-only)を含めて全リンクをドロワーに表示する。
+// PC表示(600px以上): ホームのみ常時表示バーに残し、それ以外は☰クリックで開くドロワーにまとめる。
+// スマホ表示(600px未満): 常時表示バーの「ホーム」リンクをCSSで隠し、ドロワー側に用意した
+// 同じリンク(nav-mobile-only)を含めて全リンクをドロワーに表示する。
 
 var NAV_PRIMARY_ITEMS = [
-  { key: "home",      href: "/home.html",      label: "ホーム" },
-  { key: "companies", href: "/companies.html", label: "企業リスト" },
-  { key: "send",       href: "/send.html",       label: "送信管理" },
+  { key: "home", href: "/home.html", label: "ホーム" },
 ];
 
 var NAV_SECONDARY_ITEMS = [
-  { key: "variants",        href: "/variants.html",       label: "メッセージ管理" },
-  { key: "crm",               href: "/crm.html",             label: "CRM" },
-  { key: "analytics",        href: "/analytics.html",       label: "分析" },
-  { key: "reports",           href: "/reports.html",         label: "レポート" },
-  { key: "content-studio",  href: "/content-studio.html", label: "コンテンツ制作", contentStudioOnly: true },
-  { key: "work-logs",        href: "/work-logs.html",       label: "稼働管理" },
-  { key: "meeting-notes",   href: "/meeting-notes.html",  label: "議事録" },
-  { key: "calendar",         href: "/calendar.html",        label: "カレンダー" },
-  { key: "help",              href: "/help.html",             label: "ヘルプ" },
-  { key: "demo",              href: "/index.html",            label: "デモ", external: true },
+  { key: "companies",       href: "/companies.html",       label: "企業リスト" },
+  { key: "variants",        href: "/variants.html",        label: "メッセージ管理" },
+  { key: "send",              href: "/send.html",              label: "送信管理" },
+  { key: "crm",               href: "/crm.html",               label: "CRM" },
+  { key: "analytics",        href: "/analytics.html",        label: "分析" },
+  { key: "reports",           href: "/reports.html",          label: "レポート" },
+  { key: "content-studio",  href: "/content-studio.html",  label: "コンテンツ制作", contentStudioOnly: true },
+  { key: "work-logs",        href: "/work-logs.html",        label: "稼働管理" },
+  { key: "meeting-notes",   href: "/meeting-notes.html",   label: "議事録" },
+  { key: "calendar",         href: "/calendar.html",         label: "カレンダー" },
+  { key: "help",              href: "/help.html",              label: "ヘルプ" },
+  { key: "demo",              href: "/index.html",             label: "デモ", external: true },
 ];
 
 function _navLinkHtml(item, extraClass) {
