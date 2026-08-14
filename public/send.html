@@ -372,6 +372,57 @@
   }
   .btn-schedule-delete:hover { background: #fff5f5; }
 
+  /* Auto-send settings (collapsible) */
+  .autosend-settings-section {
+    background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 4px 28px;
+    margin-bottom: 26px; box-shadow: var(--shadow-sm);
+  }
+  .autosend-settings-section summary {
+    list-style: none; cursor: pointer; padding: 20px 0;
+    font-size: 14px; font-weight: 600; color: var(--gray-700);
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
+    user-select: none;
+  }
+  .autosend-settings-section summary::-webkit-details-marker { display: none; }
+  .autosend-settings-section summary::after {
+    content: "▸"; margin-left: auto; color: var(--gray-400);
+    transition: transform 150ms; font-size: 12px;
+  }
+  .autosend-settings-section[open] summary::after { transform: rotate(90deg); }
+  .autosend-settings-body {
+    padding: 0 0 24px; display: flex; flex-direction: column; gap: 16px; max-width: 360px;
+  }
+  .autosend-form-group { display: flex; flex-direction: column; gap: 5px; }
+  .autosend-form-group label { font-size: 12px; font-weight: 600; color: var(--gray-500); }
+  .autosend-form-group input, .autosend-form-group select {
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .autosend-form-group input:focus, .autosend-form-group select:focus {
+    outline: none; border-color: var(--green-500);
+  }
+  .autosend-checkbox-row {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    color: var(--gray-700); cursor: pointer; font-family: inherit;
+  }
+  .autosend-checkbox-row input { width: 16px; height: 16px; cursor: pointer; }
+  .autosend-note {
+    font-size: 12px; color: var(--gray-500); line-height: 1.6;
+    background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px;
+  }
+  .btn-autosend-save {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
+    color: var(--white); border: none; cursor: pointer;
+    font-family: inherit; font-weight: 600; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-autosend-save:hover { background: linear-gradient(135deg, var(--green-600), var(--green-800)); }
+  .btn-autosend-save svg { width: 13px; height: 13px; }
+
   /* CSV export */
   .btn-export-csv {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
@@ -802,6 +853,39 @@
     <ul class="schedule-list" id="scheduleList"><li class="schedule-empty">読み込み中...</li></ul>
   </section>
 
+  <details class="autosend-settings-section reveal-on-scroll" id="autoSendSettingsDetails">
+    <summary>⚙️ 自動送信の設定</summary>
+    <div class="autosend-settings-body">
+      <div class="autosend-form-group">
+        <label for="settingDailyLimit">1日の送信上限</label>
+        <input type="number" id="settingDailyLimit" min="1" placeholder="20" />
+      </div>
+      <div class="autosend-form-group">
+        <label for="settingSendInterval">送信間隔（秒）</label>
+        <input type="number" id="settingSendInterval" min="0" placeholder="30" />
+      </div>
+      <div class="autosend-form-group">
+        <label for="settingAutoSendHour">自動送信の実行時刻</label>
+        <select id="settingAutoSendHour"></select>
+      </div>
+      <label class="autosend-checkbox-row">
+        <input type="checkbox" id="settingSkipWeekendsHolidays" />
+        土日祝日は自動送信をスキップする
+      </label>
+      <label class="autosend-checkbox-row">
+        <input type="checkbox" id="settingSkipRejection" />
+        営業お断りサイトを自動スキップ
+      </label>
+      <p class="autosend-note">
+        自動送信は1日1回、Vercelの実行スケジュールに基づいて処理されます。設定時刻に正確に
+        実行されるとは限りません（概ね毎日9時頃に処理されます）。
+      </p>
+      <div>
+        <button class="btn-autosend-save" onclick="saveAutoSendSettings()"><i data-lucide="save"></i>保存</button>
+      </div>
+    </div>
+  </details>
+
   <section class="history-section reveal-on-scroll">
     <h2>送信履歴<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
@@ -916,6 +1000,7 @@
   let senderAccounts = [];
   let logs      = [];
   let scheduledSends = [];
+  let autoSendSettings = {};
   let currentDraft = null;
   let logFilters = { company: "", status: "all", date: "all", channel: "all" };
 
@@ -948,13 +1033,14 @@
   async function init() {
     updateProjectDisplay();
     try {
-      const [cRes, vRes, lRes, sRes, aRes, senderRes] = await Promise.all([
+      const [cRes, vRes, lRes, sRes, aRes, senderRes, settingsRes] = await Promise.all([
         fetch("/api/companies?project=" + encodeURIComponent(getCurrentProject())),
         fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject())),
         fetch(sendLogsUrl()),
         fetch("/api/analytics?action=scheduled-sends&project=" + encodeURIComponent(getCurrentProject())),
         fetch("/api/crm?action=attachments"),
         fetch("/api/crm?action=sender-accounts"),
+        fetch("/api/crm?action=settings"),
       ]);
       const rawCompanies = await cRes.json();
       companies      = Array.isArray(rawCompanies) ? rawCompanies : [];
@@ -964,6 +1050,7 @@
       attachments    = aRes.ok ? await aRes.json() : [];
       const rawSenderAccounts = senderRes.ok ? await senderRes.json() : [];
       senderAccounts = Array.isArray(rawSenderAccounts) ? rawSenderAccounts.filter(a => a.is_active) : [];
+      autoSendSettings = settingsRes.ok ? await settingsRes.json() : {};
 
       companies.sort((a, b) => {
         const aS = a.status === "researched" ? 0 : 1;
@@ -975,6 +1062,7 @@
       applyUrlPreselect();
       renderLogs();
       renderScheduleList();
+      renderAutoSendSettingsForm();
     } catch (err) {
       document.getElementById("logsBody").innerHTML =
         `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
@@ -1537,6 +1625,56 @@
           <button class="btn-schedule-delete" onclick="deleteSchedule(${s.id})">削除</button>
         </li>`;
     }).join("");
+  }
+
+  // ==================== 自動送信の設定 ====================
+
+  function renderAutoSendSettingsForm() {
+    document.getElementById("settingDailyLimit").value = autoSendSettings.daily_send_limit ?? 20;
+    document.getElementById("settingSendInterval").value = autoSendSettings.send_interval_seconds ?? 30;
+    document.getElementById("settingSkipWeekendsHolidays").checked = autoSendSettings.skip_weekends_holidays !== "false";
+    document.getElementById("settingSkipRejection").checked = autoSendSettings.skip_rejection_sites !== "false";
+
+    const hourSelect = document.getElementById("settingAutoSendHour");
+    if (!hourSelect.options.length) {
+      hourSelect.innerHTML = Array.from({ length: 24 }, (_, h) =>
+        `<option value="${h}">${h}時</option>`
+      ).join("");
+    }
+    const autoSendHour = parseInt(autoSendSettings.auto_send_hour, 10);
+    hourSelect.value = String(Number.isFinite(autoSendHour) ? autoSendHour : 9);
+  }
+
+  async function saveAutoSendSettings() {
+    const dailyLimit = document.getElementById("settingDailyLimit").value;
+    const sendInterval = document.getElementById("settingSendInterval").value;
+    const skipWeekendsHolidays = document.getElementById("settingSkipWeekendsHolidays").checked;
+    const skipRejection = document.getElementById("settingSkipRejection").checked;
+    const autoSendHour = document.getElementById("settingAutoSendHour").value;
+
+    const updates = [
+      { key: "daily_send_limit", value: String(dailyLimit || 20) },
+      { key: "send_interval_seconds", value: String(sendInterval || 30) },
+      { key: "skip_weekends_holidays", value: skipWeekendsHolidays ? "true" : "false" },
+      { key: "skip_rejection_sites", value: skipRejection ? "true" : "false" },
+      { key: "auto_send_hour", value: String(autoSendHour || 9) },
+    ];
+
+    try {
+      for (const u of updates) {
+        const res = await fetch("/api/crm?action=settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(u),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "保存エラー");
+        autoSendSettings[u.key] = u.value;
+      }
+      showToast("自動送信の設定を保存しました", "success");
+    } catch (err) {
+      showToast("保存エラー: " + esc(err.message), "error");
+    }
   }
 
   function exportLogsCSV() {

@@ -135,7 +135,8 @@ async function handleDbSetup(req, res) {
         ('daily_send_limit', '20'),
         ('send_interval_seconds', '30'),
         ('skip_rejection_sites', 'true'),
-        ('auto_send_hour', '9')
+        ('auto_send_hour', '9'),
+        ('skip_weekends_holidays', 'true')
       ON CONFLICT (key) DO NOTHING
     `);
     // ab_testsテーブル追加（A/Bテスト機能用）
@@ -1507,12 +1508,54 @@ async function handleCompanyClusters(req, res) {
 
 // ==================== run-scheduled-sends ====================
 
+// 日本の祝日判定用（2026年分をハードコード）。
+// 内閣府の祝日CSVを毎回取得するのは重いため、簡易的にハードコードで対応する。
+// 年が変わったら更新が必要（振替休日・国民の休日を含む）。
+const JAPAN_HOLIDAYS_2026 = new Set([
+  "2026-01-01", // 元日
+  "2026-01-12", // 成人の日
+  "2026-02-11", // 建国記念の日
+  "2026-02-23", // 天皇誕生日
+  "2026-03-20", // 春分の日
+  "2026-04-29", // 昭和の日
+  "2026-05-03", // 憲法記念日
+  "2026-05-04", // みどりの日
+  "2026-05-05", // こどもの日
+  "2026-05-06", // 振替休日（憲法記念日が日曜のため）
+  "2026-07-20", // 海の日
+  "2026-08-11", // 山の日
+  "2026-09-21", // 敬老の日
+  "2026-09-22", // 国民の休日（敬老の日と秋分の日に挟まれた平日）
+  "2026-09-23", // 秋分の日
+  "2026-10-12", // スポーツの日
+  "2026-11-03", // 文化の日
+  "2026-11-23", // 勤労感謝の日
+]);
+
+function isJapaneseHoliday(dateStr) {
+  return JAPAN_HOLIDAYS_2026.has(dateStr);
+}
+
 // 現在時刻(JST)を0〜23の時間で返す。hourCycle: "h23"を明示しないと
 // ICU実装によっては深夜0時が「24」として返ることがあるため固定する
 function currentJstHour() {
   return Number(new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Tokyo", hour: "numeric", hourCycle: "h23",
   }).format(new Date()));
+}
+
+// 現在の日付(JST)を "YYYY-MM-DD" 形式で返す
+function currentJstDateString() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+}
+
+// 現在の曜日(JST)を 0(日)〜6(土) で返す。
+// JSTの暦日そのものの曜日を得たいので、"YYYY-MM-DD"をUTC日付として解釈して
+// getUTCDay()を使う（タイムゾーン変換によるズレを避けるため）
+function currentJstWeekday() {
+  return new Date(`${currentJstDateString()}T00:00:00Z`).getUTCDay();
 }
 
 // submit-form / send-email はVercel Functionハンドラー(req, res)として実装されているため、
@@ -1536,6 +1579,25 @@ async function invokeHandlerInternally(handler, body) {
 async function handleRunScheduledSends(req, res) {
   try {
     const settings = await getSettings();
+
+    // 土日祝日は自動送信をスキップする設定（デフォルトON）
+    const skipWeekendsHolidays = settings.skip_weekends_holidays !== "false";
+    if (skipWeekendsHolidays) {
+      const weekday = currentJstWeekday(); // 0=日, 6=土
+      if (weekday === 0 || weekday === 6) {
+        return res.status(200).json({
+          processed: 0, success: 0, failed: 0,
+          skipped: true, reason: "土日",
+        });
+      }
+      if (isJapaneseHoliday(currentJstDateString())) {
+        return res.status(200).json({
+          processed: 0, success: 0, failed: 0,
+          skipped: true, reason: "祝日",
+        });
+      }
+    }
+
     const configuredHour = parseInt(settings.auto_send_hour, 10);
     const targetHour = Number.isFinite(configuredHour) ? configuredHour : 9;
     const nowHour = currentJstHour();

@@ -261,12 +261,6 @@
   .task-overdue { color: #dc2626; font-weight: 700; }
 
   /* Settings */
-  .settings-form { display: flex; flex-direction: column; gap: 18px; max-width: 360px; }
-  .settings-checkbox-row {
-    display: flex; align-items: center; gap: 8px; font-size: 13px;
-    color: var(--gray-700); cursor: pointer; font-family: inherit;
-  }
-  .settings-checkbox-row input { width: 16px; height: 16px; cursor: pointer; }
   .settings-note {
     font-size: 12px; color: var(--gray-500); line-height: 1.6;
     background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px;
@@ -727,39 +721,12 @@
 
   <!-- 設定 -->
   <section class="crm-panel reveal-on-scroll" id="panel-settings">
-    <div class="panel-toolbar">
-      <div>
-        <h2>設定</h2>
-        <p class="panel-desc">送信の上限・間隔などを設定します</p>
-      </div>
-    </div>
-    <div class="settings-form">
-      <div class="form-group">
-        <label for="settingDailyLimit">1日の送信上限</label>
-        <input type="number" id="settingDailyLimit" min="1" placeholder="20" />
-      </div>
-      <div class="form-group">
-        <label for="settingSendInterval">送信間隔（秒）</label>
-        <input type="number" id="settingSendInterval" min="0" placeholder="30" />
-      </div>
-      <label class="settings-checkbox-row">
-        <input type="checkbox" id="settingSkipRejection" />
-        営業お断りサイトを自動スキップ
-      </label>
-      <div class="form-group">
-        <label for="settingAutoSendHour">自動送信の実行時刻</label>
-        <select id="settingAutoSendHour"></select>
-      </div>
-      <p class="settings-note">
-        自動送信は1日1回、Vercelの実行スケジュールに基づいて処理されます。設定時刻に正確に
-        実行されるとは限りません（概ね毎日9時頃に処理されます）。
-      </p>
-      <div>
-        <button class="btn-add" onclick="saveSettings()"><i data-lucide="save"></i>保存</button>
-      </div>
-    </div>
+    <p class="settings-note">
+      1日の送信上限・送信間隔・自動送信の実行時刻・土日祝日スキップなどの自動送信関連の設定は
+      <a href="send.html">送信ページ</a>の「⚙️ 自動送信の設定」に移動しました。
+    </p>
 
-    <div class="panel-toolbar" style="margin-top:32px;">
+    <div class="panel-toolbar" style="margin-top:20px;">
       <div>
         <h2>送信者アカウント</h2>
         <p class="panel-desc">複数のGmailアカウントを登録して、送信時に送信者を選べます</p>
@@ -1032,7 +999,6 @@
   let pipelineStats = null;
   let variants = [];
   let abTests = [];
-  let settings = {};
   let attachments = [];
   let senderAccounts = [];
 
@@ -1066,7 +1032,7 @@
     await loadCompanies();
     await Promise.all([
       loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
-      loadVariants(), loadAbTests(), loadSettings(), loadAttachments(), loadSenderAccounts(),
+      loadVariants(), loadAbTests(), loadAttachments(), loadSenderAccounts(),
     ]);
     lucide.createIcons();
     initScrollReveal();
@@ -1966,63 +1932,6 @@
     document.getElementById("abTestDetailModal").classList.remove("open");
   }
 
-  // ==================== 設定 ====================
-
-  async function loadSettings() {
-    try {
-      const res = await fetch("/api/crm?action=settings");
-      settings = await res.json();
-      renderSettingsForm();
-    } catch (err) {
-      showToast("設定の取得に失敗しました: " + esc(err.message), "error");
-    }
-  }
-
-  function renderSettingsForm() {
-    document.getElementById("settingDailyLimit").value = settings.daily_send_limit ?? 20;
-    document.getElementById("settingSendInterval").value = settings.send_interval_seconds ?? 30;
-    document.getElementById("settingSkipRejection").checked = settings.skip_rejection_sites !== "false";
-
-    const hourSelect = document.getElementById("settingAutoSendHour");
-    if (!hourSelect.options.length) {
-      hourSelect.innerHTML = Array.from({ length: 24 }, (_, h) =>
-        `<option value="${h}">${h}時</option>`
-      ).join("");
-    }
-    const autoSendHour = parseInt(settings.auto_send_hour, 10);
-    hourSelect.value = String(Number.isFinite(autoSendHour) ? autoSendHour : 9);
-  }
-
-  async function saveSettings() {
-    const dailyLimit = document.getElementById("settingDailyLimit").value;
-    const sendInterval = document.getElementById("settingSendInterval").value;
-    const skipRejection = document.getElementById("settingSkipRejection").checked;
-    const autoSendHour = document.getElementById("settingAutoSendHour").value;
-
-    const updates = [
-      { key: "daily_send_limit", value: String(dailyLimit || 20) },
-      { key: "send_interval_seconds", value: String(sendInterval || 30) },
-      { key: "skip_rejection_sites", value: skipRejection ? "true" : "false" },
-      { key: "auto_send_hour", value: String(autoSendHour || 9) },
-    ];
-
-    try {
-      for (const u of updates) {
-        const res = await fetch("/api/crm?action=settings", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(u),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "保存エラー");
-        settings[u.key] = u.value;
-      }
-      showToast("設定を保存しました", "success");
-    } catch (err) {
-      showToast("保存エラー: " + esc(err.message), "error");
-    }
-  }
-
   // ==================== 送信者アカウント ====================
 
   async function loadSenderAccounts() {
@@ -2291,7 +2200,7 @@
     { targetSelector: ".kanban-board",                          title: "パイプラインで商談を管理",   description: "商談をカンバン形式で管理します。カードをドラッグ&ドロップでステージを変更できます。パイプライン総額・成約率もここで確認できます。", position: "top" },
     { targetSelector: ".crm-tab-btn[data-tab=\"tasks\"]",       title: "タスクで期限管理",           description: "フォローアップや提案書送付などのTODOを管理します。期限切れのタスクは赤字で強調されます。ホーム画面にも未完了タスクが表示されます。", position: "bottom" },
     { targetSelector: ".crm-tab-btn[data-tab=\"abtests\"]",     title: "A/Bテストで文面を最適化",     description: "2つのバリアントを比較して、どちらが反応率が高いか確認できます。信頼度が「高」になったら、勝者のバリアントに絞り込みましょう。", position: "bottom" },
-    { targetSelector: ".crm-tab-btn[data-tab=\"settings\"]",    title: "設定で送信をコントロール",   description: "1日の送信上限・送信間隔・営業お断りサイトの自動スキップを設定できます。スパム判定を避けるため、送信間隔は30秒以上を推奨します。", position: "bottom" }
+    { targetSelector: ".crm-tab-btn[data-tab=\"settings\"]",    title: "設定で送信者アカウントを管理",   description: "複数のGmailアカウントを登録できます。1日の送信上限・送信間隔・自動送信の実行時刻などは送信ページの「⚙️ 自動送信の設定」に移動しました。", position: "bottom" }
   ], "locle_tour_crm");
 </script>
 </body>
