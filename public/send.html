@@ -423,6 +423,56 @@
   .btn-autosend-save:hover { background: linear-gradient(135deg, var(--green-600), var(--green-800)); }
   .btn-autosend-save svg { width: 13px; height: 13px; }
 
+  /* Auto pipeline (完全自動パイプライン) */
+  .autopipeline-section {
+    background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 4px 28px;
+    margin-bottom: 26px; box-shadow: var(--shadow-sm);
+  }
+  .autopipeline-section summary {
+    list-style: none; cursor: pointer; padding: 20px 0;
+    font-size: 14px; font-weight: 600; color: var(--gray-700);
+    letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px;
+    user-select: none;
+  }
+  .autopipeline-section summary::-webkit-details-marker { display: none; }
+  .autopipeline-section summary::after {
+    content: "▸"; margin-left: auto; color: var(--gray-400);
+    transition: transform 150ms; font-size: 12px;
+  }
+  .autopipeline-section[open] summary::after { transform: rotate(90deg); }
+  .autopipeline-body {
+    padding: 0 0 24px; display: flex; flex-direction: column; gap: 16px; max-width: 480px;
+  }
+  .autopipeline-warning {
+    font-size: 12px; line-height: 1.7; color: #92400e;
+    background: #fffbeb; border: 1px solid #fde68a;
+    border-radius: var(--radius-sm); padding: 10px 12px; margin: 0;
+  }
+  .autopipeline-search-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 16px;
+  }
+  .autopipeline-search-grid .autosend-form-group input,
+  .autopipeline-search-grid .autosend-form-group select {
+    padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900); width: 100%;
+  }
+  #pipelineDailyLimit { width: 100%; accent-color: var(--green-500); }
+  .autopipeline-logs { border-top: 1px solid var(--gray-100); padding-top: 14px; }
+  .autopipeline-logs h3 {
+    margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--gray-500);
+  }
+  .autopipeline-log-empty { font-size: 13px; color: var(--gray-400); margin: 0; }
+  .autopipeline-log-item {
+    display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline;
+    padding: 8px 10px; border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    font-size: 12px; color: var(--gray-700); margin-bottom: 6px;
+  }
+  .autopipeline-log-date { font-weight: 600; color: var(--gray-900); }
+  .autopipeline-log-error { color: #dc2626; flex-basis: 100%; }
+
   /* CSV export */
   .btn-export-csv {
     padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm);
@@ -886,6 +936,173 @@
     </div>
   </details>
 
+  <details class="autopipeline-section reveal-on-scroll" id="autoPipelineDetails">
+    <summary>🤖 完全自動パイプライン</summary>
+    <div class="autopipeline-body">
+      <p class="autopipeline-warning">
+        ⚠️ 有効にすると、毎日自動で企業を検索・登録・送信します。内容をよく確認してから有効にしてください。
+      </p>
+
+      <label class="autosend-checkbox-row">
+        <input type="checkbox" id="pipelineEnabled" />
+        このプロジェクトで完全自動パイプラインを有効にする
+      </label>
+
+      <div class="autopipeline-search-grid" id="pipelineSearchLocle">
+        <div class="autosend-form-group">
+          <label for="pipelineIndustry">業種</label>
+          <select id="pipelineIndustry">
+            <option value="">業種を選択</option>
+            <option value="製造業">製造業</option>
+            <option value="IT・情報通信">IT・情報通信</option>
+            <option value="小売・流通">小売・流通</option>
+            <option value="建設・不動産">建設・不動産</option>
+            <option value="医療・福祉">医療・福祉</option>
+            <option value="飲食・フード">飲食・フード</option>
+            <option value="サービス業">サービス業</option>
+            <option value="金融・保険">金融・保険</option>
+            <option value="教育・学習支援">教育・学習支援</option>
+            <option value="運輸・物流">運輸・物流</option>
+            <option value="農業・林業・漁業">農業・林業・漁業</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelinePrefecture">都道府県</label>
+          <select id="pipelinePrefecture">
+            <option value="">都道府県を選択</option>
+            <option value="北海道">北海道</option>
+            <option value="青森県">青森県</option>
+            <option value="岩手県">岩手県</option>
+            <option value="宮城県">宮城県</option>
+            <option value="秋田県">秋田県</option>
+            <option value="山形県">山形県</option>
+            <option value="福島県">福島県</option>
+            <option value="茨城県">茨城県</option>
+            <option value="栃木県">栃木県</option>
+            <option value="群馬県">群馬県</option>
+            <option value="埼玉県">埼玉県</option>
+            <option value="千葉県">千葉県</option>
+            <option value="東京都">東京都</option>
+            <option value="神奈川県">神奈川県</option>
+            <option value="新潟県">新潟県</option>
+            <option value="富山県">富山県</option>
+            <option value="石川県">石川県</option>
+            <option value="福井県">福井県</option>
+            <option value="山梨県">山梨県</option>
+            <option value="長野県">長野県</option>
+            <option value="岐阜県">岐阜県</option>
+            <option value="静岡県">静岡県</option>
+            <option value="愛知県">愛知県</option>
+            <option value="三重県">三重県</option>
+            <option value="滋賀県">滋賀県</option>
+            <option value="京都府">京都府</option>
+            <option value="大阪府">大阪府</option>
+            <option value="兵庫県">兵庫県</option>
+            <option value="奈良県">奈良県</option>
+            <option value="和歌山県">和歌山県</option>
+            <option value="鳥取県">鳥取県</option>
+            <option value="島根県">島根県</option>
+            <option value="岡山県">岡山県</option>
+            <option value="広島県">広島県</option>
+            <option value="山口県">山口県</option>
+            <option value="徳島県">徳島県</option>
+            <option value="香川県">香川県</option>
+            <option value="愛媛県">愛媛県</option>
+            <option value="高知県">高知県</option>
+            <option value="福岡県">福岡県</option>
+            <option value="佐賀県">佐賀県</option>
+            <option value="長崎県">長崎県</option>
+            <option value="熊本県">熊本県</option>
+            <option value="大分県">大分県</option>
+            <option value="宮崎県">宮崎県</option>
+            <option value="鹿児島県">鹿児島県</option>
+            <option value="沖縄県">沖縄県</option>
+          </select>
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelineCity">市区町村</label>
+          <input type="text" id="pipelineCity" placeholder="例: 前橋市" />
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelineKeyword">キーワード</label>
+          <input type="text" id="pipelineKeyword" placeholder="例: 自動車部品、ECサイト" />
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelineSize">従業員規模</label>
+          <select id="pipelineSize">
+            <option value="">規模を選択</option>
+            <option value="ベンチャー・スタートアップ">ベンチャー・スタートアップ</option>
+            <option value="中小企業">中小企業（〜300人）</option>
+            <option value="中堅企業">中堅企業（300〜1000人）</option>
+            <option value="大企業">大企業（1000人〜）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="autopipeline-search-grid" id="pipelineSearchOz" hidden>
+        <div class="autosend-form-group">
+          <label for="pipelineIndustryOz">業種</label>
+          <select id="pipelineIndustryOz">
+            <option value="">業種を選択</option>
+            <option value="製造業">製造業</option>
+            <option value="IT">IT</option>
+            <option value="金融">金融</option>
+            <option value="サービス業">サービス業</option>
+            <option value="建設">建設</option>
+            <option value="流通・小売">流通・小売</option>
+            <option value="食品">食品</option>
+            <option value="医療・福祉">医療・福祉</option>
+            <option value="教育">教育</option>
+            <option value="運輸・物流">運輸・物流</option>
+          </select>
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelineLocationOz">勤務地</label>
+          <select id="pipelineLocationOz">
+            <option value="">勤務地を選択</option>
+            <option value="高崎市">高崎市</option>
+            <option value="前橋市">前橋市</option>
+            <option value="太田市">太田市</option>
+            <option value="伊勢崎市">伊勢崎市</option>
+            <option value="桐生市">桐生市</option>
+            <option value="その他群馬県内">その他群馬県内</option>
+          </select>
+        </div>
+        <div class="autosend-form-group">
+          <label for="pipelineSizeOz">企業規模</label>
+          <select id="pipelineSizeOz">
+            <option value="">規模を選択</option>
+            <option value="50人未満">50人未満</option>
+            <option value="50〜300人">50〜300人</option>
+            <option value="300〜1000人">300〜1000人</option>
+            <option value="1000人以上">1000人以上</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="autosend-form-group">
+        <label for="pipelineVariant">使用するバリアント</label>
+        <select id="pipelineVariant"><option value="">バリアントを選択...</option></select>
+      </div>
+
+      <div class="autosend-form-group">
+        <label for="pipelineDailyLimit">1日の上限: <span id="pipelineDailyLimitValue">12</span>社</label>
+        <input type="range" id="pipelineDailyLimit" min="5" max="15" step="1" value="12"
+               oninput="document.getElementById('pipelineDailyLimitValue').textContent = this.value" />
+      </div>
+
+      <div>
+        <button class="btn-autosend-save" onclick="savePipelineConfig()"><i data-lucide="save"></i>保存</button>
+      </div>
+
+      <div class="autopipeline-logs">
+        <h3>直近の実行ログ（30日分）</h3>
+        <div id="pipelineLogsList" class="autopipeline-log-empty">読み込み中...</div>
+      </div>
+    </div>
+  </details>
+
   <section class="history-section reveal-on-scroll">
     <h2>送信履歴<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
     <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
@@ -1063,6 +1280,7 @@
       renderLogs();
       renderScheduleList();
       renderAutoSendSettingsForm();
+      initPipelineSection();
     } catch (err) {
       document.getElementById("logsBody").innerHTML =
         `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
@@ -1098,6 +1316,14 @@
       variants.map(v =>
         `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`
       ).join("");
+
+    const pvEl = document.getElementById("pipelineVariant");
+    if (pvEl) {
+      pvEl.innerHTML = '<option value="">バリアントを選択...</option>' +
+        variants.map(v =>
+          `<option value="${v.id}">${esc(v.name)}（${v.channel === "email" ? "メール" : "フォーム"}）</option>`
+        ).join("");
+    }
 
     // 登録済みの送信者アカウント(有効なもののみ)があれば、最初に登録されたものを
     // デフォルト選択にする。登録が無い場合は環境変数のデフォルトアカウントのみ表示する。
@@ -1675,6 +1901,132 @@
     } catch (err) {
       showToast("保存エラー: " + esc(err.message), "error");
     }
+  }
+
+  // ==================== 完全自動パイプライン ====================
+
+  let pipelineConfig = null;
+
+  async function initPipelineSection() {
+    const project = getCurrentProject();
+    document.getElementById("pipelineSearchLocle").hidden = project !== "locle";
+    document.getElementById("pipelineSearchOz").hidden = project !== "ozukanzukan";
+    await Promise.all([loadPipelineConfig(), loadPipelineLogs()]);
+  }
+
+  async function loadPipelineConfig() {
+    try {
+      const res = await fetch("/api/crm?action=auto-pipeline-config&project=" + encodeURIComponent(getCurrentProject()));
+      pipelineConfig = await res.json();
+      if (!res.ok) throw new Error(pipelineConfig.error || "取得エラー");
+      renderPipelineConfigForm(pipelineConfig);
+    } catch (err) {
+      showToast("自動パイプライン設定の取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function renderPipelineConfigForm(config) {
+    document.getElementById("pipelineEnabled").checked = !!config.enabled;
+
+    const dailyLimit = Number.isFinite(parseInt(config.daily_limit, 10)) ? parseInt(config.daily_limit, 10) : 12;
+    document.getElementById("pipelineDailyLimit").value = dailyLimit;
+    document.getElementById("pipelineDailyLimitValue").textContent = dailyLimit;
+
+    const vEl = document.getElementById("pipelineVariant");
+    if (vEl && config.variant_id) vEl.value = String(config.variant_id);
+
+    const p = config.search_params || {};
+    if (getCurrentProject() === "ozukanzukan") {
+      document.getElementById("pipelineIndustryOz").value = p.industry || "";
+      document.getElementById("pipelineLocationOz").value = p.location || "";
+      document.getElementById("pipelineSizeOz").value = p.size || "";
+    } else {
+      document.getElementById("pipelineIndustry").value = p.industry || "";
+      document.getElementById("pipelinePrefecture").value = p.prefecture || "";
+      document.getElementById("pipelineCity").value = p.city || "";
+      document.getElementById("pipelineKeyword").value = p.keyword || "";
+      document.getElementById("pipelineSize").value = p.size || "";
+    }
+  }
+
+  async function savePipelineConfig() {
+    const project = getCurrentProject();
+    const enabled = document.getElementById("pipelineEnabled").checked;
+    const variantId = document.getElementById("pipelineVariant").value;
+    const dailyLimit = document.getElementById("pipelineDailyLimit").value;
+
+    const searchParams = project === "ozukanzukan"
+      ? {
+          industry: document.getElementById("pipelineIndustryOz").value,
+          location: document.getElementById("pipelineLocationOz").value,
+          size:     document.getElementById("pipelineSizeOz").value,
+        }
+      : {
+          industry:   document.getElementById("pipelineIndustry").value,
+          prefecture: document.getElementById("pipelinePrefecture").value,
+          city:       document.getElementById("pipelineCity").value,
+          keyword:    document.getElementById("pipelineKeyword").value,
+          size:       document.getElementById("pipelineSize").value,
+        };
+
+    if (enabled && !variantId) {
+      showToast("有効にするにはバリアントを選択してください", "error");
+      return;
+    }
+    if (enabled && !Object.values(searchParams).some(v => String(v || "").trim())) {
+      showToast("有効にするには検索条件を1つ以上指定してください", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/crm?action=auto-pipeline-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project, enabled, search_params: searchParams,
+          variant_id: variantId || null, daily_limit: dailyLimit,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存エラー");
+      pipelineConfig = data;
+      showToast("自動パイプライン設定を保存しました", "success");
+    } catch (err) {
+      showToast("保存エラー: " + esc(err.message), "error");
+    }
+  }
+
+  async function loadPipelineLogs() {
+    const el = document.getElementById("pipelineLogsList");
+    try {
+      const res = await fetch("/api/crm?action=auto-pipeline-logs&project=" + encodeURIComponent(getCurrentProject()));
+      const logs = await res.json();
+      if (!res.ok) throw new Error(logs.error || "取得エラー");
+      renderPipelineLogs(Array.isArray(logs) ? logs : []);
+    } catch (err) {
+      el.innerHTML = `<p class="autopipeline-log-empty">実行ログの取得に失敗しました: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderPipelineLogs(logs) {
+    const el = document.getElementById("pipelineLogsList");
+    if (!logs.length) {
+      el.innerHTML = '<p class="autopipeline-log-empty">実行履歴はまだありません</p>';
+      return;
+    }
+    el.innerHTML = logs.map(l => {
+      const date = l.run_date ? new Date(l.run_date).toLocaleDateString("ja-JP") : "-";
+      const errorHtml = l.error_message ? `<span class="autopipeline-log-error">${esc(l.error_message)}</span>` : "";
+      return `
+        <div class="autopipeline-log-item">
+          <span class="autopipeline-log-date">${date}</span>
+          <span>見つかった: ${l.found_count ?? 0}社</span>
+          <span>リサーチ: ${l.researched_count ?? 0}社</span>
+          <span>送信: ${l.sent_count ?? 0}社</span>
+          <span>スキップ: ${l.skipped_count ?? 0}社</span>
+          ${errorHtml}
+        </div>`;
+    }).join("");
   }
 
   function exportLogsCSV() {

@@ -9,6 +9,9 @@ const { neon } = require("@neondatabase/serverless");
 const { sql, getSettings } = require("../lib/db");
 const submitFormHandler = require("./submit-form");
 const sendEmailHandler = require("./send-email");
+const discoverHandler = require("./discover");
+const companiesHandler = require("./companies");
+const researchHandler = require("./companies/[id]/research");
 const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-message-generator");
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
@@ -33,6 +36,9 @@ module.exports = async function handler(req, res) {
     case "attachments":       return handleAttachments(req, res);
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
+    case "auto-pipeline-config": return handleAutoPipelineConfig(req, res);
+    case "auto-pipeline-logs": return handleAutoPipelineLogs(req, res);
+    case "run-auto-pipeline": return handleRunAutoPipeline(req, res);
     case "generate-message": return handleGenerateMessage(req, res);
     case "followup-suggestions": return handleFollowUpSuggestions(req, res);
     case "generate-followup": return handleGenerateFollowUp(req, res);
@@ -45,7 +51,7 @@ module.exports = async function handler(req, res) {
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -281,6 +287,32 @@ async function handleDbSetup(req, res) {
     // meeting_notes.labeled_text/speakers_detected追加（話者分離機能用）
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS labeled_text TEXT");
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS speakers_detected JSONB DEFAULT '[]'");
+    // auto_pipeline_config / auto_pipeline_logsテーブル追加（完全自動営業パイプライン機能用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS auto_pipeline_config (
+        id              SERIAL PRIMARY KEY,
+        project         TEXT NOT NULL,
+        enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+        search_params   JSONB NOT NULL,
+        variant_id      INTEGER REFERENCES message_variants(id),
+        daily_limit     INTEGER NOT NULL DEFAULT 12,
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS auto_pipeline_logs (
+        id           SERIAL PRIMARY KEY,
+        project      TEXT NOT NULL,
+        run_date     DATE NOT NULL,
+        found_count  INTEGER DEFAULT 0,
+        researched_count INTEGER DEFAULT 0,
+        sent_count   INTEGER DEFAULT 0,
+        skipped_count INTEGER DEFAULT 0,
+        error_message TEXT,
+        created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -1569,35 +1601,28 @@ function createInternalRes() {
   };
 }
 
-async function invokeHandlerInternally(handler, body) {
-  const req = { method: "POST", body };
+async function invokeHandlerInternally(handler, body, query) {
+  const req = { method: "POST", body, query: query || {} };
   const res = createInternalRes();
   await handler(req, res);
   return { ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body: res.body };
 }
 
-async function handleRunScheduledSends(req, res) {
+// 土日祝日は自動送信をスキップする設定（デフォルトON）。スケジュール送信・自動パイプライン共通の判定
+function computeWeekendHolidaySkipReason(settings) {
+  if (settings.skip_weekends_holidays === "false") return null;
+  const weekday = currentJstWeekday(); // 0=日, 6=土
+  if (weekday === 0 || weekday === 6) return "土日";
+  if (isJapaneseHoliday(currentJstDateString())) return "祝日";
+  return null;
+}
+
+async function runScheduledSendsBatch(settings, skipReason) {
+  if (skipReason) {
+    return { processed: 0, success: 0, failed: 0, skipped: true, reason: skipReason };
+  }
+
   try {
-    const settings = await getSettings();
-
-    // 土日祝日は自動送信をスキップする設定（デフォルトON）
-    const skipWeekendsHolidays = settings.skip_weekends_holidays !== "false";
-    if (skipWeekendsHolidays) {
-      const weekday = currentJstWeekday(); // 0=日, 6=土
-      if (weekday === 0 || weekday === 6) {
-        return res.status(200).json({
-          processed: 0, success: 0, failed: 0,
-          skipped: true, reason: "土日",
-        });
-      }
-      if (isJapaneseHoliday(currentJstDateString())) {
-        return res.status(200).json({
-          processed: 0, success: 0, failed: 0,
-          skipped: true, reason: "祝日",
-        });
-      }
-    }
-
     const configuredHour = parseInt(settings.auto_send_hour, 10);
     const targetHour = Number.isFinite(configuredHour) ? configuredHour : 9;
     const nowHour = currentJstHour();
@@ -1605,13 +1630,13 @@ async function handleRunScheduledSends(req, res) {
     // Vercel Cronは "0 9 * * *" 固定(1日1回)のため、設定時刻が9時以外の場合は
     // 実際には「次にcronが呼ばれた時」まで実行が持ち越される
     if (nowHour !== targetHour) {
-      return res.status(200).json({
+      return {
         processed: 0,
         success: 0,
         failed: 0,
         skipped: true,
         message: `設定された実行時刻(${targetHour}時)ではないため今回はスキップしました(現在${nowHour}時 JST)`,
-      });
+      };
     }
 
     const due = await sql`
@@ -1652,9 +1677,339 @@ async function handleRunScheduledSends(req, res) {
       }
     }
 
-    return res.status(200).json({ processed: due.length, success, failed });
+    return { processed: due.length, success, failed };
+  } catch (err) {
+    return { error: `実行エラー: ${err.message}` };
+  }
+}
+
+// Vercel Hobbyプランは1プロジェクトあたりCron Jobsが最大2つまでのため、新しくcronを増やさず、
+// 既存の「run-scheduled-sends」cron(毎日9時)の末尾で完全自動パイプラインも続けて実行する。
+// 両者は同じ関数呼び出し・同じmaxDuration(60秒)の中で動くため、自動パイプライン側の時間予算は
+// スケジュール送信の処理時間も差し引かれる形で共有される
+async function handleRunScheduledSends(req, res) {
+  let settings;
+  try {
+    settings = await getSettings();
   } catch (err) {
     return res.status(500).json({ error: `実行エラー: ${err.message}` });
+  }
+
+  const skipReason = computeWeekendHolidaySkipReason(settings);
+  const scheduledSendsResult = await runScheduledSendsBatch(settings, skipReason);
+
+  let autoPipelineResult;
+  try {
+    const deadline = Date.now() + AUTO_PIPELINE_TIME_BUDGET_MS;
+    autoPipelineResult = await runAutoPipelineAllProjects(settings, skipReason, deadline);
+  } catch (err) {
+    autoPipelineResult = { error: `自動パイプライン実行エラー: ${err.message}` };
+  }
+
+  return res.status(200).json({
+    scheduled_sends: scheduledSendsResult,
+    auto_pipeline: autoPipelineResult,
+  });
+}
+
+// ==================== auto-pipeline ====================
+//
+// 完全自動営業パイプライン。有効化されたproject(locle/ozukanzukan)それぞれについて、
+// 毎日1回のcronで「企業検索→登録→リサーチ→送信」までを自動で行う。
+// Vercel Hobbyプランのmaxduration(60秒)というハード上限の中で、検索API・サイト解析・
+// フォーム自動送信という重い処理を複数社分こなす必要があるため、絶対時刻ベースの
+// 時間予算(AUTO_PIPELINE_TIME_BUDGET_MS)で処理を打ち切り、間に合わなかった分は
+// その日はそこで終了する(daily_limitはあくまで目標上限であり、時間内に収まる範囲が実質の上限)。
+
+const AUTO_PIPELINE_PROJECTS = ["locle", "ozukanzukan"];
+const AUTO_PIPELINE_HARD_CAP = 15;
+const AUTO_PIPELINE_DEFAULT_DAILY_LIMIT = 12;
+const AUTO_PIPELINE_TIME_BUDGET_MS = 48000; // maxDuration=60秒に対して12秒の余裕を残す
+
+function isValidPipelineProject(p) {
+  return p === "locle" || p === "ozukanzukan";
+}
+
+async function handleAutoPipelineConfig(req, res) {
+  if (req.method === "GET") {
+    const project = req.query.project;
+    if (!isValidPipelineProject(project)) {
+      return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
+    }
+    try {
+      const [config] = await sql`SELECT * FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
+      if (config) return res.status(200).json(config);
+      return res.status(200).json({
+        id: null,
+        project,
+        enabled: false,
+        search_params: {},
+        variant_id: null,
+        daily_limit: AUTO_PIPELINE_DEFAULT_DAILY_LIMIT,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST" || req.method === "PATCH") {
+    const { project, enabled, search_params, variant_id, daily_limit } = req.body || {};
+    if (!isValidPipelineProject(project)) {
+      return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
+    }
+    if (search_params !== undefined && (typeof search_params !== "object" || search_params === null || Array.isArray(search_params))) {
+      return res.status(400).json({ error: "search_paramsはオブジェクトで指定してください" });
+    }
+
+    const enabledFlag = !!enabled;
+
+    let variantId = null;
+    if (variant_id !== undefined && variant_id !== null && variant_id !== "") {
+      variantId = parseInt(variant_id, 10);
+      if (!variantId || isNaN(variantId)) {
+        return res.status(400).json({ error: "有効なvariant_idを指定してください" });
+      }
+      try {
+        const [variant] = await sql`SELECT id, project FROM message_variants WHERE id = ${variantId}`;
+        if (!variant) return res.status(400).json({ error: "指定されたバリアントが見つかりません" });
+        if (variant.project !== project) {
+          return res.status(400).json({ error: "バリアントのプロジェクトが一致しません" });
+        }
+      } catch (err) {
+        return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+      }
+    }
+
+    if (enabledFlag && !variantId) {
+      return res.status(400).json({ error: "有効にするにはバリアントを選択してください" });
+    }
+
+    const searchParamsObj = (search_params && typeof search_params === "object") ? search_params : {};
+    if (enabledFlag && !Object.values(searchParamsObj).some(v => String(v || "").trim())) {
+      return res.status(400).json({ error: "有効にするには検索条件を1つ以上指定してください" });
+    }
+
+    const dailyLimit = Math.min(
+      Math.max(parseInt(daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, 1),
+      AUTO_PIPELINE_HARD_CAP
+    );
+    const searchParamsJson = JSON.stringify(searchParamsObj);
+
+    try {
+      const [existing] = await sql`SELECT id FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
+      let saved;
+      if (existing) {
+        [saved] = await sql`
+          UPDATE auto_pipeline_config
+          SET enabled = ${enabledFlag}, search_params = ${searchParamsJson}, variant_id = ${variantId},
+              daily_limit = ${dailyLimit}, updated_at = NOW()
+          WHERE id = ${existing.id}
+          RETURNING *
+        `;
+      } else {
+        [saved] = await sql`
+          INSERT INTO auto_pipeline_config (project, enabled, search_params, variant_id, daily_limit)
+          VALUES (${project}, ${enabledFlag}, ${searchParamsJson}, ${variantId}, ${dailyLimit})
+          RETURNING *
+        `;
+      }
+      return res.status(200).json(saved);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH のみ対応しています" });
+}
+
+async function handleAutoPipelineLogs(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  const project = req.query.project;
+  if (!isValidPipelineProject(project)) {
+    return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
+  }
+  try {
+    const logs = await sql`
+      SELECT * FROM auto_pipeline_logs
+      WHERE project = ${project} AND created_at >= NOW() - INTERVAL '30 days'
+      ORDER BY created_at DESC
+    `;
+    return res.status(200).json(logs);
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+async function logAutoPipelineRun(project, counts) {
+  try {
+    await sql`
+      INSERT INTO auto_pipeline_logs
+        (project, run_date, found_count, researched_count, sent_count, skipped_count, error_message)
+      VALUES (
+        ${project}, CURRENT_DATE,
+        ${counts.found_count || 0}, ${counts.researched_count || 0},
+        ${counts.sent_count || 0}, ${counts.skipped_count || 0},
+        ${counts.error_message || null}
+      )
+    `;
+  } catch (err) {
+    // ログ記録自体の失敗はパイプライン本体の実行結果には影響させない
+  }
+}
+
+// 企業候補をcompaniesに登録し、続けてリサーチ(フォーム解析・会社概要抽出)を実行する。
+// 既存のcompanies.js / companies/[id]/research.jsのハンドラーをそのまま内部呼び出しすることで、
+// 除外URL判定・会社概要抽出・訴求ポイント自動タグ付けなど既存ロジックを重複実装せずに再利用する
+async function registerAndResearchCandidate(candidate, project) {
+  const registerResult = await invokeHandlerInternally(companiesHandler, {
+    name: candidate.name,
+    url: candidate.url,
+    project,
+  });
+  if (!registerResult.ok || !registerResult.body?.id) {
+    throw new Error(registerResult.body?.error || "企業登録に失敗しました");
+  }
+  const companyId = registerResult.body.id;
+
+  const researchRes = await invokeHandlerInternally(researchHandler, {}, { id: String(companyId) });
+  if (!researchRes.ok) {
+    throw new Error(researchRes.body?.error || "リサーチに失敗しました");
+  }
+  return researchRes.body; // リサーチ結果が反映された企業レコード
+}
+
+// automatable=trueならフォーム自動送信、無理な場合(または送信失敗時)はメールアドレスがあれば
+// メール送信を試みる。除外ドメイン・営業お断り自動検出・1日の送信上限・24時間の再送信ガードは
+// 既存のsubmit-form.js / send-email.jsの内部呼び出しにより自動的に適用される
+async function trySendToCompany(company, variantId) {
+  try {
+    if (company?.research_result?.automatable === true) {
+      const formResult = await invokeHandlerInternally(submitFormHandler, {
+        company_id: company.id,
+        variant_id: variantId,
+        tags: ["自動パイプライン"],
+      });
+      if (formResult.ok) return true;
+    }
+    if (company?.email) {
+      const [variant] = await sql`SELECT attachment_id FROM message_variants WHERE id = ${variantId}`;
+      const emailResult = await invokeHandlerInternally(sendEmailHandler, {
+        company_id: company.id,
+        variant_id: variantId,
+        attachment_id: variant?.attachment_id || null,
+        tags: ["自動パイプライン"],
+      });
+      if (emailResult.ok) return true;
+    }
+  } catch (err) {
+    // 送信時の予期しないエラーはこの企業だけスキップし、パイプライン全体は止めない
+  }
+  return false;
+}
+
+async function runAutoPipelineForProject(project, settings, skipReason, deadline) {
+  const [config] = await sql`SELECT * FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
+  if (!config || !config.enabled) {
+    return { project, enabled: false };
+  }
+
+  if (skipReason) {
+    await logAutoPipelineRun(project, { error_message: `${skipReason}のためスキップしました` });
+    return { project, enabled: true, skipped: true, reason: skipReason };
+  }
+
+  let found = 0, researched = 0, sent = 0, skipped = 0, attempted = 0;
+  let errorMessage = null;
+
+  try {
+    if (!config.variant_id) {
+      errorMessage = "使用するバリアントが設定されていません";
+    } else if (Date.now() > deadline) {
+      errorMessage = "他プロジェクトの処理で時間予算を使い切ったため、今回はスキップしました";
+    } else {
+      // auto_pipeline_config.daily_limitと既存settings.daily_send_limit(本日の残り送信可能数)の
+      // 小さい方を、このプロジェクトで今回処理する実質の上限とする
+      const configLimit = Math.min(parseInt(config.daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, AUTO_PIPELINE_HARD_CAP);
+      const dailySendLimit = parseInt(settings.daily_send_limit, 10) || 20;
+      const [{ count: todaySendCount }] = await sql`
+        SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
+      `;
+      const remainingSendQuota = Math.max(0, dailySendLimit - todaySendCount);
+      const effectiveLimit = Math.min(configLimit, remainingSendQuota);
+
+      if (effectiveLimit <= 0) {
+        errorMessage = "本日の送信上限(設定タブの1日の送信上限)にすでに達しているため実行をスキップしました";
+      } else {
+        const searchParams = (config.search_params && typeof config.search_params === "object") ? config.search_params : {};
+        const discoverResult = await invokeHandlerInternally(discoverHandler, {
+          project,
+          ...searchParams,
+          result_count: 20,
+        });
+
+        if (!discoverResult.ok) {
+          errorMessage = discoverResult.body?.error || "企業検索に失敗しました";
+        } else if (discoverResult.body?.configured === false) {
+          errorMessage = discoverResult.body?.message || "検索機能が設定されていません";
+        } else {
+          const candidates = Array.isArray(discoverResult.body?.results) ? discoverResult.body.results : [];
+          found = candidates.length;
+
+          for (const candidate of candidates) {
+            if (attempted >= effectiveLimit) break;
+            if (Date.now() > deadline) {
+              errorMessage = `実行時間の都合により処理を打ち切りました(${attempted}/${effectiveLimit}社処理)`;
+              break;
+            }
+            attempted++;
+
+            let company;
+            try {
+              company = await registerAndResearchCandidate(candidate, project);
+              researched++;
+            } catch (err) {
+              skipped++;
+              continue;
+            }
+
+            const sentOk = await trySendToCompany(company, config.variant_id);
+            if (sentOk) sent++; else skipped++;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    errorMessage = err.message;
+  }
+
+  await logAutoPipelineRun(project, {
+    found_count: found, researched_count: researched, sent_count: sent, skipped_count: skipped, error_message: errorMessage,
+  });
+  return { project, enabled: true, found, researched, sent, skipped, error: errorMessage };
+}
+
+async function runAutoPipelineAllProjects(settings, skipReason, deadline) {
+  const results = [];
+  for (const project of AUTO_PIPELINE_PROJECTS) {
+    results.push(await runAutoPipelineForProject(project, settings, skipReason, deadline));
+  }
+  return { skipped: !!skipReason, reason: skipReason, results };
+}
+
+// 手動実行・動作確認用に自動パイプラインだけを単独で呼び出せるアクション。
+// 実際のcronからの定期実行は「run-scheduled-sends」の末尾から行われる
+// (Vercel Hobbyプランのcron数上限のため、これ専用のcronは登録していない)
+async function handleRunAutoPipeline(req, res) {
+  try {
+    const settings = await getSettings();
+    const skipReason = computeWeekendHolidaySkipReason(settings);
+    const deadline = Date.now() + AUTO_PIPELINE_TIME_BUDGET_MS;
+    const result = await runAutoPipelineAllProjects(settings, skipReason, deadline);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ error: `自動パイプライン実行エラー: ${err.message}` });
   }
 }
 
