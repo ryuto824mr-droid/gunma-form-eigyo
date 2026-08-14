@@ -31,6 +31,7 @@ const EXCLUDE_DOMAINS = [
   "schoolweb.ne.jp", "gakushu-kukan.com",
   "ac.jp", // 大学・高等教育機関専用ドメイン(hiroshima-u.ac.jp等のサブドメインも末尾一致で除外)
   "fallabs.com", "ntticc.or.jp", "govtechtokyo.or.jp", "shigotozaidan.or.jp",
+  "ota-cci.or.jp", // 太田商工会議所
   "or.jp", // 公益法人・財団法人専用ドメイン(末尾一致で除外)
   "hotstaff.co.jp", "odoor.co.jp", "revive-support.jp", "amazon.co.jp",
   "some-rize.jp", "tepco.co.jp", "peraichi.com", "school.stephouse.jp",
@@ -51,6 +52,7 @@ const NOISE_NAME_KEYWORDS = [
   "社会保険労務士", "行政書士", "弁護士法人", "サービスステーション",
   "ガソリンスタンド", "service station",
   "ほけんの窓口", "保険クリニック", "保険相談", "マネードクター",
+  "商工会議所", "商工会",
 ];
 
 // 「銀行」単体では正当な金融法人ヒットもあり誤除外が多いため、
