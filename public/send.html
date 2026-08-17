@@ -528,6 +528,16 @@
   .btn-filter-clear:hover { background: var(--gray-100); color: var(--gray-900); }
   .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
 
+  /* Send queue (送信待ちリスト) */
+  .send-queue-toolbar {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .send-queue-select-all {
+    display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gray-600);
+    cursor: pointer;
+  }
+  .send-queue-progress { font-size: 12px; color: var(--gray-400); }
+
   /* History table */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -909,7 +919,7 @@
       <div class="autosend-form-group">
         <label for="settingDailyLimit">自動パイプラインの1日の送信上限</label>
         <input type="number" id="settingDailyLimit" min="1" placeholder="20" />
-        <p class="autosend-note">手動送信（個別・一括）には適用されません。この上限は完全自動パイプラインの送信にのみ適用されます。</p>
+        <p class="autosend-note">手動送信（個別・一括）には適用されません。（現在未使用）自動パイプラインは送信まで自動実行しなくなったため、この上限を実際に適用する送信は現時点ではありません。</p>
       </div>
       <div class="autosend-form-group">
         <label for="settingSendInterval">送信間隔（秒）</label>
@@ -941,7 +951,8 @@
     <summary>🤖 完全自動パイプライン</summary>
     <div class="autopipeline-body">
       <p class="autopipeline-warning">
-        ⚠️ 有効にすると、毎日自動で企業を検索・登録・送信します。内容をよく確認してから有効にしてください。
+        ⚠️ 有効にすると、毎日自動で企業を検索・リサーチし、送信待ちリストに追加します。
+        実際の送信は、送信待ちリストから内容を確認してから手動で実行してください。
       </p>
 
       <label class="autosend-checkbox-row">
@@ -1088,7 +1099,7 @@
       </div>
 
       <div class="autosend-form-group">
-        <label for="pipelineDailyLimit">1日の上限: <span id="pipelineDailyLimitValue">12</span>社</label>
+        <label for="pipelineDailyLimit">1日に自動で調査・リストアップする上限: <span id="pipelineDailyLimitValue">12</span>社</label>
         <input type="range" id="pipelineDailyLimit" min="5" max="15" step="1" value="12"
                oninput="document.getElementById('pipelineDailyLimitValue').textContent = this.value" />
       </div>
@@ -1103,6 +1114,35 @@
       </div>
     </div>
   </details>
+
+  <section class="history-section send-queue-section reveal-on-scroll">
+    <h2>📋 送信待ちリスト</h2>
+    <div class="send-queue-toolbar">
+      <label class="send-queue-select-all">
+        <input type="checkbox" id="sendQueueSelectAll" onchange="toggleSendQueueSelectAll()" />
+        すべて選択
+      </label>
+      <button class="btn-autosend-save" id="sendQueueSendBtn" onclick="sendSelectedQueueItems()">選択したものを送信</button>
+      <span class="send-queue-progress" id="sendQueueProgress"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>企業名</th>
+            <th>バリアント</th>
+            <th>チャネル</th>
+            <th>登録日時</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="sendQueueBody">
+          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <section class="history-section reveal-on-scroll">
     <h2>送信履歴<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h2>
@@ -1282,6 +1322,7 @@
       renderScheduleList();
       renderAutoSendSettingsForm();
       initPipelineSection();
+      loadSendQueue();
     } catch (err) {
       document.getElementById("logsBody").innerHTML =
         `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
@@ -2025,11 +2066,122 @@
           <span class="autopipeline-log-date">${date}</span>
           <span>見つかった: ${l.found_count ?? 0}社</span>
           <span>リサーチ: ${l.researched_count ?? 0}社</span>
-          <span>送信: ${l.sent_count ?? 0}社</span>
+          <span>送信待ちに追加: ${l.sent_count ?? 0}社</span>
           <span>スキップ: ${l.skipped_count ?? 0}社</span>
           ${errorHtml}
         </div>`;
     }).join("");
+  }
+
+  // ==================== 送信待ちリスト (send_queue) ====================
+
+  let sendQueueItems = [];
+
+  async function loadSendQueue() {
+    const tbody = document.getElementById("sendQueueBody");
+    try {
+      const res = await fetch("/api/crm?action=send-queue&project=" + encodeURIComponent(getCurrentProject()));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得エラー");
+      sendQueueItems = Array.isArray(data) ? data : [];
+      renderSendQueue();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderSendQueue() {
+    const tbody = document.getElementById("sendQueueBody");
+    const selectAll = document.getElementById("sendQueueSelectAll");
+    if (selectAll) selectAll.checked = false;
+
+    if (sendQueueItems.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">送信待ちの企業はありません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sendQueueItems.map(item => `
+      <tr>
+        <td><input type="checkbox" class="send-queue-check" value="${item.id}" /></td>
+        <td>${esc(item.company_name)}</td>
+        <td>${esc(item.variant_name)}</td>
+        <td>${item.channel === "email" ? "📧 メール" : "📬 フォーム"}</td>
+        <td>${item.created_at ? new Date(item.created_at).toLocaleString("ja-JP") : "-"}</td>
+        <td><button class="btn-schedule-delete" onclick="dismissQueueItem(${item.id})">却下</button></td>
+      </tr>`).join("");
+  }
+
+  function toggleSendQueueSelectAll() {
+    const checked = document.getElementById("sendQueueSelectAll").checked;
+    document.querySelectorAll(".send-queue-check").forEach(cb => { cb.checked = checked; });
+  }
+
+  async function dismissQueueItem(id) {
+    if (!confirm("この企業を送信待ちリストから却下しますか？")) return;
+    try {
+      const res = await fetch("/api/crm?action=send-queue", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "dismissed" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新エラー");
+      sendQueueItems = sendQueueItems.filter(item => item.id !== id);
+      renderSendQueue();
+      showToast("送信待ちリストから却下しました", "success");
+    } catch (err) {
+      showToast("却下に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  async function sendSelectedQueueItems() {
+    const checkedIds = Array.from(document.querySelectorAll(".send-queue-check:checked")).map(cb => parseInt(cb.value, 10));
+    if (checkedIds.length === 0) {
+      showToast("送信する項目を選択してください", "error");
+      return;
+    }
+    const btn = document.getElementById("sendQueueSendBtn");
+    const progress = document.getElementById("sendQueueProgress");
+    btn.disabled = true;
+
+    let success = 0, failure = 0;
+    const total = checkedIds.length;
+    for (let i = 0; i < checkedIds.length; i++) {
+      const id = checkedIds[i];
+      const item = sendQueueItems.find(q => q.id === id);
+      if (!item) continue;
+      progress.textContent = `${i + 1}/${total}件: ${item.company_name} を送信中...`;
+      try {
+        const endpoint = item.channel === "email" ? "/api/send-email" : "/api/submit-form";
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_id: item.company_id, variant_id: item.variant_id, trigger_source: "manual" }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "送信エラー");
+        await fetch("/api/crm?action=send-queue", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, status: "sent" }),
+        });
+        success++;
+      } catch (err) {
+        failure++;
+      }
+    }
+
+    progress.textContent = `完了: 成功${success}件 / 失敗${failure}件`;
+    btn.disabled = false;
+    showToast(`送信が完了しました（成功${success}件 / 失敗${failure}件）`, failure === 0 ? "success" : "error");
+
+    await loadSendQueue();
+    try {
+      const lRes = await fetch(sendLogsUrl());
+      logs = await lRes.json();
+      renderLogs();
+    } catch {
+      // 送信履歴の再読み込み失敗は送信結果自体には影響させない
+    }
   }
 
   function exportLogsCSV() {

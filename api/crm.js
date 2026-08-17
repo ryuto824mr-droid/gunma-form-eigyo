@@ -39,6 +39,7 @@ module.exports = async function handler(req, res) {
     case "auto-pipeline-config": return handleAutoPipelineConfig(req, res);
     case "auto-pipeline-logs": return handleAutoPipelineLogs(req, res);
     case "run-auto-pipeline": return handleRunAutoPipeline(req, res);
+    case "send-queue":        return handleSendQueue(req, res);
     case "generate-message": return handleGenerateMessage(req, res);
     case "followup-suggestions": return handleFollowUpSuggestions(req, res);
     case "generate-followup": return handleGenerateFollowUp(req, res);
@@ -51,7 +52,7 @@ module.exports = async function handler(req, res) {
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -312,6 +313,30 @@ async function handleDbSetup(req, res) {
         error_message TEXT,
         created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
+    `);
+    // send_queue: 自動パイプラインが調査まで済ませた企業の送信待ちキュー
+    // (自動パイプラインは送信までは行わず、ここに登録するところまでで止まる。
+    // 実際の送信はsend.htmlの「送信待ちリスト」から人が内容を確認して手動で行う)
+    // status: pending(送信待ち) / sent(送信済み) / skipped(スキップ) / dismissed(却下)
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS send_queue (
+        id          SERIAL PRIMARY KEY,
+        project     TEXT NOT NULL,
+        company_id  INTEGER NOT NULL REFERENCES companies(id),
+        variant_id  INTEGER NOT NULL REFERENCES message_variants(id),
+        channel     TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'pending',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // 同一企業・同一バリアントのpending行が多重に積み重なるのを防ぐ多重防御。
+    // queueCompanyForSend()側の事前チェックが主だが、DB制約としても保険をかけておく
+    // (status='pending'のみを対象にした部分UNIQUEインデックスなので、sent/skipped/dismissed後の
+    // 再登録は妨げない)
+    await dbSql.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS send_queue_pending_company_variant_uidx
+      ON send_queue (company_id, variant_id)
+      WHERE status = 'pending'
     `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
@@ -1880,35 +1905,43 @@ async function registerAndResearchCandidate(candidate, project) {
   return researchRes.body; // リサーチ結果が反映された企業レコード
 }
 
-// automatable=trueならフォーム自動送信、無理な場合(または送信失敗時)はメールアドレスがあれば
-// メール送信を試みる。除外ドメイン・営業お断り自動検出・1日の送信上限・24時間の再送信ガードは
-// 既存のsubmit-form.js / send-email.jsの内部呼び出しにより自動的に適用される
-async function trySendToCompany(company, variantId) {
-  try {
-    if (company?.research_result?.automatable === true) {
-      const formResult = await invokeHandlerInternally(submitFormHandler, {
-        company_id: company.id,
-        variant_id: variantId,
-        tags: ["自動パイプライン"],
-        trigger_source: "auto_pipeline",
-      });
-      if (formResult.ok) return true;
-    }
-    if (company?.email) {
-      const [variant] = await sql`SELECT attachment_id FROM message_variants WHERE id = ${variantId}`;
-      const emailResult = await invokeHandlerInternally(sendEmailHandler, {
-        company_id: company.id,
-        variant_id: variantId,
-        attachment_id: variant?.attachment_id || null,
-        tags: ["自動パイプライン"],
-        trigger_source: "auto_pipeline",
-      });
-      if (emailResult.ok) return true;
-    }
-  } catch (err) {
-    // 送信時の予期しないエラーはこの企業だけスキップし、パイプライン全体は止めない
+// automatable=trueならフォーム、無理な場合はメールアドレスがあればメールと、
+// companies.htmlのresolveSendChannel()の自動判定と同じ優先順位でチャネルを決め、
+// 実際には送信せずsend_queueにstatus='pending'で登録するところまでで止める。
+// 除外ドメイン・営業お断り自動検出等のチェックは、人がsend.htmlの送信待ちリストから
+// 実際に送信ボタンを押した時点でsubmit-form.js / send-email.js側で適用される
+//
+// 重複登録防止: discover.js側の既知ホスト名除外が主な防御線だが、それをすり抜けた場合
+// (URL表記ゆれ等で同一企業が別レコードとして再登録された場合など)に備えて、INSERT前に
+// 同一company_id・variant_idのpending行が既に無いか確認する。DB側にも同じ条件の部分
+// UNIQUEインデックス(send_queue_pending_company_variant_uidx)を張っているため、
+// この事前チェックをすり抜けた場合(同時実行競合等)もINSERT自体がDB制約で失敗し、
+// catchでfalseを返す(=多重登録は起きない)
+async function queueCompanyForSend(company, project, variantId) {
+  let channel;
+  if (company?.research_result?.automatable === true) {
+    channel = "form";
+  } else if (company?.email) {
+    channel = "email";
+  } else {
+    return false;
   }
-  return false;
+  try {
+    const [existing] = await sql`
+      SELECT id FROM send_queue
+      WHERE company_id = ${company.id} AND variant_id = ${variantId} AND status = 'pending'
+      LIMIT 1
+    `;
+    if (existing) return false;
+
+    await sql`
+      INSERT INTO send_queue (project, company_id, variant_id, channel, status)
+      VALUES (${project}, ${company.id}, ${variantId}, ${channel}, 'pending')
+    `;
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 async function runAutoPipelineForProject(project, settings, skipReason, deadline) {
@@ -1922,7 +1955,7 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
     return { project, enabled: true, skipped: true, reason: skipReason };
   }
 
-  let found = 0, researched = 0, sent = 0, skipped = 0, attempted = 0;
+  let found = 0, researched = 0, queued = 0, skipped = 0, attempted = 0;
   let errorMessage = null;
 
   try {
@@ -1931,18 +1964,12 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
     } else if (Date.now() > deadline) {
       errorMessage = "他プロジェクトの処理で時間予算を使い切ったため、今回はスキップしました";
     } else {
-      // auto_pipeline_config.daily_limitと既存settings.daily_send_limit(本日の残り送信可能数)の
-      // 小さい方を、このプロジェクトで今回処理する実質の上限とする
-      const configLimit = Math.min(parseInt(config.daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, AUTO_PIPELINE_HARD_CAP);
-      const dailySendLimit = parseInt(settings.daily_send_limit, 10) || 20;
-      const [{ count: todaySendCount }] = await sql`
-        SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
-      `;
-      const remainingSendQuota = Math.max(0, dailySendLimit - todaySendCount);
-      const effectiveLimit = Math.min(configLimit, remainingSendQuota);
+      // auto_pipeline_config.daily_limitが、このプロジェクトで1日に自動調査・送信待ちリストへの
+      // 追加を行う上限(実際の送信は行わないため、送信上限(settings.daily_send_limit)とは無関係)
+      const effectiveLimit = Math.min(parseInt(config.daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, AUTO_PIPELINE_HARD_CAP);
 
       if (effectiveLimit <= 0) {
-        errorMessage = "本日の送信上限(設定タブの1日の送信上限)にすでに達しているため実行をスキップしました";
+        errorMessage = "1日の上限が0以下のため実行をスキップしました";
       } else {
         const searchParams = (config.search_params && typeof config.search_params === "object") ? config.search_params : {};
         const discoverResult = await invokeHandlerInternally(discoverHandler, {
@@ -1976,8 +2003,8 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
               continue;
             }
 
-            const sentOk = await trySendToCompany(company, config.variant_id);
-            if (sentOk) sent++; else skipped++;
+            const queuedOk = await queueCompanyForSend(company, project, config.variant_id);
+            if (queuedOk) queued++; else skipped++;
           }
         }
       }
@@ -1986,10 +2013,11 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
     errorMessage = err.message;
   }
 
+  // auto_pipeline_logs.sent_countは実際の送信数ではなく、送信待ちリストへのキュー追加数を記録する
   await logAutoPipelineRun(project, {
-    found_count: found, researched_count: researched, sent_count: sent, skipped_count: skipped, error_message: errorMessage,
+    found_count: found, researched_count: researched, sent_count: queued, skipped_count: skipped, error_message: errorMessage,
   });
-  return { project, enabled: true, found, researched, sent, skipped, error: errorMessage };
+  return { project, enabled: true, found, researched, queued, skipped, error: errorMessage };
 }
 
 async function runAutoPipelineAllProjects(settings, skipReason, deadline) {
@@ -2013,6 +2041,69 @@ async function handleRunAutoPipeline(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `自動パイプライン実行エラー: ${err.message}` });
   }
+}
+
+// ==================== send-queue ====================
+//
+// 自動パイプラインがqueueCompanyForSend()で登録した送信待ちキュー。
+// GET: pending状態の一覧(企業名・バリアント名をJOINして返す) / PATCH: ステータス更新 / DELETE: 削除
+
+const SEND_QUEUE_STATUSES = ["pending", "sent", "skipped", "dismissed"];
+
+async function handleSendQueue(req, res) {
+  if (req.method === "GET") {
+    const project = req.query.project;
+    if (project !== "locle" && project !== "ozukanzukan") {
+      return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
+    }
+    try {
+      const rows = await sql`
+        SELECT sq.id, sq.project, sq.company_id, sq.variant_id, sq.channel, sq.status, sq.created_at,
+               c.name AS company_name, c.url AS company_url,
+               mv.name AS variant_name
+        FROM send_queue sq
+        JOIN companies c ON c.id = sq.company_id
+        JOIN message_variants mv ON mv.id = sq.variant_id
+        WHERE sq.project = ${project} AND sq.status = 'pending'
+        ORDER BY sq.created_at ASC
+      `;
+      return res.status(200).json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { id, status } = req.body || {};
+    const queueId = parseInt(id, 10);
+    if (!queueId || !SEND_QUEUE_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `有効なid, status(${SEND_QUEUE_STATUSES.join("/")})を指定してください` });
+    }
+    try {
+      const [updated] = await sql`UPDATE send_queue SET status = ${status} WHERE id = ${queueId} RETURNING *`;
+      if (!updated) return res.status(404).json({ error: "キュー項目が見つかりません" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const queueId = parseInt(id, 10);
+    if (!queueId) {
+      return res.status(400).json({ error: "有効なidを指定してください" });
+    }
+    try {
+      const [deleted] = await sql`DELETE FROM send_queue WHERE id = ${queueId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "キュー項目が見つかりません" });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET, PATCH, DELETEメソッドのみ対応しています" });
 }
 
 // ==================== generate-message ====================
