@@ -334,24 +334,38 @@
       <button type="button" class="wl-clock-btn clock-in" id="wlClockInBtn" onclick="clockAction('in')">🟢 出勤</button>
       <button type="button" class="wl-clock-btn clock-out" id="wlClockOutBtn" onclick="clockAction('out')">🔴 退勤</button>
     </div>
-
-    <div class="wl-form-group full">
-      <label for="wlChatText">今日やったこと・残タスクを話してください</label>
-      <div class="wl-chat-input-row">
-        <textarea id="wlChatText" placeholder="例: LOCLE企業リサーチを20社やりました。お仕事図鑑のReels台本も3本作成済みです。残りはA社への返信とSNS投稿の下書き確認です。"></textarea>
-        <button type="button" class="wl-mic-btn" id="wlMicBtn" onclick="toggleVoiceInput()" title="音声入力">🎤</button>
-      </div>
-    </div>
-    <button type="button" class="btn-primary" id="wlChatSubmitBtn" onclick="submitChatRecord()">記録する</button>
   </div>
 
   <div class="wl-section reveal-on-scroll">
-    <p class="wl-section-title">📋 Todo</p>
-    <p class="wl-todo-hint">💬 チャット入力で話した「残タスク」は自動でここにも追加されます。完了したらチェックを入れてください。</p>
+    <p class="wl-section-title">✅ やったこと</p>
+    <div class="wl-form-group full">
+      <div class="wl-chat-input-row">
+        <textarea id="wlTasksDoneText" placeholder="例: LOCLE企業リサーチを20社やりました。お仕事図鑑のReels台本も3本作成済みです。"></textarea>
+        <button type="button" class="wl-mic-btn" id="wlMicBtnDone" onclick="toggleVoiceInput('done')" title="音声入力">🎤</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">📌 残っているタスク</p>
+    <div class="wl-form-group full">
+      <div class="wl-chat-input-row">
+        <textarea id="wlTasksRemainingText" placeholder="例: A社への返信、SNS投稿の下書き確認"></textarea>
+        <button type="button" class="wl-mic-btn" id="wlMicBtnRemaining" onclick="toggleVoiceInput('remaining')" title="音声入力">🎤</button>
+      </div>
+    </div>
+    <button type="button" class="btn-primary" id="wlChatSubmitBtn" onclick="submitChatRecord()" style="margin-top:4px;">記録する</button>
+    <p class="wl-todo-hint" style="margin:8px 0 0;">「やったこと」「残っているタスク」「To Do」をまとめて保存します。</p>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">📋 To Do</p>
+    <p class="wl-todo-hint">🎤ボタンで話した内容はAIが解析し、Todo項目として自動追加されます。</p>
     <div class="wl-todo-add-row">
       <input type="text" id="wlTodoInput" placeholder="Todoを入力"
              onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoItem();}">
       <button type="button" class="btn-primary" onclick="addTodoItem()">追加</button>
+      <button type="button" class="wl-mic-btn" id="wlMicBtnTodo" onclick="toggleVoiceInput('todo')" title="音声でTodo追加">🎤</button>
     </div>
     <ul class="wl-todo-list" id="wlTodoList">
       <li class="wl-todo-empty">Todoはまだありません</li>
@@ -486,12 +500,11 @@
   function onNameSelectChange() {
     const isOther = document.getElementById("wlNameSelect").value === "__other__";
     document.getElementById("wlNameOtherGroup").hidden = !isOther;
-    document.getElementById("wlChatText").value = ""; // 氏名切り替え時のみクリア(他人の入力欄に書き続ける事故を防ぐ)
-    refreshCurrentUserState();
+    refreshCurrentUserState(true); // 氏名切り替え時は「やったこと」「残っているタスク」欄もその人の保存済み内容に合わせる
   }
 
   function onOtherNameInput() {
-    refreshCurrentUserState();
+    refreshCurrentUserState(true);
   }
 
   function getSelectedUserName() {
@@ -501,15 +514,20 @@
   }
 
   // 選択中の氏名に本日分の記録が既に存在する場合、その状態を出退勤表示・currentEditIdに反映する。
-  // loadTodayData()完了後にも呼ばれるため、入力中のチャット欄はここではクリアしない
-  // (出勤ボタンを押しただけでチャット欄の下書きが消えてしまうのを防ぐため)。
-  function refreshCurrentUserState() {
+  // loadTodayData()完了後にも呼ばれるため、populateDraftsがtrueの場合(氏名切り替え・初回読み込み時)
+  // のみ「やったこと」「残っているタスク」欄を保存済みの内容で上書きする。それ以外(出退勤・Todo操作
+  // 等による背後でのリロード)ではpopulateDraftsをfalseにし、入力中の下書きを消さないようにする
+  function refreshCurrentUserState(populateDrafts) {
     const name = getSelectedUserName();
     const existing = name ? todayLogs.find(l => l.user_name === name) : null;
     currentEditId = existing ? existing.id : null;
     currentTodoItems = existing && Array.isArray(existing.todo_items) ? existing.todo_items : [];
     currentConfirmedByBoss = existing ? !!existing.confirmed_by_boss : false;
     currentUserSessions = name ? todaySessions.filter(s => s.user_name === name) : [];
+    if (populateDrafts) {
+      document.getElementById("wlTasksDoneText").value = existing ? (existing.tasks_done || "") : "";
+      document.getElementById("wlTasksRemainingText").value = existing ? (existing.tasks_remaining || "") : "";
+    }
     updateStatusDisplay();
     renderTodoList();
     document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
@@ -677,9 +695,15 @@
     }
   }
 
-  // ===== チャット風入力(AI解析) =====
+  // ===== 音声入力(3つのマイクボタンで1つのSpeechRecognitionインスタンスを共有) =====
+  // target: "done"(やったこと) / "remaining"(残っているタスク) / "todo"(To Do)
   let recognition = null;
   let isRecording = false;
+  let recordingTarget = null;
+  let isProcessingTodoVoice = false;
+
+  const MIC_BUTTON_IDS = { done: "wlMicBtnDone", remaining: "wlMicBtnRemaining", todo: "wlMicBtnTodo" };
+  const VOICE_TARGET_TEXTAREA_IDS = { done: "wlTasksDoneText", remaining: "wlTasksRemainingText" };
 
   // ブラウザによってはマイク許可拒否時にonerror/onendが確実に発火しない既知の実装差異があるため、
   // toggleVoiceInput側のtry/catchと合わせて二重に状態をリセットできるようにしている
@@ -693,10 +717,9 @@
   };
 
   function initSpeechRecognition() {
-    const micBtn = document.getElementById("wlMicBtn");
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionCtor) {
-      micBtn.hidden = true;
+      Object.values(MIC_BUTTON_IDS).forEach(id => { document.getElementById(id).hidden = true; });
       return;
     }
     recognition = new SpeechRecognitionCtor();
@@ -706,66 +729,85 @@
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
-      const ta = document.getElementById("wlChatText");
-      ta.value = ta.value.trim() ? `${ta.value.trim()} ${transcript}` : transcript;
+      handleVoiceResult(recordingTarget, transcript);
     };
     recognition.onend = () => {
       isRecording = false;
-      micBtn.classList.remove("recording");
+      recordingTarget = null;
+      updateMicButtonsState();
     };
     recognition.onerror = (event) => {
       isRecording = false;
-      micBtn.classList.remove("recording");
+      recordingTarget = null;
+      updateMicButtonsState();
       showToast(SPEECH_ERROR_MESSAGES[event.error] || "音声入力に失敗しました", "error");
     };
   }
 
-  function toggleVoiceInput() {
+  // 3つのマイクが同時に動作しないよう、録音中・To Do音声のAI解析中は他のマイクボタンをdisabledにする
+  function updateMicButtonsState() {
+    const busy = isRecording || isProcessingTodoVoice;
+    Object.entries(MIC_BUTTON_IDS).forEach(([target, id]) => {
+      const btn = document.getElementById(id);
+      const isThisRecording = isRecording && recordingTarget === target;
+      btn.classList.toggle("recording", isThisRecording);
+      btn.disabled = busy && !isThisRecording;
+    });
+  }
+
+  function toggleVoiceInput(target) {
     if (!recognition) return;
-    const micBtn = document.getElementById("wlMicBtn");
-    if (isRecording) {
+    if (isRecording && recordingTarget === target) {
       try {
         recognition.stop();
       } catch (e) {
         // 実際のエンジン状態とisRecordingがずれてstop()が失敗した場合の保険:
         // 強制的にUIをリセットし、ボタンが「録音中」表示のまま固まらないようにする
         isRecording = false;
-        micBtn.classList.remove("recording");
+        recordingTarget = null;
+        updateMicButtonsState();
       }
-    } else {
-      try {
-        recognition.start();
-        isRecording = true;
-        micBtn.classList.add("recording");
-      } catch (e) {
-        isRecording = false;
-        micBtn.classList.remove("recording");
-        showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
-      }
+      return;
+    }
+    if (isRecording) return; // 他のマイクが録音中(disabledなので通常ここには来ない)
+    try {
+      recordingTarget = target;
+      recognition.start();
+      isRecording = true;
+      updateMicButtonsState();
+    } catch (e) {
+      isRecording = false;
+      recordingTarget = null;
+      updateMicButtonsState();
+      showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
     }
   }
 
-  // 「記録する」: AI(Claude)にテキストを解析させ、tasks_done/tasks_remainingを
-  // 整形させたうえでそのままwork-logsに保存する(退勤発言が検出されればclock_outも記録)
-  async function submitChatRecord() {
-    const userName = getSelectedUserName();
-    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
-    const text = document.getElementById("wlChatText").value.trim();
-    if (!text) { showToast("内容を入力してください", "error"); return; }
+  function handleVoiceResult(target, transcript) {
+    const textareaId = VOICE_TARGET_TEXTAREA_IDS[target];
+    if (textareaId) {
+      // 「やったこと」「残っているタスク」: AI解析はせず、音声認識結果をそのままテキストエリアに追記する
+      const ta = document.getElementById(textareaId);
+      ta.value = ta.value.trim() ? `${ta.value.trim()} ${transcript}` : transcript;
+      return;
+    }
+    if (target === "todo") {
+      addTodoItemsFromVoice(transcript);
+    }
+  }
 
-    const existing = todayLogs.find(l => l.user_name === userName);
-    const btn = document.getElementById("wlChatSubmitBtn");
-    btn.disabled = true;
-    btn.textContent = "解析中...";
+  // To Doのマイク入力: 話した内容をparse-work-logで解析し、抽出された箇条書き項目を
+  // (話した内容そのままではなく、複数のタスクが含まれていればAIに分割させたうえで)Todoに追加する。
+  // 既存のTodoとの重複判定は既存のisSimilarTodoText(類似度85%)をそのまま流用する
+  async function addTodoItemsFromVoice(transcript) {
+    if (!getSelectedUserName()) { showToast("氏名を選択または入力してください", "error"); return; }
+    isProcessingTodoVoice = true;
+    updateMicButtonsState();
     try {
       const parseRes = await fetch("/api/crm?action=parse-work-log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text,
-          existing_tasks_done: existing ? existing.tasks_done : "",
-          existing_tasks_remaining: existing ? existing.tasks_remaining : "",
-        }),
+        body: JSON.stringify({ text: transcript, existing_tasks_done: "", existing_tasks_remaining: "" }),
       });
       const parsed = await parseRes.json();
       if (!parseRes.ok) throw new Error(parsed.error || "解析に失敗しました");
@@ -774,21 +816,48 @@
         return;
       }
 
-      // AIが整形した「残タスク」のうち、まだTodoに無い行だけを自動追加する(確認は不要でそのまま追加)。
-      // AIは「残タスク」全文をその都度言い換えて返すため、完全一致ではなく類似度判定
-      // (isSimilarTodoText)で重複を防ぐ。done:trueの項目(完了済み)は比較対象から除外し、
-      // 同じ内容が完了後に再度出てきた場合は新規タスクとして追加する
       const mergedTodoItems = currentTodoItems.slice();
       const hasSimilarActiveTodo = text => mergedTodoItems.some(t => !t.done && isSimilarTodoText(t.text, text));
+      let addedCount = 0;
       parseBulletLines(parsed.tasks_remaining).forEach(lineText => {
         if (!hasSimilarActiveTodo(lineText)) {
           mergedTodoItems.push({ text: lineText, done: false });
+          addedCount++;
         }
       });
 
+      if (addedCount === 0) {
+        showToast("新しいTodoは検出されませんでした", "info");
+        return;
+      }
+      currentTodoItems = mergedTodoItems;
+      renderTodoList();
+      await saveTodoAndConfirmState();
+      showToast(`Todoを${addedCount}件追加しました`, "success");
+    } catch (err) {
+      showToast("Todoの音声追加に失敗しました: " + esc(err.message), "error");
+    } finally {
+      isProcessingTodoVoice = false;
+      updateMicButtonsState();
+    }
+  }
+
+  // 「記録する」: 「やったこと」「残っているタスク」(直接入力、AI解析なし)とTodoをまとめて保存する
+  async function submitChatRecord() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+
+    const tasksDone = document.getElementById("wlTasksDoneText").value.trim();
+    const tasksRemaining = document.getElementById("wlTasksRemainingText").value.trim();
+    const existing = todayLogs.find(l => l.user_name === userName);
+
+    const btn = document.getElementById("wlChatSubmitBtn");
+    btn.disabled = true;
+    btn.textContent = "記録中...";
+    try {
       const saveBody = existing
-        ? { id: existing.id, tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems }
-        : { user_name: userName, date: todayStr(), tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems };
+        ? { id: existing.id, tasks_done: tasksDone, tasks_remaining: tasksRemaining, todo_items: currentTodoItems }
+        : { user_name: userName, date: todayStr(), tasks_done: tasksDone, tasks_remaining: tasksRemaining, todo_items: currentTodoItems };
 
       const saveRes = await fetch("/api/crm?action=work-logs", {
         method: existing ? "PATCH" : "POST",
@@ -798,20 +867,7 @@
       const saved = await saveRes.json();
       if (!saveRes.ok) throw new Error(saved.error || "保存に失敗しました");
 
-      // 退勤発言が検出された場合、直近の未退勤セッション(work_sessions)に退勤時刻を記録する
-      if (parsed.detected_clock_out) {
-        const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
-        if (openSession) {
-          await fetch("/api/crm?action=work-sessions", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: openSession.id, clock_out: parsed.detected_clock_out }),
-          });
-        }
-      }
-
-      document.getElementById("wlChatText").value = "";
-      showToast(`記録しました: ${esc(truncate(parsed.tasks_done || "", 60))}`, "success");
+      showToast("記録しました", "success");
       await loadTodayData();
     } catch (err) {
       showToast("記録に失敗しました: " + esc(err.message), "error");
@@ -824,7 +880,7 @@
   // ===== 今日のチーム状況 =====
   // work_logs(やったこと/Todo/確認)とwork_sessions(出退勤セッション)を両方取得し、
   // user_nameで突き合わせてから描画する
-  async function loadTodayData() {
+  async function loadTodayData(populateDrafts) {
     const grid = document.getElementById("wlTeamGrid");
     try {
       const [logsRes, sessionsRes] = await Promise.all([
@@ -842,7 +898,7 @@
       return;
     }
     renderTeamStatus();
-    refreshCurrentUserState();
+    refreshCurrentUserState(populateDrafts);
   }
 
   function renderTeamStatus() {
@@ -1035,7 +1091,7 @@
   }
 
   initSpeechRecognition();
-  loadTodayData();
+  loadTodayData(true);
   initScrollReveal();
   initNavMenu("work-logs");
 </script>
