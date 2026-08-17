@@ -154,6 +154,38 @@
   .wl-team-hours { font-size: 12px; color: var(--green-700); font-weight: 700; margin: 4px 0; }
   .wl-team-tasks { font-size: 12px; color: var(--gray-500); line-height: 1.6; white-space: pre-wrap; }
   .wl-team-empty { font-size: 13px; color: var(--gray-400); font-style: italic; margin-top: 4px; }
+  .wl-team-todo { font-size: 12px; color: var(--gray-500); margin-top: 6px; }
+
+  /* Todo section */
+  .wl-todo-hint { font-size: 12px; color: var(--gray-400); margin: -8px 0 14px; }
+  .wl-todo-add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .wl-todo-add-row input {
+    flex: 1; padding: 9px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .wl-todo-add-row input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100); }
+  .wl-todo-add-row button { flex-shrink: 0; padding: 9px 18px; font-size: 13px; }
+  .wl-todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .wl-todo-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--gray-50); border-radius: var(--radius-sm); }
+  .wl-todo-item input[type="checkbox"] { width: 17px; height: 17px; cursor: pointer; flex-shrink: 0; }
+  .wl-todo-text { flex: 1; font-size: 14px; color: var(--gray-900); word-break: break-word; }
+  .wl-todo-item.done .wl-todo-text { text-decoration: line-through; color: var(--gray-400); }
+  .wl-todo-delete {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    color: var(--gray-400); font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px;
+  }
+  .wl-todo-delete:hover { color: #dc2626; background: #fff5f5; }
+  .wl-todo-empty { font-size: 13px; color: var(--gray-400); font-style: italic; }
+
+  /* 確認 section */
+  .wl-confirm-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--gray-900); cursor: pointer; }
+  .wl-confirm-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+  .wl-confirm-badge {
+    display: inline-block; font-size: 11px; font-weight: 600; color: var(--green-700);
+    background: var(--green-50); border: 1px solid var(--green-200); border-radius: 999px;
+    padding: 2px 8px; margin-left: 6px; vertical-align: middle;
+  }
 
   .wl-summary-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
   .wl-summary-controls .wl-form-group { min-width: 200px; margin: 0; }
@@ -309,6 +341,27 @@
   </div>
 
   <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">📋 Todo</p>
+    <p class="wl-todo-hint">💬 チャット入力で話した「残タスク」は自動でここにも追加されます。完了したらチェックを入れてください。</p>
+    <div class="wl-todo-add-row">
+      <input type="text" id="wlTodoInput" placeholder="Todoを入力"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoItem();}">
+      <button type="button" class="btn-primary" onclick="addTodoItem()">追加</button>
+    </div>
+    <ul class="wl-todo-list" id="wlTodoList">
+      <li class="wl-todo-empty">Todoはまだありません</li>
+    </ul>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">✅ 確認</p>
+    <label class="wl-confirm-row">
+      <input type="checkbox" id="wlConfirmedCheckbox" onchange="toggleConfirmedByBoss()">
+      社長確認済み
+    </label>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
     <p class="wl-section-title">今日のチーム状況</p>
     <div class="wl-team-grid" id="wlTeamGrid">
       <p style="font-size:13px; color:var(--gray-400);">読み込み中...</p>
@@ -342,9 +395,9 @@
     </div>
     <div class="wl-summary-table-wrap">
       <table class="wl-summary-table">
-        <thead><tr><th>日付</th><th>出退勤</th><th>稼働時間</th><th>やったこと</th></tr></thead>
+        <thead><tr><th>日付</th><th>出退勤</th><th>稼働時間</th><th>やったこと</th><th>確認</th></tr></thead>
         <tbody id="wlSummaryBody">
-          <tr class="empty-row"><td colspan="4">ユーザーを選択してください</td></tr>
+          <tr class="empty-row"><td colspan="5">ユーザーを選択してください</td></tr>
         </tbody>
       </table>
     </div>
@@ -409,6 +462,8 @@
   // ===== 本日の稼働記録 =====
   let todayLogs = [];
   let currentEditId = null;
+  let currentTodoItems = [];
+  let currentConfirmedByBoss = false;
 
   function onNameSelectChange() {
     const isOther = document.getElementById("wlNameSelect").value === "__other__";
@@ -434,7 +489,11 @@
     const name = getSelectedUserName();
     const existing = name ? todayLogs.find(l => l.user_name === name) : null;
     currentEditId = existing ? existing.id : null;
+    currentTodoItems = existing && Array.isArray(existing.todo_items) ? existing.todo_items : [];
+    currentConfirmedByBoss = existing ? !!existing.confirmed_by_boss : false;
     updateStatusDisplay(existing);
+    renderTodoList();
+    document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
   }
 
   function updateStatusDisplay(existing) {
@@ -447,6 +506,112 @@
     const outText = existing.clock_out ? `退勤 ${fmtTime(existing.clock_out)}` : "退勤未記録";
     const hoursText = existing.work_hours != null ? `（${Number(existing.work_hours).toFixed(2)}時間）` : "";
     el.textContent = `本日: ${inText} / ${outText} ${hoursText}`;
+  }
+
+  // ===== Todo / 確認 =====
+  function renderTodoList() {
+    const list = document.getElementById("wlTodoList");
+    if (currentTodoItems.length === 0) {
+      list.innerHTML = '<li class="wl-todo-empty">Todoはまだありません</li>';
+      return;
+    }
+    list.innerHTML = currentTodoItems.map((item, i) => `
+      <li class="wl-todo-item ${item.done ? "done" : ""}">
+        <input type="checkbox" ${item.done ? "checked" : ""} onchange="toggleTodoItem(${i})">
+        <span class="wl-todo-text">${esc(item.text)}</span>
+        <button type="button" class="wl-todo-delete" onclick="deleteTodoItem(${i})" title="削除">×</button>
+      </li>`).join("");
+  }
+
+  // Todo項目の追加/チェック/削除、社長確認チェックはいずれもこの関数経由でwork-logsに保存する。
+  // currentEditIdが無い(その日まだ何も記録していない)場合はPOSTで新規作成する
+  async function saveTodoAndConfirmState() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    const body = currentEditId
+      ? { id: currentEditId, todo_items: currentTodoItems, confirmed_by_boss: currentConfirmedByBoss }
+      : { user_name: userName, date: todayStr(), todo_items: currentTodoItems, confirmed_by_boss: currentConfirmedByBoss };
+    try {
+      const res = await fetch("/api/crm?action=work-logs", {
+        method: currentEditId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+      await loadTodayLogs();
+    } catch (err) {
+      showToast("保存に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function addTodoItem() {
+    if (!getSelectedUserName()) { showToast("氏名を選択または入力してください", "error"); return; }
+    const input = document.getElementById("wlTodoInput");
+    const text = input.value.trim();
+    if (!text) return;
+    currentTodoItems = currentTodoItems.concat([{ text, done: false }]);
+    input.value = "";
+    renderTodoList();
+    saveTodoAndConfirmState();
+  }
+
+  function toggleTodoItem(index) {
+    if (!currentTodoItems[index]) return;
+    currentTodoItems = currentTodoItems.map((item, i) => i === index ? { ...item, done: !item.done } : item);
+    renderTodoList();
+    saveTodoAndConfirmState();
+  }
+
+  function deleteTodoItem(index) {
+    currentTodoItems = currentTodoItems.filter((_, i) => i !== index);
+    renderTodoList();
+    saveTodoAndConfirmState();
+  }
+
+  function toggleConfirmedByBoss() {
+    if (!getSelectedUserName()) {
+      showToast("氏名を選択または入力してください", "error");
+      document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
+      return;
+    }
+    currentConfirmedByBoss = document.getElementById("wlConfirmedCheckbox").checked;
+    saveTodoAndConfirmState();
+  }
+
+  // AIが整形した「残タスク」の箇条書きテキストを行単位に分割する(先頭の「・」「-」「*」は除去)
+  function parseBulletLines(text) {
+    return String(text || "")
+      .split("\n")
+      .map(line => line.replace(/^[・\-\*]\s*/, "").trim())
+      .filter(Boolean);
+  }
+
+  // 文字の多重集合の共通部分 / 長い方の文字数、というシンプルな類似度(0〜1)。
+  // AIが「残タスク」全文を毎回言い換えて返すため、完全一致だけでは同じタスクの
+  // 重複追加を防ぎきれない対策として使う(簡易判定でよい旨の指示に基づく)
+  function charOverlapRatio(a, b) {
+    const counts = {};
+    for (const ch of a) counts[ch] = (counts[ch] || 0) + 1;
+    let common = 0;
+    for (const ch of b) {
+      if (counts[ch] > 0) { common++; counts[ch]--; }
+    }
+    const maxLen = Math.max(a.length, b.length);
+    return maxLen === 0 ? 1 : common / maxLen;
+  }
+
+  // 2つのTodoテキストが「同じタスク」とみなせるか: 完全一致 / 一方が他方を含む
+  // (ただし短すぎる文字列同士の偶然の部分一致を避けるため4文字未満は対象外) /
+  // 文字の類似度が85%以上、のいずれか
+  // (0.8だと5文字前後で「大部分が同じ・末尾など1箇所だけ違う」ケースが誤って
+  // 重複判定されることを実測で確認したため、0.85に引き上げている)
+  function isSimilarTodoText(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const minLen = Math.min(a.length, b.length);
+    if (minLen >= 4 && (a.includes(b) || b.includes(a))) return true;
+    return charOverlapRatio(a, b) >= 0.85;
   }
 
   function nowHm() {
@@ -581,9 +746,21 @@
         return;
       }
 
+      // AIが整形した「残タスク」のうち、まだTodoに無い行だけを自動追加する(確認は不要でそのまま追加)。
+      // AIは「残タスク」全文をその都度言い換えて返すため、完全一致ではなく類似度判定
+      // (isSimilarTodoText)で重複を防ぐ。done:trueの項目(完了済み)は比較対象から除外し、
+      // 同じ内容が完了後に再度出てきた場合は新規タスクとして追加する
+      const mergedTodoItems = currentTodoItems.slice();
+      const hasSimilarActiveTodo = text => mergedTodoItems.some(t => !t.done && isSimilarTodoText(t.text, text));
+      parseBulletLines(parsed.tasks_remaining).forEach(lineText => {
+        if (!hasSimilarActiveTodo(lineText)) {
+          mergedTodoItems.push({ text: lineText, done: false });
+        }
+      });
+
       const saveBody = existing
-        ? { id: existing.id, tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining }
-        : { user_name: userName, date: todayStr(), tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining };
+        ? { id: existing.id, tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems }
+        : { user_name: userName, date: todayStr(), tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems };
       if (parsed.detected_clock_out) saveBody.clock_out = parsed.detected_clock_out;
 
       const saveRes = await fetch("/api/crm?action=work-logs", {
@@ -637,11 +814,17 @@
         </div>`;
       }
       const hours = log.work_hours != null ? `${Number(log.work_hours).toFixed(2)}時間` : "—";
+      const todoItems = Array.isArray(log.todo_items) ? log.todo_items : [];
+      const todoHtml = todoItems.length > 0
+        ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
+        : "";
+      const confirmedBadge = log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓社長確認済み</span>' : "";
       return `<div class="wl-team-card">
-        <div class="wl-team-name">${esc(name)}</div>
+        <div class="wl-team-name">${esc(name)}${confirmedBadge}</div>
         <div class="wl-team-time">${fmtTime(log.clock_in)} 〜 ${fmtTime(log.clock_out)}</div>
         <div class="wl-team-hours">${hours}</div>
         <div class="wl-team-tasks">${esc(truncate(log.tasks_done || "未入力", 60))}</div>
+        ${todoHtml}
       </div>`;
     }).join("");
   }
@@ -688,19 +871,19 @@
     const tbody = document.getElementById("wlSummaryBody");
     const totalEl = document.getElementById("wlSummaryTotal");
     if (!userName) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="4">ユーザーを選択してください</td></tr>';
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="5">ユーザーを選択してください</td></tr>';
       totalEl.textContent = "";
       return;
     }
     const { from, to } = getMonthRange(summaryPeriod);
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">読み込み中...</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">読み込み中...</td></tr>';
     try {
       const res = await fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "取得に失敗しました");
       const logs = Array.isArray(data.logs) ? data.logs : [];
       if (logs.length === 0) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="4">記録がありません</td></tr>';
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">記録がありません</td></tr>';
       } else {
         tbody.innerHTML = logs.map(l => `
           <tr>
@@ -708,11 +891,12 @@
             <td>${fmtTime(l.clock_in)} 〜 ${fmtTime(l.clock_out)}</td>
             <td>${l.work_hours != null ? Number(l.work_hours).toFixed(2) : "—"}</td>
             <td>${esc(truncate(l.tasks_done || "", 40))}</td>
+            <td>${l.confirmed_by_boss ? "✓" : ""}</td>
           </tr>`).join("");
       }
       totalEl.textContent = `合計稼働時間: ${Number(data.total_hours || 0).toFixed(2)} 時間`;
     } catch (err) {
-      tbody.innerHTML = `<tr class="empty-row"><td colspan="4">エラー: ${esc(err.message)}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="5">エラー: ${esc(err.message)}</td></tr>`;
       totalEl.textContent = "";
     }
   }

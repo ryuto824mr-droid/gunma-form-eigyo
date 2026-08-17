@@ -237,6 +237,10 @@ async function handleDbSetup(req, res) {
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // work_logs.todo_items/confirmed_by_boss追加（稼働記録フォームのTodoリスト・社長確認機能用）
+    // todo_items: [{ text: "タスク内容", done: false }] の配列
+    await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS todo_items JSONB DEFAULT '[]'");
+    await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS confirmed_by_boss BOOLEAN DEFAULT FALSE");
     // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
     await dbSql.query(`
@@ -2460,6 +2464,15 @@ function todayJst() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
+// todo_itemsは[{ text, done }]の配列のみ受け付ける。不正な値が混ざっていた場合は
+// その項目だけを除外する(textが空/非文字列の項目、null等)
+function normalizeTodoItems(items) {
+  if (!Array.isArray(items)) return null;
+  return items
+    .filter(t => t && typeof t.text === "string" && t.text.trim())
+    .map(t => ({ text: t.text.trim(), done: !!t.done }));
+}
+
 async function handleWorkLogs(req, res) {
   if (req.method === "GET") {
     try {
@@ -2488,7 +2501,7 @@ async function handleWorkLogs(req, res) {
   }
 
   if (req.method === "POST") {
-    const { user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project } = req.body || {};
+    const { user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss } = req.body || {};
     if (!user_name || typeof user_name !== "string" || !user_name.trim()) {
       return res.status(400).json({ error: "user_name（文字列）が必要です" });
     }
@@ -2497,6 +2510,7 @@ async function handleWorkLogs(req, res) {
     }
     const name = user_name.trim();
     const hasProject = project === "locle" || project === "ozukanzukan";
+    const normalizedTodoItems = normalizeTodoItems(todo_items);
 
     try {
       const [existing] = await sql`SELECT * FROM work_logs WHERE user_name = ${name} AND date = ${date}`;
@@ -2510,13 +2524,16 @@ async function handleWorkLogs(req, res) {
         const newTasksDone      = tasks_done      !== undefined ? (tasks_done || null)      : existing.tasks_done;
         const newTasksRemaining = tasks_remaining !== undefined ? (tasks_remaining || null) : existing.tasks_remaining;
         const newMemo           = memo            !== undefined ? (memo || null)            : existing.memo;
+        const newTodoItems      = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : (existing.todo_items || []));
+        const newConfirmed      = confirmed_by_boss !== undefined ? !!confirmed_by_boss : existing.confirmed_by_boss;
 
         [row] = hasProject
           ? await sql`
               UPDATE work_logs
               SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
                   tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
-                  memo = ${newMemo}, project = ${project}
+                  memo = ${newMemo}, project = ${project},
+                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
               WHERE id = ${existing.id}
               RETURNING *
             `
@@ -2524,20 +2541,24 @@ async function handleWorkLogs(req, res) {
               UPDATE work_logs
               SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
                   tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
-                  memo = ${newMemo}
+                  memo = ${newMemo},
+                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
               WHERE id = ${existing.id}
               RETURNING *
             `;
       } else {
+        const insertTodoItems = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : []);
+        const insertConfirmed = !!confirmed_by_boss;
+
         [row] = hasProject
           ? await sql`
-              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project)
-              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project})
+              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss)
+              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project}, ${insertTodoItems}, ${insertConfirmed})
               RETURNING *
             `
           : await sql`
-              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo)
-              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null})
+              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss)
+              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${insertTodoItems}, ${insertConfirmed})
               RETURNING *
             `;
       }
@@ -2548,7 +2569,7 @@ async function handleWorkLogs(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, clock_in, clock_out, tasks_done, tasks_remaining, memo } = req.body || {};
+    const { id, clock_in, clock_out, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss } = req.body || {};
     const logId = parseInt(id, 10);
     if (!logId || isNaN(logId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -2562,11 +2583,15 @@ async function handleWorkLogs(req, res) {
       const newTasksDone      = tasks_done      !== undefined ? (tasks_done || null)      : current.tasks_done;
       const newTasksRemaining = tasks_remaining !== undefined ? (tasks_remaining || null) : current.tasks_remaining;
       const newMemo           = memo            !== undefined ? (memo || null)            : current.memo;
+      const normalizedTodoItems = normalizeTodoItems(todo_items);
+      const newTodoItems      = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : (current.todo_items || []));
+      const newConfirmed      = confirmed_by_boss !== undefined ? !!confirmed_by_boss : current.confirmed_by_boss;
 
       const [updated] = await sql`
         UPDATE work_logs
         SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
-            tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining}, memo = ${newMemo}
+            tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining}, memo = ${newMemo},
+            todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
         WHERE id = ${logId}
         RETURNING *
       `;
