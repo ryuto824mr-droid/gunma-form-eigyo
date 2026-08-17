@@ -150,7 +150,7 @@
   .wl-team-card { background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-md); padding: 14px 16px; }
   .wl-team-card.empty { opacity: 0.6; }
   .wl-team-name { font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
-  .wl-team-time { font-size: 13px; color: var(--gray-700); }
+  .wl-team-sessions { font-size: 13px; color: var(--gray-700); line-height: 1.5; }
   .wl-team-hours { font-size: 12px; color: var(--green-700); font-weight: 700; margin: 4px 0; }
   .wl-team-tasks { font-size: 12px; color: var(--gray-500); line-height: 1.6; white-space: pre-wrap; }
   .wl-team-empty { font-size: 13px; color: var(--gray-400); font-style: italic; margin-top: 4px; }
@@ -207,6 +207,11 @@
   .wl-summary-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-100); color: var(--gray-700); }
   .wl-summary-table .empty-row td { text-align: center; color: var(--gray-400); padding: 24px; }
   .wl-summary-total { font-size: 14px; font-weight: 700; color: var(--green-700); margin-top: 12px; text-align: right; }
+  .wl-summary-total-big { text-align: center; margin: 8px 0 4px; }
+  .wl-summary-total-big .wl-summary-total-label {
+    display: block; font-size: 13px; font-weight: 600; color: var(--gray-500); margin-bottom: 6px;
+  }
+  .wl-summary-total-big .wl-summary-total-value { font-size: 30px; font-weight: 800; color: var(--green-700); }
 
   @media (max-width: 700px) {
     .page-header { padding: 0 12px; }
@@ -303,7 +308,7 @@
 <div class="container">
 
   <p class="wl-section-title" style="border:none; padding:0; font-size:20px;">稼働管理</p>
-  <p class="wl-lead">出退勤・稼働時間はLOCLE / 群馬お仕事図鑑に関わらず、1日1レコードで共通管理します。</p>
+  <p class="wl-lead">出退勤は1日に何回でも記録できます（午前・午後など）。やったこと・残タスク等はLOCLE / 群馬お仕事図鑑に関わらず、1日1レコードで共通管理します。</p>
 
   <div class="wl-section reveal-on-scroll">
     <p class="wl-section-title">本日の稼働記録</p>
@@ -390,10 +395,12 @@
         <div class="wl-period-toggle">
           <button type="button" class="wl-period-btn active" id="wlPeriodThis" onclick="setSummaryPeriod('this')">今月</button>
           <button type="button" class="wl-period-btn" id="wlPeriodLast" onclick="setSummaryPeriod('last')">先月</button>
+          <button type="button" class="wl-period-btn" id="wlPeriodThisYear" onclick="setSummaryPeriod('thisYear')">今年</button>
+          <button type="button" class="wl-period-btn" id="wlPeriodLastYear" onclick="setSummaryPeriod('lastYear')">去年</button>
         </div>
       </div>
     </div>
-    <div class="wl-summary-table-wrap">
+    <div class="wl-summary-table-wrap" id="wlSummaryDailyWrap">
       <table class="wl-summary-table">
         <thead><tr><th>日付</th><th>出退勤</th><th>稼働時間</th><th>やったこと</th><th>確認</th></tr></thead>
         <tbody id="wlSummaryBody">
@@ -401,7 +408,16 @@
         </tbody>
       </table>
     </div>
+    <div class="wl-summary-table-wrap" id="wlSummaryYearlyWrap" hidden>
+      <table class="wl-summary-table">
+        <thead><tr><th>月</th><th>合計稼働時間</th></tr></thead>
+        <tbody id="wlSummaryYearlyBody">
+          <tr class="empty-row"><td colspan="2">ユーザーを選択してください</td></tr>
+        </tbody>
+      </table>
+    </div>
     <p class="wl-summary-total" id="wlSummaryTotal"></p>
+    <div class="wl-summary-total-big" id="wlSummaryTotalBig" hidden></div>
   </div>
 
 </div>
@@ -460,10 +476,12 @@
   const FIXED_MEMBERS = ["りゅうと", "宮田", "岡田"];
 
   // ===== 本日の稼働記録 =====
-  let todayLogs = [];
+  let todayLogs = [];       // work_logs: その日のやったこと/残タスク/Todo/確認(1ユーザー1件)
+  let todaySessions = [];   // work_sessions: その日の出退勤セッション(1ユーザー複数件)
   let currentEditId = null;
   let currentTodoItems = [];
   let currentConfirmedByBoss = false;
+  let currentUserSessions = [];
 
   function onNameSelectChange() {
     const isOther = document.getElementById("wlNameSelect").value === "__other__";
@@ -483,7 +501,7 @@
   }
 
   // 選択中の氏名に本日分の記録が既に存在する場合、その状態を出退勤表示・currentEditIdに反映する。
-  // loadTodayLogs()完了後にも呼ばれるため、入力中のチャット欄はここではクリアしない
+  // loadTodayData()完了後にも呼ばれるため、入力中のチャット欄はここではクリアしない
   // (出勤ボタンを押しただけでチャット欄の下書きが消えてしまうのを防ぐため)。
   function refreshCurrentUserState() {
     const name = getSelectedUserName();
@@ -491,21 +509,22 @@
     currentEditId = existing ? existing.id : null;
     currentTodoItems = existing && Array.isArray(existing.todo_items) ? existing.todo_items : [];
     currentConfirmedByBoss = existing ? !!existing.confirmed_by_boss : false;
-    updateStatusDisplay(existing);
+    currentUserSessions = name ? todaySessions.filter(s => s.user_name === name) : [];
+    updateStatusDisplay();
     renderTodoList();
     document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
   }
 
-  function updateStatusDisplay(existing) {
+  function updateStatusDisplay() {
     const el = document.getElementById("wlStatusDisplay");
-    if (!existing || (!existing.clock_in && !existing.clock_out)) {
+    if (currentUserSessions.length === 0) {
       el.textContent = "本日: 未出勤";
       return;
     }
-    const inText = existing.clock_in ? `出勤 ${fmtTime(existing.clock_in)}` : "出勤未記録";
-    const outText = existing.clock_out ? `退勤 ${fmtTime(existing.clock_out)}` : "退勤未記録";
-    const hoursText = existing.work_hours != null ? `（${Number(existing.work_hours).toFixed(2)}時間）` : "";
-    el.textContent = `本日: ${inText} / ${outText} ${hoursText}`;
+    const parts = currentUserSessions.map(s => `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`);
+    const totalHours = currentUserSessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+    const hoursText = totalHours > 0 ? `（合計${totalHours.toFixed(2)}時間）` : "";
+    el.textContent = `本日: ${parts.join(" / ")} ${hoursText}`;
   }
 
   // ===== Todo / 確認 =====
@@ -539,7 +558,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "保存に失敗しました");
-      await loadTodayLogs();
+      await loadTodayData();
     } catch (err) {
       showToast("保存に失敗しました: " + esc(err.message), "error");
     }
@@ -618,8 +637,9 @@
     return new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hour12: false });
   }
 
-  // 🟢出勤・🔴退勤ボタン: ワンタップで現在時刻を記録する。既存レコードがあればPATCHで
-  // その項目だけを更新し(他方のclock_in/outは維持)、無ければPOSTで新規作成する。
+  // 🟢出勤: 押すたびに新しいセッションを開始する(何回でも押せる、既存セッションは上書きしない)。
+  // 🔴退勤: 直近の「まだclock_outが記録されていない」セッションに退勤時刻を記録する。
+  // 全セッションが退勤済み(または1件も無い)状態で押した場合は「出勤していません」と表示する。
   async function clockAction(type) {
     const userName = getSelectedUserName();
     if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
@@ -628,20 +648,28 @@
     btn.disabled = true;
     try {
       const timeValue = nowHm();
-      const body = currentEditId
-        ? { id: currentEditId }
-        : { user_name: userName, date: todayStr() };
-      if (type === "in") body.clock_in = timeValue; else body.clock_out = timeValue;
-
-      const res = await fetch("/api/crm?action=work-logs", {
-        method: currentEditId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
-      showToast(type === "in" ? `🟢 出勤（${timeValue}）を記録しました` : `🔴 退勤（${timeValue}）を記録しました`, "success");
-      await loadTodayLogs();
+      if (type === "in") {
+        const res = await fetch("/api/crm?action=work-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_name: userName, date: todayStr(), clock_in: timeValue }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+        showToast(`🟢 出勤（${timeValue}）を記録しました`, "success");
+      } else {
+        const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
+        if (!openSession) { showToast("出勤していません", "error"); return; }
+        const res = await fetch("/api/crm?action=work-sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: openSession.id, clock_out: timeValue }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+        showToast(`🔴 退勤（${timeValue}）を記録しました`, "success");
+      }
+      await loadTodayData();
     } catch (err) {
       showToast("記録に失敗しました: " + esc(err.message), "error");
     } finally {
@@ -761,7 +789,6 @@
       const saveBody = existing
         ? { id: existing.id, tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems }
         : { user_name: userName, date: todayStr(), tasks_done: parsed.tasks_done, tasks_remaining: parsed.tasks_remaining, todo_items: mergedTodoItems };
-      if (parsed.detected_clock_out) saveBody.clock_out = parsed.detected_clock_out;
 
       const saveRes = await fetch("/api/crm?action=work-logs", {
         method: existing ? "PATCH" : "POST",
@@ -771,9 +798,21 @@
       const saved = await saveRes.json();
       if (!saveRes.ok) throw new Error(saved.error || "保存に失敗しました");
 
+      // 退勤発言が検出された場合、直近の未退勤セッション(work_sessions)に退勤時刻を記録する
+      if (parsed.detected_clock_out) {
+        const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
+        if (openSession) {
+          await fetch("/api/crm?action=work-sessions", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: openSession.id, clock_out: parsed.detected_clock_out }),
+          });
+        }
+      }
+
       document.getElementById("wlChatText").value = "";
       showToast(`記録しました: ${esc(truncate(parsed.tasks_done || "", 60))}`, "success");
-      await loadTodayLogs();
+      await loadTodayData();
     } catch (err) {
       showToast("記録に失敗しました: " + esc(err.message), "error");
     } finally {
@@ -783,13 +822,21 @@
   }
 
   // ===== 今日のチーム状況 =====
-  async function loadTodayLogs() {
+  // work_logs(やったこと/Todo/確認)とwork_sessions(出退勤セッション)を両方取得し、
+  // user_nameで突き合わせてから描画する
+  async function loadTodayData() {
     const grid = document.getElementById("wlTeamGrid");
     try {
-      const res = await fetch("/api/crm?action=work-logs&date=" + todayStr());
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
-      todayLogs = Array.isArray(data) ? data : [];
+      const [logsRes, sessionsRes] = await Promise.all([
+        fetch("/api/crm?action=work-logs&date=" + todayStr()),
+        fetch("/api/crm?action=work-sessions&date=" + todayStr()),
+      ]);
+      const logsData = await logsRes.json();
+      const sessionsData = await sessionsRes.json();
+      if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
+      if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
+      todayLogs = Array.isArray(logsData) ? logsData : [];
+      todaySessions = Array.isArray(sessionsData) ? sessionsData : [];
     } catch (err) {
       grid.innerHTML = `<p style="font-size:13px; color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
       return;
@@ -801,29 +848,35 @@
   function renderTeamStatus() {
     const grid = document.getElementById("wlTeamGrid");
     const extraNames = [...new Set(
-      todayLogs.map(l => l.user_name).filter(n => !FIXED_MEMBERS.includes(n))
+      todayLogs.map(l => l.user_name)
+        .concat(todaySessions.map(s => s.user_name))
+        .filter(n => !FIXED_MEMBERS.includes(n))
     )];
     const members = FIXED_MEMBERS.concat(extraNames);
 
     grid.innerHTML = members.map(name => {
       const log = todayLogs.find(l => l.user_name === name);
-      if (!log) {
+      const sessions = todaySessions.filter(s => s.user_name === name);
+      if (!log && sessions.length === 0) {
         return `<div class="wl-team-card empty">
           <div class="wl-team-name">${esc(name)}</div>
           <div class="wl-team-empty">未入力</div>
         </div>`;
       }
-      const hours = log.work_hours != null ? `${Number(log.work_hours).toFixed(2)}時間` : "—";
-      const todoItems = Array.isArray(log.todo_items) ? log.todo_items : [];
+      const totalHours = sessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+      const sessionsHtml = sessions.length > 0
+        ? sessions.map(s => `<div>${fmtTime(s.clock_in)} 〜 ${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}</div>`).join("")
+        : '<div class="wl-team-empty">出退勤未記録</div>';
+      const todoItems = log && Array.isArray(log.todo_items) ? log.todo_items : [];
       const todoHtml = todoItems.length > 0
         ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
         : "";
-      const confirmedBadge = log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓社長確認済み</span>' : "";
+      const confirmedBadge = log && log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓社長確認済み</span>' : "";
       return `<div class="wl-team-card">
         <div class="wl-team-name">${esc(name)}${confirmedBadge}</div>
-        <div class="wl-team-time">${fmtTime(log.clock_in)} 〜 ${fmtTime(log.clock_out)}</div>
-        <div class="wl-team-hours">${hours}</div>
-        <div class="wl-team-tasks">${esc(truncate(log.tasks_done || "未入力", 60))}</div>
+        <div class="wl-team-sessions">${sessionsHtml}</div>
+        <div class="wl-team-hours">${totalHours > 0 ? totalHours.toFixed(2) + "時間" : "—"}</div>
+        <div class="wl-team-tasks">${esc(truncate(log && log.tasks_done ? log.tasks_done : "未入力", 60))}</div>
         ${todoHtml}
       </div>`;
     }).join("");
@@ -848,7 +901,13 @@
     summaryPeriod = period;
     document.getElementById("wlPeriodThis").classList.toggle("active", period === "this");
     document.getElementById("wlPeriodLast").classList.toggle("active", period === "last");
+    document.getElementById("wlPeriodThisYear").classList.toggle("active", period === "thisYear");
+    document.getElementById("wlPeriodLastYear").classList.toggle("active", period === "lastYear");
     loadSummary();
+  }
+
+  function isYearlyPeriod(period) {
+    return period === "thisYear" || period === "lastYear";
   }
 
   function getMonthRange(which) {
@@ -866,35 +925,109 @@
     return { from, to };
   }
 
+  function getYearRange(which) {
+    const [y] = todayStr().split("-").map(Number);
+    const year = which === "lastYear" ? y - 1 : y;
+    return { from: `${year}-01-01`, to: `${year}-12-31`, year };
+  }
+
   async function loadSummary() {
     const userName = getSummaryUserName();
-    const tbody = document.getElementById("wlSummaryBody");
-    const totalEl = document.getElementById("wlSummaryTotal");
+    const dailyWrap  = document.getElementById("wlSummaryDailyWrap");
+    const yearlyWrap = document.getElementById("wlSummaryYearlyWrap");
+    const tbody       = document.getElementById("wlSummaryBody");
+    const yearlyBody  = document.getElementById("wlSummaryYearlyBody");
+    const totalEl     = document.getElementById("wlSummaryTotal");
+    const totalBigEl  = document.getElementById("wlSummaryTotalBig");
+
     if (!userName) {
       tbody.innerHTML = '<tr class="empty-row"><td colspan="5">ユーザーを選択してください</td></tr>';
+      yearlyBody.innerHTML = '<tr class="empty-row"><td colspan="2">ユーザーを選択してください</td></tr>';
       totalEl.textContent = "";
+      totalBigEl.innerHTML = "";
       return;
     }
+
+    const yearly = isYearlyPeriod(summaryPeriod);
+    dailyWrap.hidden = yearly;
+    yearlyWrap.hidden = !yearly;
+    totalEl.hidden = yearly;
+    totalBigEl.hidden = !yearly;
+
+    if (yearly) {
+      const { from, to, year } = getYearRange(summaryPeriod);
+      yearlyBody.innerHTML = '<tr class="empty-row"><td colspan="2">読み込み中...</td></tr>';
+      try {
+        const res = await fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+        const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+
+        const hoursByMonth = Array(12).fill(0);
+        sessions.forEach(s => {
+          if (s.work_hours == null) return;
+          const monthIndex = Number(String(s.date).slice(5, 7)) - 1;
+          if (monthIndex >= 0 && monthIndex < 12) hoursByMonth[monthIndex] += Number(s.work_hours);
+        });
+        yearlyBody.innerHTML = hoursByMonth.map((h, i) => `
+          <tr><td>${i + 1}月</td><td>${h.toFixed(2)} 時間</td></tr>`).join("");
+
+        totalBigEl.innerHTML = `
+          <span class="wl-summary-total-label">${year}年 年間累計稼働時間</span>
+          <span class="wl-summary-total-value">${Number(data.total_hours || 0).toFixed(2)} 時間</span>`;
+      } catch (err) {
+        yearlyBody.innerHTML = `<tr class="empty-row"><td colspan="2">エラー: ${esc(err.message)}</td></tr>`;
+        totalBigEl.innerHTML = "";
+      }
+      return;
+    }
+
+    // 今月/先月: 日ごとの表(出退勤はその日の全セッションを列挙、やったこと・確認はwork_logsから)
     const { from, to } = getMonthRange(summaryPeriod);
     tbody.innerHTML = '<tr class="empty-row"><td colspan="5">読み込み中...</td></tr>';
     try {
-      const res = await fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
-      const logs = Array.isArray(data.logs) ? data.logs : [];
-      if (logs.length === 0) {
+      const [sessionsRes, logsRes] = await Promise.all([
+        fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+        fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+      ]);
+      const sessionsData = await sessionsRes.json();
+      const logsData = await logsRes.json();
+      if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
+      if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
+      const sessions = Array.isArray(sessionsData.sessions) ? sessionsData.sessions : [];
+      const logs = Array.isArray(logsData.logs) ? logsData.logs : [];
+
+      const sessionsByDate = {};
+      sessions.forEach(s => {
+        const key = String(s.date).slice(0, 10);
+        (sessionsByDate[key] = sessionsByDate[key] || []).push(s);
+      });
+      const logsByDate = {};
+      logs.forEach(l => { logsByDate[String(l.date).slice(0, 10)] = l; });
+
+      const allDates = [...new Set([...Object.keys(sessionsByDate), ...Object.keys(logsByDate)])].sort();
+
+      if (allDates.length === 0) {
         tbody.innerHTML = '<tr class="empty-row"><td colspan="5">記録がありません</td></tr>';
       } else {
-        tbody.innerHTML = logs.map(l => `
-          <tr>
-            <td>${esc(l.date)}</td>
-            <td>${fmtTime(l.clock_in)} 〜 ${fmtTime(l.clock_out)}</td>
-            <td>${l.work_hours != null ? Number(l.work_hours).toFixed(2) : "—"}</td>
-            <td>${esc(truncate(l.tasks_done || "", 40))}</td>
-            <td>${l.confirmed_by_boss ? "✓" : ""}</td>
-          </tr>`).join("");
+        tbody.innerHTML = allDates.map(date => {
+          const daySessions = sessionsByDate[date] || [];
+          const log = logsByDate[date];
+          const timesText = daySessions.length > 0
+            ? daySessions.map(s => `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`).join(", ")
+            : "—";
+          const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+          return `
+            <tr>
+              <td>${esc(date)}</td>
+              <td>${esc(timesText)}</td>
+              <td>${dayHours > 0 ? dayHours.toFixed(2) : "—"}</td>
+              <td>${esc(truncate(log && log.tasks_done ? log.tasks_done : "", 40))}</td>
+              <td>${log && log.confirmed_by_boss ? "✓" : ""}</td>
+            </tr>`;
+        }).join("");
       }
-      totalEl.textContent = `合計稼働時間: ${Number(data.total_hours || 0).toFixed(2)} 時間`;
+      totalEl.textContent = `合計稼働時間: ${Number(sessionsData.total_hours || 0).toFixed(2)} 時間`;
     } catch (err) {
       tbody.innerHTML = `<tr class="empty-row"><td colspan="5">エラー: ${esc(err.message)}</td></tr>`;
       totalEl.textContent = "";
@@ -902,7 +1035,7 @@
   }
 
   initSpeechRecognition();
-  loadTodayLogs();
+  loadTodayData();
   initScrollReveal();
   initNavMenu("work-logs");
 </script>

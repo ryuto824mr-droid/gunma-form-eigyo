@@ -47,12 +47,13 @@ module.exports = async function handler(req, res) {
     case "saved-content": return handleSavedContent(req, res);
     case "sender-accounts": return handleSenderAccounts(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
+    case "work-sessions":    return handleWorkSessions(req, res);
     case "parse-work-log":  return handleParseWorkLog(req, res);
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -241,6 +242,50 @@ async function handleDbSetup(req, res) {
     // todo_items: [{ text: "タスク内容", done: false }] の配列
     await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS todo_items JSONB DEFAULT '[]'");
     await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS confirmed_by_boss BOOLEAN DEFAULT FALSE");
+    // work_sessionsテーブル追加（1人が1日に複数回、出勤〜退勤を記録できるようにするため）。
+    // 出退勤の時刻情報はここに一本化し、work_logsは1日1レコードのまま
+    // tasks_done/tasks_remaining/memo/todo_items/confirmed_by_bossのみを扱う
+    // (work_logs.clock_in/clock_out/work_hoursは後方互換のため残すが、今後は使わずnullのまま)
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS work_sessions (
+        id          SERIAL PRIMARY KEY,
+        user_name   TEXT NOT NULL,
+        date        DATE NOT NULL,
+        clock_in    TIME,
+        clock_out   TIME,
+        work_hours  NUMERIC(5,2) GENERATED ALWAYS AS (
+                       CASE
+                         WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL THEN
+                           ROUND(
+                             (EXTRACT(EPOCH FROM (clock_out - clock_in))
+                              + CASE WHEN clock_out < clock_in THEN 86400 ELSE 0 END
+                             )::numeric / 3600, 2)
+                         ELSE NULL
+                       END
+                     ) STORED,
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // work_sessions.work_hours再作成: clock_in/clock_outはTIME型(日付を持たない)のため、
+    // 22:00出勤→翌1:00退勤のような深夜0時をまたぐセッションではclock_out - clock_inが
+    // 単純な時刻引き算になり負の値(-21:00等)になってしまう。clock_out < clock_inの場合は
+    // 日付をまたいだとみなし86400秒(24時間)を加算するよう式を修正する。GENERATEDカラムの
+    // 式はALTER COLUMNで直接差し替えられないため、DROP→ADDで再作成する
+    // (CREATE TABLE IF NOT EXISTSは初回作成時のみ有効なため、既に古い式で作成済みの
+    // 環境にもこの修正を反映させる必要があり、無条件で実行する)
+    await dbSql.query("ALTER TABLE work_sessions DROP COLUMN IF EXISTS work_hours");
+    await dbSql.query(`
+      ALTER TABLE work_sessions ADD COLUMN work_hours NUMERIC(5,2) GENERATED ALWAYS AS (
+        CASE
+          WHEN clock_in IS NOT NULL AND clock_out IS NOT NULL THEN
+            ROUND(
+              (EXTRACT(EPOCH FROM (clock_out - clock_in))
+               + CASE WHEN clock_out < clock_in THEN 86400 ELSE 0 END
+              )::numeric / 3600, 2)
+          ELSE NULL
+        END
+      ) STORED
+    `);
     // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
     await dbSql.query(`
@@ -2456,9 +2501,10 @@ async function handleSenderAccounts(req, res) {
   return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
 }
 
-// ==================== work-logs (稼働時間管理: プロジェクト非依存) ====================
-// work_logs.work_hoursはDB側のGENERATEDカラム(clock_in/clock_outから自動計算)のため、
-// INSERT/UPDATEでは明示的に指定しない(指定するとPostgresがエラーを返す)。
+// ==================== work-logs (1日1件の作業内容: プロジェクト非依存) ====================
+// 出退勤の時刻情報はwork_sessions側で管理する。work_logsはtasks_done/tasks_remaining/
+// memo/todo_items/confirmed_by_bossのみを扱う(clock_in/clock_out/work_hoursカラムは
+// 後方互換のため残っているが、ここでは一切読み書きしない)。
 
 function todayJst() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
@@ -2479,7 +2525,7 @@ async function handleWorkLogs(req, res) {
       const userName = req.query.user_name;
 
       if (userName) {
-        // 期間指定: ユーザーごとの履歴(月次集計用)
+        // 期間指定: ユーザーごとの履歴(月次サマリーの「やったこと」「確認」列用)
         const from = req.query.from || `${todayJst().slice(0, 7)}-01`;
         const to   = req.query.to   || todayJst();
         const logs = await sql`
@@ -2487,8 +2533,7 @@ async function handleWorkLogs(req, res) {
           WHERE user_name = ${userName} AND date >= ${from} AND date <= ${to}
           ORDER BY date ASC
         `;
-        const totalHours = logs.reduce((sum, l) => sum + (l.work_hours != null ? Number(l.work_hours) : 0), 0);
-        return res.status(200).json({ logs, total_hours: Math.round(totalHours * 100) / 100 });
+        return res.status(200).json({ logs });
       }
 
       // 日付指定: その日の全ユーザー分
@@ -2501,7 +2546,7 @@ async function handleWorkLogs(req, res) {
   }
 
   if (req.method === "POST") {
-    const { user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss } = req.body || {};
+    const { user_name, date, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss } = req.body || {};
     if (!user_name || typeof user_name !== "string" || !user_name.trim()) {
       return res.status(400).json({ error: "user_name（文字列）が必要です" });
     }
@@ -2517,10 +2562,7 @@ async function handleWorkLogs(req, res) {
 
       let row;
       if (existing) {
-        // POSTでも一部フィールドのみ送られてきた場合(未送信のキーはundefined)は既存値を維持し、
-        // 先に保存済みのclock_in等が後続のPOSTでnull上書きされないようにする(PATCHと同じマージ方式)
-        const newClockIn        = clock_in        !== undefined ? (clock_in || null)        : existing.clock_in;
-        const newClockOut       = clock_out       !== undefined ? (clock_out || null)       : existing.clock_out;
+        // POSTでも一部フィールドのみ送られてきた場合(未送信のキーはundefined)は既存値を維持する(PATCHと同じマージ方式)
         const newTasksDone      = tasks_done      !== undefined ? (tasks_done || null)      : existing.tasks_done;
         const newTasksRemaining = tasks_remaining !== undefined ? (tasks_remaining || null) : existing.tasks_remaining;
         const newMemo           = memo            !== undefined ? (memo || null)            : existing.memo;
@@ -2530,8 +2572,7 @@ async function handleWorkLogs(req, res) {
         [row] = hasProject
           ? await sql`
               UPDATE work_logs
-              SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
-                  tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
+              SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
                   memo = ${newMemo}, project = ${project},
                   todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
               WHERE id = ${existing.id}
@@ -2539,8 +2580,7 @@ async function handleWorkLogs(req, res) {
             `
           : await sql`
               UPDATE work_logs
-              SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
-                  tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
+              SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
                   memo = ${newMemo},
                   todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
               WHERE id = ${existing.id}
@@ -2552,13 +2592,13 @@ async function handleWorkLogs(req, res) {
 
         [row] = hasProject
           ? await sql`
-              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss)
-              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project}, ${insertTodoItems}, ${insertConfirmed})
+              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss)
+              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project}, ${insertTodoItems}, ${insertConfirmed})
               RETURNING *
             `
           : await sql`
-              INSERT INTO work_logs (user_name, date, clock_in, clock_out, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss)
-              VALUES (${name}, ${date}, ${clock_in || null}, ${clock_out || null}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${insertTodoItems}, ${insertConfirmed})
+              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss)
+              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${insertTodoItems}, ${insertConfirmed})
               RETURNING *
             `;
       }
@@ -2569,7 +2609,7 @@ async function handleWorkLogs(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, clock_in, clock_out, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss } = req.body || {};
+    const { id, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss } = req.body || {};
     const logId = parseInt(id, 10);
     if (!logId || isNaN(logId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -2578,8 +2618,6 @@ async function handleWorkLogs(req, res) {
       const [current] = await sql`SELECT * FROM work_logs WHERE id = ${logId}`;
       if (!current) return res.status(404).json({ error: "レコードが見つかりません" });
 
-      const newClockIn        = clock_in        !== undefined ? (clock_in || null)        : current.clock_in;
-      const newClockOut       = clock_out       !== undefined ? (clock_out || null)       : current.clock_out;
       const newTasksDone      = tasks_done      !== undefined ? (tasks_done || null)      : current.tasks_done;
       const newTasksRemaining = tasks_remaining !== undefined ? (tasks_remaining || null) : current.tasks_remaining;
       const newMemo           = memo            !== undefined ? (memo || null)            : current.memo;
@@ -2589,12 +2627,96 @@ async function handleWorkLogs(req, res) {
 
       const [updated] = await sql`
         UPDATE work_logs
-        SET clock_in = ${newClockIn}, clock_out = ${newClockOut},
-            tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining}, memo = ${newMemo},
+        SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining}, memo = ${newMemo},
             todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
         WHERE id = ${logId}
         RETURNING *
       `;
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCHのみ対応しています" });
+}
+
+// ==================== work-sessions (出退勤: 1人が1日に複数セッション記録できる) ====================
+// work_sessions.work_hoursはDB側のGENERATEDカラム(clock_in/clock_outから自動計算)のため、
+// INSERT/UPDATEでは明示的に指定しない(指定するとPostgresがエラーを返す)。
+
+async function handleWorkSessions(req, res) {
+  if (req.method === "GET") {
+    try {
+      const userName = req.query.user_name;
+
+      if (userName && !req.query.date) {
+        // 期間指定: ユーザーごとの履歴(月次・年次集計用)
+        const from = req.query.from || `${todayJst().slice(0, 7)}-01`;
+        const to   = req.query.to   || todayJst();
+        const sessions = await sql`
+          SELECT * FROM work_sessions
+          WHERE user_name = ${userName} AND date >= ${from} AND date <= ${to}
+          ORDER BY date ASC, clock_in ASC
+        `;
+        const totalHours = sessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+        return res.status(200).json({ sessions, total_hours: Math.round(totalHours * 100) / 100 });
+      }
+
+      const date = req.query.date || todayJst();
+      if (userName) {
+        // 特定ユーザー・特定日の全セッション(出勤ボタンの状態判定・当日ステータス表示用)
+        const sessions = await sql`
+          SELECT * FROM work_sessions WHERE user_name = ${userName} AND date = ${date} ORDER BY clock_in ASC, id ASC
+        `;
+        return res.status(200).json(sessions);
+      }
+
+      // 日付指定のみ: その日の全ユーザー分(今日のチーム状況用)
+      const sessions = await sql`SELECT * FROM work_sessions WHERE date = ${date} ORDER BY user_name ASC, clock_in ASC, id ASC`;
+      return res.status(200).json(sessions);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { user_name, date, clock_in } = req.body || {};
+    if (!user_name || typeof user_name !== "string" || !user_name.trim()) {
+      return res.status(400).json({ error: "user_name（文字列）が必要です" });
+    }
+    if (!date || isNaN(Date.parse(date))) {
+      return res.status(400).json({ error: "有効なdateが必要です" });
+    }
+    if (!clock_in) {
+      return res.status(400).json({ error: "clock_inが必要です" });
+    }
+    try {
+      const [session] = await sql`
+        INSERT INTO work_sessions (user_name, date, clock_in)
+        VALUES (${user_name.trim()}, ${date}, ${clock_in})
+        RETURNING *
+      `;
+      return res.status(201).json(session);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    const { id, clock_out } = req.body || {};
+    const sessionId = parseInt(id, 10);
+    if (!sessionId || isNaN(sessionId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    if (!clock_out) {
+      return res.status(400).json({ error: "clock_outが必要です" });
+    }
+    try {
+      const [updated] = await sql`
+        UPDATE work_sessions SET clock_out = ${clock_out} WHERE id = ${sessionId} RETURNING *
+      `;
+      if (!updated) return res.status(404).json({ error: "セッションが見つかりません" });
       return res.status(200).json(updated);
     } catch (err) {
       return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
