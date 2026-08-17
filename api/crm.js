@@ -1890,6 +1890,7 @@ async function trySendToCompany(company, variantId) {
         company_id: company.id,
         variant_id: variantId,
         tags: ["自動パイプライン"],
+        trigger_source: "auto_pipeline",
       });
       if (formResult.ok) return true;
     }
@@ -1900,6 +1901,7 @@ async function trySendToCompany(company, variantId) {
         variant_id: variantId,
         attachment_id: variant?.attachment_id || null,
         tags: ["自動パイプライン"],
+        trigger_source: "auto_pipeline",
       });
       if (emailResult.ok) return true;
     }

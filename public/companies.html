@@ -2808,7 +2808,7 @@
           const res = await fetch("/api/submit-form", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "フォーム送信エラー");
@@ -2820,7 +2820,7 @@
           const res = await fetch("/api/send-email", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || "メール送信エラー");
@@ -2847,7 +2847,7 @@
         const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_id: company.id, variant_id: variantId, force }),
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "送信エラー");
@@ -3359,7 +3359,7 @@
       try {
         const res = await fetch(endpoint, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_id: company.id, variant_id: variantId, tags: lastSearchAutoTags }),
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, tags: lastSearchAutoTags, trigger_source: "manual" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "送信エラー");
@@ -3496,7 +3496,7 @@
       try {
         const res = await fetch(endpoint, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_id: company.id, variant_id: state.variantId, tags: lastSearchAutoTags }),
+          body: JSON.stringify({ company_id: company.id, variant_id: state.variantId, tags: lastSearchAutoTags, trigger_source: "manual" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "送信エラー");

@@ -907,8 +907,9 @@
     <summary>⚙️ 自動送信の設定</summary>
     <div class="autosend-settings-body">
       <div class="autosend-form-group">
-        <label for="settingDailyLimit">1日の送信上限</label>
+        <label for="settingDailyLimit">自動パイプラインの1日の送信上限</label>
         <input type="number" id="settingDailyLimit" min="1" placeholder="20" />
+        <p class="autosend-note">手動送信（個別・一括）には適用されません。この上限は完全自動パイプラインの送信にのみ適用されます。</p>
       </div>
       <div class="autosend-form-group">
         <label for="settingSendInterval">送信間隔（秒）</label>
@@ -1606,6 +1607,7 @@
           force: document.getElementById("forceCheck").checked,
           attachment_id: variant?.attachment_id || null,
           sender_id: getSelectedSenderId(),
+          trigger_source: "manual",
         }),
       });
       const data = await res.json();
@@ -1640,7 +1642,7 @@
       const res = await fetch("/api/submit-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked }),
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force: document.getElementById("forceCheck").checked, trigger_source: "manual" }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1683,7 +1685,7 @@
       const res = await fetch("/api/submit-form", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force }),
+        body: JSON.stringify({ company_id: companyId, variant_id: variantId, force, trigger_source: "manual" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "フォーム送信エラー");
@@ -1700,6 +1702,7 @@
           company_id: companyId, variant_id: variantId, force,
           attachment_id: variant?.attachment_id || null,
           sender_id: getSelectedSenderId(),
+          trigger_source: "manual",
         }),
       });
       const data = await res.json();

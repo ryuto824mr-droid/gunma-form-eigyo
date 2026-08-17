@@ -6,20 +6,23 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force, tags } = req.body || {};
+  const { company_id, variant_id, force, tags, trigger_source } = req.body || {};
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
   }
+  const triggerSource = trigger_source === "auto_pipeline" ? "auto_pipeline" : "manual";
 
   const settings = await getSettings();
 
-  // 1日の送信上限チェック
-  const dailyLimit = parseInt(settings.daily_send_limit, 10) || 20;
-  const [{ count: todaySendCount }] = await sql`
-    SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
-  `;
-  if (todaySendCount >= dailyLimit) {
-    return res.status(429).json({ error: `本日の送信上限(${dailyLimit}件)に達しました` });
+  // 1日の送信上限チェック(自動パイプラインのみ適用。手動送信は上限なし)
+  if (triggerSource === "auto_pipeline") {
+    const dailyLimit = parseInt(settings.daily_send_limit, 10) || 20;
+    const [{ count: todaySendCount }] = await sql`
+      SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
+    `;
+    if (todaySendCount >= dailyLimit) {
+      return res.status(429).json({ error: `本日の送信上限(${dailyLimit}件)に達しました` });
+    }
   }
 
   // 再送信ガード
