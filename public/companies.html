@@ -1041,7 +1041,7 @@
 
   <section class="discover-section reveal-on-scroll">
     <h2>企業を自動検索</h2>
-    <div class="search-form-grid" id="searchFormLocle">
+    <div class="search-form-grid" id="searchFormFields">
       <div class="search-form-field">
         <label for="searchIndustry">業種</label>
         <select id="searchIndustry" onchange="updateSearchQueryPreview()">
@@ -1180,59 +1180,9 @@
         </select>
         <p class="search-form-hint">※現在は最大20件までの取得となります</p>
       </div>
-    </div>
-    <div class="search-form-grid" id="searchFormOzukanzukan" hidden>
-      <div class="search-form-field">
-        <label for="searchIndustryOz">業種</label>
-        <select id="searchIndustryOz" onchange="updateSearchQueryPreview()">
-          <option value="">業種を選択</option>
-          <option value="製造業">製造業</option>
-          <option value="IT">IT</option>
-          <option value="金融">金融</option>
-          <option value="サービス業">サービス業</option>
-          <option value="建設">建設</option>
-          <option value="流通・小売">流通・小売</option>
-          <option value="食品">食品</option>
-          <option value="医療・福祉">医療・福祉</option>
-          <option value="教育">教育</option>
-          <option value="運輸・物流">運輸・物流</option>
-        </select>
-      </div>
-      <div class="search-form-field">
-        <label for="searchSizeOz">企業規模</label>
-        <select id="searchSizeOz" onchange="updateSearchQueryPreview()">
-          <option value="">規模を選択</option>
-          <option value="50人未満">50人未満</option>
-          <option value="50〜300人">50〜300人</option>
-          <option value="300〜1000人">300〜1000人</option>
-          <option value="1000人以上">1000人以上</option>
-        </select>
-      </div>
-      <div class="search-form-field">
-        <label for="searchLocationOz">勤務地</label>
-        <select id="searchLocationOz" onchange="updateSearchQueryPreview()">
-          <option value="">勤務地を選択</option>
-          <option value="高崎市">高崎市</option>
-          <option value="前橋市">前橋市</option>
-          <option value="太田市">太田市</option>
-          <option value="伊勢崎市">伊勢崎市</option>
-          <option value="桐生市">桐生市</option>
-          <option value="その他群馬県内">その他群馬県内</option>
-        </select>
-      </div>
-      <div class="search-form-field">
-        <label for="searchResultCountOz">取得件数</label>
-        <select id="searchResultCountOz">
-          <option value="10">10社</option>
-          <option value="20" selected>20社</option>
-          <option value="30">30社</option>
-          <option value="50">50社</option>
-        </select>
-        <p class="search-form-hint">※現在は最大20件までの取得となります</p>
-      </div>
-      <div class="search-form-field search-form-field-wide">
+      <div class="search-form-field search-form-field-wide" id="searchAppealSection" hidden>
         <label>訴求ポイント<span style="text-transform:none;font-weight:400;color:var(--gray-400)">（検索条件には使わず、登録時に企業タグとして先に付与されます）</span></label>
-        <div class="search-appeal-checkboxes" id="searchAppealOz">
+        <div class="search-appeal-checkboxes" id="searchAppeal">
           <label><input type="checkbox" value="SNS映え" onchange="updateSearchQueryPreview()"> SNS映え</label>
           <label><input type="checkbox" value="知名度の高さ" onchange="updateSearchQueryPreview()"> 知名度の高さ</label>
           <label><input type="checkbox" value="福利厚生充実" onchange="updateSearchQueryPreview()"> 福利厚生充実</label>
@@ -3057,33 +3007,23 @@
   let lastSearchProject = getCurrentProject();
   initDiscoverForm();
 
-  // 検索フォームは個別のタブ切り替えUIを持たず、常に現在のプロジェクト
-  // (getCurrentProject() = app.html/home.htmlで選択済みのプロジェクト)に応じて
-  // LOCLE用/お仕事図鑑用のどちらか一方のフォームだけを表示する
+  // 検索フォームの9項目(業種〜取得件数)はLOCLE/お仕事図鑑で共通の単一フォーム。
+  // 訴求ポイントセクションのみ、現在のプロジェクト(getCurrentProject() =
+  // app.html/home.htmlで選択済みのプロジェクト)がお仕事図鑑の場合だけ表示する
   function initDiscoverForm() {
     const project = getCurrentProject();
-    document.getElementById("searchFormLocle").hidden = project !== "locle";
-    document.getElementById("searchFormOzukanzukan").hidden = project !== "ozukanzukan";
+    document.getElementById("searchAppealSection").hidden = project !== "ozukanzukan";
     updateSearchQueryPreview();
   }
 
-  function getSelectedSearchAppealOz() {
-    return Array.from(document.querySelectorAll("#searchAppealOz input:checked")).map(cb => cb.value);
+  function getSelectedSearchAppeal() {
+    if (getCurrentProject() !== "ozukanzukan") return [];
+    return Array.from(document.querySelectorAll("#searchAppeal input:checked")).map(cb => cb.value);
   }
 
   function getSearchParams() {
-    if (getCurrentProject() === "ozukanzukan") {
-      return {
-        project:      "ozukanzukan",
-        industry:     document.getElementById("searchIndustryOz").value,
-        size:         document.getElementById("searchSizeOz").value,
-        location:     document.getElementById("searchLocationOz").value,
-        appeal:       getSelectedSearchAppealOz(),
-        result_count: parseInt(document.getElementById("searchResultCountOz")?.value, 10) || 20,
-      };
-    }
     return {
-      project:      "locle",
+      project:      getCurrentProject(),
       industry:     document.getElementById("searchIndustry").value,
       prefecture:   document.getElementById("searchPrefecture").value,
       city:         getSelectedCity(),
@@ -3093,32 +3033,17 @@
       founding_age: document.getElementById("searchFoundingAge").value,
       revenue:      document.getElementById("searchRevenue").value,
       hiring:       document.getElementById("searchHiring").value,
+      appeal:       getSelectedSearchAppeal(),
       result_count: parseInt(document.getElementById("searchResultCount")?.value, 10) || 20,
     };
   }
 
   function hasAnySearchParam(params) {
-    if (params.project === "ozukanzukan") {
-      return !!(params.industry || params.size || params.location);
-    }
     return !!(params.industry || params.prefecture || params.city || params.keyword || params.size ||
       params.listing || params.founding_age || params.revenue || params.hiring);
   }
 
   function buildQueryPreview(params) {
-    if (params.project === "ozukanzukan") {
-      const parts = [];
-      if (params.location) parts.push(params.location); else parts.push("群馬県内");
-      if (params.industry) parts.push(params.industry);
-      if (params.size) parts.push(params.size);
-      parts.push("公式サイト");
-      const excludes = DISCOVER_EXCLUDE_DOMAINS.map(d => `-site:${d}`);
-      excludes.push("-求人", "-採用", "-転職");
-      const appealNote = params.appeal && params.appeal.length
-        ? `（訴求ポイント「${params.appeal.join("、")}」は検索クエリには使わず、登録時にタグとして付与されます）`
-        : "";
-      return parts.join(" ") + " " + excludes.join(" ") + (appealNote ? " " + appealNote : "");
-    }
     const parts = [];
     if (params.prefecture) parts.push(params.prefecture);
     if (params.city) parts.push(params.city);
@@ -3133,18 +3058,13 @@
     // 除外ワード
     const excludes = DISCOVER_EXCLUDE_DOMAINS.map(d => `-site:${d}`);
     excludes.push("-求人", "-採用", "-転職");
-    return parts.join(" ") + " " + excludes.join(" ");
+    const appealNote = params.appeal && params.appeal.length
+      ? `（訴求ポイント「${params.appeal.join("、")}」は検索クエリには使わず、登録時にタグとして付与されます）`
+      : "";
+    return parts.join(" ") + " " + excludes.join(" ") + (appealNote ? " " + appealNote : "");
   }
 
   function buildAutoTags(params) {
-    if (params.project === "ozukanzukan") {
-      const tags = [];
-      if (params.industry) tags.push(`業種:${params.industry}`);
-      if (params.location) tags.push(`地域:${params.location}`);
-      if (params.size) tags.push(`規模:${params.size}`);
-      (params.appeal || []).forEach(a => tags.push(`訴求:${a}`));
-      return tags;
-    }
     const tags = [];
     if (params.industry) tags.push(`業種:${params.industry}`);
     if (params.prefecture) tags.push(`地域:${params.prefecture}`);
@@ -3154,6 +3074,7 @@
     if (params.founding_age) tags.push(`設立:${params.founding_age}`);
     if (params.revenue) tags.push(`売上:${params.revenue}`);
     if (params.hiring) tags.push(`採用:${params.hiring}`);
+    (params.appeal || []).forEach(a => tags.push(`訴求:${a}`));
     return tags;
   }
 
@@ -3180,12 +3101,7 @@
     const resultCountEl = document.getElementById("searchResultCount");
     if (resultCountEl) resultCountEl.value = "20";
 
-    document.getElementById("searchIndustryOz").value = "";
-    document.getElementById("searchSizeOz").value = "";
-    document.getElementById("searchLocationOz").value = "";
-    document.querySelectorAll("#searchAppealOz input[type=checkbox]").forEach(cb => { cb.checked = false; });
-    const resultCountOzEl = document.getElementById("searchResultCountOz");
-    if (resultCountOzEl) resultCountOzEl.value = "20";
+    document.querySelectorAll("#searchAppeal input[type=checkbox]").forEach(cb => { cb.checked = false; });
 
     updateSearchQueryPreview();
   }

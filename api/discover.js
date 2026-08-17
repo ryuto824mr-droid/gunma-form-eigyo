@@ -89,59 +89,28 @@ function isBranchOrStore(name) {
 // URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
 const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
 
-// 「群馬お仕事図鑑」タブの企業規模を、LOCLEタブの従業員規模カテゴリに内部変換するためのマッピング
-const OZUKANZUKAN_SIZE_TO_LOCLE_SIZE = {
-  "50人未満":      "ベンチャー・スタートアップ",
-  "50〜300人":     "中小企業",
-  "300〜1000人":   "中堅企業",
-  "1000人以上":    "大企業",
-};
-
-// 「群馬お仕事図鑑」タブの勤務地のうち、市区町村として都道府県+市区町村の形式に変換できるもの
-// (「その他群馬県内」は市区町村を特定できないため都道府県のみで検索する)
-const OZUKANZUKAN_CITY_VALUES = new Set(["高崎市", "前橋市", "太田市", "伊勢崎市", "桐生市"]);
-
-// 「群馬お仕事図鑑」タブのbodyを、既存のbuildQuery/searchViaBrave/searchPlacesAPIが
-// そのまま扱えるLOCLEタブと同じ形式(業種/都道府県+市区町村/従業員規模)に変換する。
-// 訴求ポイント(body.appeal)は検索クエリには使わない(フロント側で企業登録時のタグ付けにのみ使用する)
-function mapOzukanzukanParams(body) {
-  const location = String(body.location || "").trim();
-  const hasLocation = !!location;
-  return {
-    industry:     String(body.industry || "").trim(),
-    prefecture:   hasLocation ? "群馬県" : "",
-    city:         OZUKANZUKAN_CITY_VALUES.has(location) ? location : "",
-    keyword:      "",
-    size:         OZUKANZUKAN_SIZE_TO_LOCLE_SIZE[String(body.size || "").trim()] || "",
-    listing:      "",
-    founding_age: "",
-    revenue:      "",
-    hiring:       "",
-  };
-}
-
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
   const body = req.body || {};
-  const isOzukanzukan = body.project === "ozukanzukan";
-  const project = isOzukanzukan ? "ozukanzukan" : "locle";
+  const project = body.project === "ozukanzukan" ? "ozukanzukan" : "locle";
 
-  const params = isOzukanzukan
-    ? mapOzukanzukanParams(body)
-    : {
-        industry:     String(body.industry     || "").trim(),
-        prefecture:   String(body.prefecture   || "").trim(),
-        city:         String(body.city         || "").trim(),
-        keyword:      String(body.keyword      || "").trim(),
-        size:         String(body.size         || "").trim(),
-        listing:      String(body.listing      || "").trim(),
-        founding_age: String(body.founding_age || "").trim(),
-        revenue:      String(body.revenue      || "").trim(),
-        hiring:       String(body.hiring       || "").trim(),
-      };
+  // 検索フォームはLOCLE/お仕事図鑑で共通の9軸(業種/都道府県/市区町村/キーワード/
+  // 従業員規模/上場区分/設立年数/売上規模/採用状況)。訴求ポイント(body.appeal)は
+  // 検索クエリには使わない(フロント側で企業登録時のタグ付けにのみ使用する)
+  const params = {
+    industry:     String(body.industry     || "").trim(),
+    prefecture:   String(body.prefecture   || "").trim(),
+    city:         String(body.city         || "").trim(),
+    keyword:      String(body.keyword      || "").trim(),
+    size:         String(body.size         || "").trim(),
+    listing:      String(body.listing      || "").trim(),
+    founding_age: String(body.founding_age || "").trim(),
+    revenue:      String(body.revenue      || "").trim(),
+    hiring:       String(body.hiring       || "").trim(),
+  };
 
   const hasAnyParam = params.industry || params.prefecture || params.city || params.keyword ||
     params.size || params.listing || params.founding_age || params.revenue || params.hiring;
