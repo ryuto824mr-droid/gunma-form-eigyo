@@ -146,7 +146,7 @@ module.exports = async function handler(req, res) {
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
     // Brave側と同じEXCLUDE_DOMAINSブロックリストをPlacesの結果(websiteUri)にも適用する
-    const placesResults = await searchPlacesAPI(locationStr, descStr, resultCount, params.industry, EXCLUDE_DOMAINS);
+    const placesResults = await searchPlacesAPI(locationStr, descStr, resultCount, params.industry, EXCLUDE_DOMAINS, params.prefecture);
     if (placesResults.debug?.has_key) {
       await logApiUsage("google_places", "text_search");
     }
