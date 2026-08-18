@@ -10,6 +10,8 @@
   :root {
     --green-500: #44B13F;
     --green-400: #5BC952;
+    --orange-500: #f97316;
+    --orange-400: #fb923c;
     --navy: #0a0f1a;
     --navy-light: #141c2e;
     --navy-card: #1a2337;
@@ -161,6 +163,16 @@
   }
   .present-section.active .scene-desc { opacity: 1; transform: translateY(0); }
 
+  .scene-reassurance {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 700; color: var(--green-400);
+    background: rgba(68,177,63,0.12); border: 1px solid rgba(68,177,63,0.3);
+    padding: 8px 16px; border-radius: 999px; margin: 0 0 22px;
+    opacity: 0; transform: translateY(10px); transition: opacity 0.6s ease, transform 0.6s ease;
+    transition-delay: 0.75s;
+  }
+  .present-section.active .scene-reassurance { opacity: 1; transform: translateY(0); }
+
   .scene-points { list-style: none; display: flex; flex-direction: column; gap: 10px; }
   .scene-points li {
     font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 9px;
@@ -170,6 +182,7 @@
   .present-section.active .scene-points li:nth-child(2) { transition-delay: 1.2s; opacity: 1; transform: translateY(0); }
   .present-section.active .scene-points li:nth-child(3) { transition-delay: 1.5s; opacity: 1; transform: translateY(0); }
   .present-section.active .scene-points li:nth-child(4) { transition-delay: 1.8s; opacity: 1; transform: translateY(0); }
+  .present-section.active .scene-points li:nth-child(5) { transition-delay: 2.1s; opacity: 1; transform: translateY(0); }
   .scene-points .check {
     color: var(--green-400); font-weight: 800; flex-shrink: 0;
     width: 19px; height: 19px; border-radius: 50%; background: rgba(68,177,63,0.15);
@@ -323,6 +336,67 @@
   .mock-line-chart-sm { width: 100%; height: 40px; display: block; }
   .mock-line-path { fill: none; stroke: var(--green-400); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
+  /* Scene 5: team mock */
+  .mock-cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .mock-cal-title { font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.5); letter-spacing: 0.04em; }
+  .mock-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 18px; }
+  .mock-cal-cell {
+    aspect-ratio: 1; border-radius: 6px; background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; padding: 4px;
+  }
+  .mock-cal-day { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.55); }
+  .mock-cal-dots { display: flex; gap: 2px; min-height: 5px; }
+  .mock-cal-dot {
+    width: 5px; height: 5px; border-radius: 50%; opacity: 0; transform: scale(0);
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .mock-cal-dot.show { opacity: 1; transform: scale(1); }
+  .mock-cal-dot.green  { background: var(--green-400); }
+  .mock-cal-dot.orange { background: var(--orange-400); }
+  .mock-cal-dot.gray   { background: rgba(255,255,255,0.35); }
+
+  .mock-team-row { display: flex; gap: 14px; align-items: stretch; flex-wrap: wrap; }
+  .mock-mic-box {
+    flex: 1; min-width: 140px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; padding: 16px 10px; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; position: relative;
+  }
+  .mock-mic-circle {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; background: linear-gradient(135deg, var(--green-500), var(--green-400));
+    position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(68,177,63,0.4);
+  }
+  .mock-mic-ring {
+    position: absolute; width: 40px; height: 40px; border-radius: 50%;
+    border: 2px solid var(--green-400); opacity: 0;
+  }
+  .mock-mic-ring.pulse { animation: micPulse 1.6s ease-out infinite; }
+  @keyframes micPulse {
+    0% { opacity: 0.6; transform: scale(1); }
+    100% { opacity: 0; transform: scale(2.3); }
+  }
+  .mock-mic-label { font-size: 10.5px; font-weight: 700; color: rgba(255,255,255,0.55); text-align: center; }
+
+  .mock-project-toggle {
+    flex: 1.5; min-width: 190px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; padding: 16px 12px; display: flex; align-items: center; justify-content: center; gap: 9px;
+  }
+  .mock-toggle-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35); transition: color 0.4s ease; }
+  .mock-toggle-label.active { color: var(--green-400); }
+  .mock-toggle-label.active.orange { color: var(--orange-400); }
+  .mock-toggle-switch {
+    width: 40px; height: 21px; border-radius: 999px; background: rgba(255,255,255,0.1);
+    border: none; position: relative; cursor: default; padding: 0; flex-shrink: 0;
+    transition: background 0.4s ease;
+  }
+  .mock-toggle-switch.on { background: rgba(249,115,22,0.3); }
+  .mock-toggle-knob {
+    position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--green-400); transition: transform 0.4s cubic-bezier(0.4,0,0.2,1), background 0.4s ease;
+  }
+  .mock-toggle-knob.on { transform: translateX(19px); background: var(--orange-400); }
+
   /* ===== CTA section ===== */
   .cta-section { flex-direction: column; text-align: center; justify-content: center; }
   .cta-inner { display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -357,7 +431,8 @@
   <button class="side-dot" data-idx="2" aria-label="文面を送る"></button>
   <button class="side-dot" data-idx="3" aria-label="商談を管理する"></button>
   <button class="side-dot" data-idx="4" aria-label="データで改善する"></button>
-  <button class="side-dot" data-idx="5" aria-label="CTA"></button>
+  <button class="side-dot" data-idx="5" aria-label="チームで、育てる。"></button>
+  <button class="side-dot" data-idx="6" aria-label="CTA"></button>
 </nav>
 
 <div class="playback-controls">
@@ -390,12 +465,13 @@
     <div class="scene-text-col">
       <div class="step-number">01</div>
       <h2 class="scene-title"><span class="typing-text" data-full="企業を集めて、すぐ動ける。"></span></h2>
-      <p class="scene-desc">URLを貼り付けるだけで企業を一括登録。業種・地域・規模で絞り込んだ検索結果から直接送信もできます。お問い合わせフォームの有無・メールアドレスも自動で取得します。</p>
+      <p class="scene-desc">URLを貼り付けるだけで企業を一括登録。業種・地域・規模で絞り込んだ検索結果から直接送信もできます。検索フォームはLOCLE・群馬お仕事図鑑で1つの画面に統一されており、お問い合わせフォームの有無・メールアドレスも自動で取得します。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>URLを貼るだけで一括登録</li>
         <li><span class="check">✓</span>業種・地域・規模・上場区分など9軸で検索</li>
         <li><span class="check">✓</span>フォーム構造とメアドを自動取得</li>
         <li><span class="check">✓</span>営業お断り文言を自動検出してスキップ</li>
+        <li><span class="check">✓</span>AIが訴求ポイント(働きやすさ・成長環境など)を自動判定</li>
       </ul>
     </div>
     <div class="scene-mock-col">
@@ -443,12 +519,14 @@
     <div class="scene-text-col">
       <div class="step-number">02</div>
       <h2 class="scene-title"><span class="typing-text" data-full="文面を選んで、ワンクリック送信。"></span></h2>
-      <p class="scene-desc">作成した文面テンプレートを選ぶだけで、企業名が自動で差し込まれた下書きが生成されます。文面スコアで品質チェックしてから、フォームまたはメールに自動送信。送信履歴は全て自動で記録されます。</p>
+      <p class="scene-desc">作成した文面テンプレートを選ぶだけで、企業名が自動で差し込まれた下書きが生成されます。文面スコアで品質チェックしてから、フォームまたはメールに自動送信。🤖完全自動パイプラインが毎日自動で企業を探して「送信待ちリスト」に追加しますが、実際の送信は必ず人の目で確認してから。送信履歴は全て自動で記録されます。</p>
+      <p class="scene-reassurance">🤖 探すのは自動、送るのは手動確認。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>{{company_name}}で企業名を自動差し込み</li>
         <li><span class="check">✓</span>文字数・読みやすさスコアで品質チェック</li>
         <li><span class="check">✓</span>フォーム自動送信・Gmail送信に対応</li>
         <li><span class="check">✓</span>24時間制限・重複送信ガード機能付き</li>
+        <li><span class="check">✓</span>送信待ちリストから内容を確認して手動送信</li>
       </ul>
     </div>
     <div class="scene-mock-col">
@@ -561,14 +639,66 @@
   </div>
 </section>
 
-<!-- ===== Section 5: CTA ===== -->
-<section class="present-section cta-section" id="section5" data-idx="5">
+<!-- ===== Section 5: チームで、育てる。 ===== -->
+<section class="present-section feature-scene" id="section5" data-idx="5">
+  <div class="scene-inner">
+    <div class="scene-text-col">
+      <div class="step-number">05</div>
+      <h2 class="scene-title"><span class="typing-text" data-full="チームで、育てる。"></span></h2>
+      <p class="scene-desc">出退勤・議事録・Todoも一元管理。LOCLE・群馬お仕事図鑑、2つのプロジェクトを1つのツールで切り替えながら、チーム全体の動きをカレンダーで見渡せます。</p>
+      <ul class="scene-points">
+        <li><span class="check">✓</span>音声入力で出退勤・日報を記録</li>
+        <li><span class="check">✓</span>議事録をAIが自動要約・Todo抽出</li>
+        <li><span class="check">✓</span>LOCLE・お仕事図鑑をワンクリックで切り替え</li>
+        <li><span class="check">✓</span>カレンダーで全プロジェクトを横断表示</li>
+      </ul>
+    </div>
+    <div class="scene-mock-col">
+      <div class="mock-box" id="mockScene5">
+        <div class="mock-cal-header"><span class="mock-cal-title">8月</span></div>
+        <div class="mock-cal-grid" id="mockCalGrid5">
+          <div class="mock-cal-cell"><span class="mock-cal-day">3</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="green"><span class="mock-cal-day">4</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="gray"><span class="mock-cal-day">5</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="orange,gray"><span class="mock-cal-day">6</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell"><span class="mock-cal-day">7</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="green,gray"><span class="mock-cal-day">8</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="orange"><span class="mock-cal-day">9</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="gray"><span class="mock-cal-day">10</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="green"><span class="mock-cal-day">11</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell"><span class="mock-cal-day">12</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="orange,green,gray"><span class="mock-cal-day">13</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="gray"><span class="mock-cal-day">14</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell" data-dots="green"><span class="mock-cal-day">15</span><span class="mock-cal-dots"></span></div>
+          <div class="mock-cal-cell"><span class="mock-cal-day">16</span><span class="mock-cal-dots"></span></div>
+        </div>
+        <div class="mock-team-row">
+          <div class="mock-mic-box">
+            <div class="mock-mic-ring" id="mockMicRing5"></div>
+            <div class="mock-mic-circle" id="mockMicCircle5">🎤</div>
+            <div class="mock-mic-label" id="mockMicLabel5">話すだけで記録</div>
+          </div>
+          <div class="mock-project-toggle">
+            <span class="mock-toggle-label active" id="mockToggleLocle5">LOCLE</span>
+            <button class="mock-toggle-switch" id="mockToggleSwitch5" type="button" tabindex="-1"><span class="mock-toggle-knob" id="mockToggleKnob5"></span></button>
+            <span class="mock-toggle-label" id="mockToggleOshigoto5">群馬お仕事図鑑</span>
+          </div>
+        </div>
+        <div class="mock-cursor" id="mockCursor5" style="top:14px; left:14px;"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Section 6: CTA ===== -->
+<section class="present-section cta-section" id="section6" data-idx="6">
   <div class="cta-inner">
     <h2 class="cta-title"><span class="typing-text" data-full="さあ、営業を自動化しよう。"></span></h2>
     <a href="/app.html" class="btn-cta-huge cta-fade">今すぐ使い始める →</a>
     <ul class="feature-mini-list cta-fade">
       <li>企業管理</li><li>自動リサーチ</li><li>フォーム送信</li><li>メール送信</li>
       <li>CRM管理</li><li>A/Bテスト</li><li>反応分析</li><li>レポート</li>
+      <li>プロジェクト管理</li><li>稼働管理</li><li>議事録</li><li>カレンダー</li>
     </ul>
     <p class="cta-footer-note">&copy; 2026 LOCLE</p>
   </div>
@@ -661,13 +791,13 @@
   let playGen = 0;
   let userPaused = false;
 
-  const mockIds = ["mockScene1", "mockScene2", "mockScene3", "mockScene4"];
+  const mockIds = ["mockScene1", "mockScene2", "mockScene3", "mockScene4", "mockScene5"];
   const mockSnapshot = {};
   mockIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) mockSnapshot[id] = el.innerHTML;
   });
-  const sceneMockId = { 1: "mockScene1", 2: "mockScene2", 3: "mockScene3", 4: "mockScene4" };
+  const sceneMockId = { 1: "mockScene1", 2: "mockScene2", 3: "mockScene3", 4: "mockScene4", 5: "mockScene5" };
 
   function resetMock(id) {
     const el = document.getElementById(id);
@@ -869,6 +999,63 @@
     }
   }
 
+  /* ===================== Scene 5 runner ===================== */
+  function runScene5(myGen) {
+    const box = document.getElementById("mockScene5");
+    const cursor = document.getElementById("mockCursor5");
+    const grid = document.getElementById("mockCalGrid5");
+    const micRing = document.getElementById("mockMicRing5");
+    const micLabel = document.getElementById("mockMicLabel5");
+    const toggleSwitch = document.getElementById("mockToggleSwitch5");
+    const toggleKnob = document.getElementById("mockToggleKnob5");
+    const toggleLocle = document.getElementById("mockToggleLocle5");
+    const toggleOshigoto = document.getElementById("mockToggleOshigoto5");
+
+    // カレンダーの色ドット(緑=LOCLE/オレンジ=お仕事図鑑/グレー=出退勤)を日付ごとに順番に表示
+    const cells = grid ? Array.from(grid.querySelectorAll(".mock-cal-cell")) : [];
+    cells.forEach((cell, i) => {
+      const dots = (cell.dataset.dots || "").split(",").filter(Boolean);
+      if (dots.length === 0) return;
+      setTimeout(() => {
+        if (myGen !== playGen) return;
+        const dotsEl = cell.querySelector(".mock-cal-dots");
+        dots.forEach(color => {
+          const d = document.createElement("span");
+          d.className = "mock-cal-dot " + color;
+          dotsEl.appendChild(d);
+          requestAnimationFrame(() => { if (myGen === playGen) d.classList.add("show"); });
+        });
+      }, 1200 + i * 110);
+    });
+
+    // マイクで話すだけで記録する演出
+    setTimeout(() => {
+      if (myGen !== playGen) return;
+      micRing.classList.add("pulse");
+      micLabel.textContent = "🔴 録音中...";
+    }, 3600);
+    setTimeout(() => {
+      if (myGen !== playGen) return;
+      micLabel.textContent = "✓ 記録しました";
+    }, 5400);
+    setTimeout(() => {
+      if (myGen !== playGen) return;
+      micRing.classList.remove("pulse");
+      micLabel.textContent = "話すだけで記録";
+    }, 6600);
+
+    // LOCLE ⇄ 群馬お仕事図鑑をワンクリックで切り替える演出
+    setTimeout(() => {
+      if (myGen !== playGen || !toggleSwitch) return;
+      moveCursor(box, cursor, toggleSwitch, 500, myGen, () => {
+        toggleSwitch.classList.add("on");
+        toggleKnob.classList.add("on");
+        toggleLocle.classList.remove("active");
+        toggleOshigoto.classList.add("active", "orange");
+      });
+    }, 6900);
+  }
+
   /* ===================== Hero runner ===================== */
   function runHero(myGen) {
     const c = document.getElementById("statCompanies");
@@ -880,7 +1067,7 @@
     setTimeout(() => { if (myGen === playGen) countUp(n, 20, { suffix: "+", duration: 900 }); }, 2500);
   }
 
-  const sceneRunnerMap = { 0: runHero, 1: runScene1, 2: runScene2, 3: runScene3, 4: runScene4 };
+  const sceneRunnerMap = { 0: runHero, 1: runScene1, 2: runScene2, 3: runScene3, 4: runScene4, 5: runScene5 };
 
   /* ===================== Auto-advance timer (rAF-driven, pause-aware) ===================== */
   const AUTO_MS = 8000;
@@ -951,7 +1138,7 @@
     sec.classList.add("active");
 
     if (titleSpan) {
-      const speed = idx === 0 ? 90 : (idx === 5 ? 70 : 55);
+      const speed = idx === 0 ? 90 : (idx === 6 ? 70 : 55);
       typeText(titleSpan, titleSpan.dataset.full, speed);
     }
 
