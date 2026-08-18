@@ -187,6 +187,64 @@
     padding: 2px 8px; margin-left: 6px; vertical-align: middle;
   }
 
+  /* モーダル共通(退勤時の3項目入力・編集履歴) */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); z-index: 1000;
+    align-items: center; justify-content: center; padding: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--white); border-radius: var(--radius-lg); max-width: 480px; width: 100%;
+    max-height: 85vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px; border-bottom: 1px solid var(--gray-200);
+  }
+  .modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--gray-900); }
+  .modal-close {
+    background: none; border: none; font-size: 18px; cursor: pointer;
+    color: var(--gray-400); line-height: 1; padding: 4px 8px; border-radius: var(--radius-sm);
+    transition: all 150ms;
+  }
+  .modal-close:hover { color: var(--gray-700); background: var(--gray-100); }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+  .modal-body .wl-section-title { margin: 0 0 4px; }
+  .btn-modal-close {
+    padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
+  }
+  .btn-modal-close:hover { background: var(--gray-50); }
+
+  /* 出退勤セッションのインライン編集・編集済みバッジ */
+  .wl-session-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .wl-session-time { cursor: pointer; border-bottom: 1px dashed var(--gray-300); padding: 0 1px; }
+  .wl-session-time:hover { border-bottom-color: var(--green-500); color: var(--green-700); }
+  .wl-session-time-input {
+    font-size: 13px; padding: 1px 4px; border: 1px solid var(--green-500); border-radius: 4px;
+    font-family: inherit; background: var(--white); color: var(--gray-900); width: 90px;
+  }
+  .wl-session-edited-badge {
+    font-size: 10px; font-weight: 600; color: var(--gray-500); background: var(--gray-100);
+    border-radius: 999px; padding: 1px 6px; cursor: pointer; margin-left: 2px; border: none; font-family: inherit;
+  }
+  .wl-session-edited-badge:hover { background: var(--gray-200); }
+  .wl-edit-history-item { padding: 8px 10px; background: var(--gray-50); border-radius: var(--radius-sm); font-size: 13px; color: var(--gray-700); }
+  .wl-edit-history-item + .wl-edit-history-item { margin-top: 8px; }
+  .wl-edit-history-meta { font-size: 11px; color: var(--gray-400); margin-bottom: 3px; }
+
+  .wl-editor-select-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wl-editor-select-btn {
+    padding: 10px 20px; font-size: 14px; font-weight: 600; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-900);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .wl-editor-select-btn:hover { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); }
+
   .wl-summary-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }
   .wl-summary-controls .wl-form-group { min-width: 200px; margin: 0; }
   .wl-period-toggle { display: flex; gap: 6px; }
@@ -331,8 +389,92 @@
     <p class="wl-status-display" id="wlStatusDisplay">本日: 未出勤</p>
 
     <div class="wl-clock-buttons">
-      <button type="button" class="wl-clock-btn clock-in" id="wlClockInBtn" onclick="clockAction('in')">🟢 出勤</button>
-      <button type="button" class="wl-clock-btn clock-out" id="wlClockOutBtn" onclick="clockAction('out')">🔴 退勤</button>
+      <button type="button" class="wl-clock-btn clock-in" id="wlClockInBtn" onclick="clockIn()">🟢 出勤</button>
+      <button type="button" class="wl-clock-btn clock-out" id="wlClockOutBtn" onclick="openClockOutModal()">🔴 退勤</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="wlClockOutModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>🔴 退勤</h3>
+        <button class="modal-close" onclick="closeClockOutModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <p class="wl-section-title" style="font-size:15px;">✅ やったこと</p>
+          <div class="wl-chat-input-row">
+            <textarea id="wlModalTasksDoneText" placeholder="例: LOCLE企業リサーチを20社やりました。"></textarea>
+            <button type="button" class="wl-mic-btn" id="wlModalMicBtnDone" onclick="toggleVoiceInput('modalDone')" title="音声入力">🎤</button>
+          </div>
+        </div>
+        <div>
+          <p class="wl-section-title" style="font-size:15px;">📌 残っているタスク</p>
+          <div class="wl-chat-input-row">
+            <textarea id="wlModalTasksRemainingText" placeholder="例: A社への返信、SNS投稿の下書き確認"></textarea>
+            <button type="button" class="wl-mic-btn" id="wlModalMicBtnRemaining" onclick="toggleVoiceInput('modalRemaining')" title="音声入力">🎤</button>
+          </div>
+        </div>
+        <div>
+          <p class="wl-section-title" style="font-size:15px;">📋 To Do</p>
+          <div class="wl-todo-add-row">
+            <input type="text" id="wlModalTodoInput" placeholder="Todoを入力"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addTodoItem('wlModalTodoInput');}">
+            <button type="button" class="btn-primary" onclick="addTodoItem('wlModalTodoInput')">追加</button>
+            <button type="button" class="wl-mic-btn" id="wlModalMicBtnTodo" onclick="toggleVoiceInput('modalTodo')" title="音声でTodo追加">🎤</button>
+          </div>
+          <ul class="wl-todo-list" id="wlModalTodoList">
+            <li class="wl-todo-empty">Todoはまだありません</li>
+          </ul>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn-modal-close" onclick="closeClockOutModal()">キャンセル</button>
+          <button class="btn-primary" id="wlModalConfirmBtn" onclick="confirmClockOut()">退勤する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="wlEditHistoryModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>編集履歴</h3>
+        <button class="modal-close" onclick="closeEditHistoryModal()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div id="wlEditHistoryBody"></div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="btn-modal-close" onclick="closeEditHistoryModal()">閉じる</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 出退勤時刻のインライン編集を保存する直前に、編集者を選ぶための独立したモーダル。
+       ページ上部「本日の稼働記録」の氏名選択(wlNameSelect)とは完全に独立しており、
+       ここで選んだ氏名だけがedited_byとして使われる -->
+  <div class="modal-overlay" id="wlEditorSelectModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>編集者を選択</h3>
+        <button class="modal-close" onclick="cancelEditorSelect()">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p class="wl-todo-hint" style="margin:0;">この時刻編集を行っているのはどなたですか？</p>
+        <div class="wl-editor-select-buttons">
+          <button type="button" class="wl-editor-select-btn" onclick="confirmEditorSelect('りゅうと')">りゅうと</button>
+          <button type="button" class="wl-editor-select-btn" onclick="confirmEditorSelect('宮田')">宮田</button>
+          <button type="button" class="wl-editor-select-btn" onclick="confirmEditorSelect('岡田')">岡田</button>
+        </div>
+        <div class="wl-form-group">
+          <label for="wlEditorSelectOther">その他</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="wlEditorSelectOther" placeholder="氏名を入力"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();confirmEditorSelectOther();}">
+            <button type="button" class="btn-primary" onclick="confirmEditorSelectOther()">決定</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -546,18 +688,20 @@
   }
 
   // ===== Todo / 確認 =====
+  // ページ本体の「📋 To Do」セクションと、退勤モーダル内のTo Doは同じcurrentTodoItemsを
+  // 共有するため、両方のリストコンテナに同じHTMLを描画する
   function renderTodoList() {
-    const list = document.getElementById("wlTodoList");
-    if (currentTodoItems.length === 0) {
-      list.innerHTML = '<li class="wl-todo-empty">Todoはまだありません</li>';
-      return;
-    }
-    list.innerHTML = currentTodoItems.map((item, i) => `
-      <li class="wl-todo-item ${item.done ? "done" : ""}">
-        <input type="checkbox" ${item.done ? "checked" : ""} onchange="toggleTodoItem(${i})">
-        <span class="wl-todo-text">${esc(item.text)}</span>
-        <button type="button" class="wl-todo-delete" onclick="deleteTodoItem(${i})" title="削除">×</button>
-      </li>`).join("");
+    const html = currentTodoItems.length === 0
+      ? '<li class="wl-todo-empty">Todoはまだありません</li>'
+      : currentTodoItems.map((item, i) => `
+          <li class="wl-todo-item ${item.done ? "done" : ""}">
+            <input type="checkbox" ${item.done ? "checked" : ""} onchange="toggleTodoItem(${i})">
+            <span class="wl-todo-text">${esc(item.text)}</span>
+            <button type="button" class="wl-todo-delete" onclick="deleteTodoItem(${i})" title="削除">×</button>
+          </li>`).join("");
+    document.getElementById("wlTodoList").innerHTML = html;
+    const modalList = document.getElementById("wlModalTodoList");
+    if (modalList) modalList.innerHTML = html;
   }
 
   // Todo項目の追加/チェック/削除、社長確認チェックはいずれもこの関数経由でwork-logsに保存する。
@@ -582,9 +726,9 @@
     }
   }
 
-  function addTodoItem() {
+  function addTodoItem(inputId) {
     if (!getSelectedUserName()) { showToast("氏名を選択または入力してください", "error"); return; }
-    const input = document.getElementById("wlTodoInput");
+    const input = document.getElementById(inputId || "wlTodoInput");
     const text = input.value.trim();
     if (!text) return;
     currentTodoItems = currentTodoItems.concat([{ text, done: false }]);
@@ -656,37 +800,22 @@
   }
 
   // 🟢出勤: 押すたびに新しいセッションを開始する(何回でも押せる、既存セッションは上書きしない)。
-  // 🔴退勤: 直近の「まだclock_outが記録されていない」セッションに退勤時刻を記録する。
-  // 全セッションが退勤済み(または1件も無い)状態で押した場合は「出勤していません」と表示する。
-  async function clockAction(type) {
+  async function clockIn() {
     const userName = getSelectedUserName();
     if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
 
-    const btn = document.getElementById(type === "in" ? "wlClockInBtn" : "wlClockOutBtn");
+    const btn = document.getElementById("wlClockInBtn");
     btn.disabled = true;
     try {
       const timeValue = nowHm();
-      if (type === "in") {
-        const res = await fetch("/api/crm?action=work-sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_name: userName, date: todayStr(), clock_in: timeValue }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "保存に失敗しました");
-        showToast(`🟢 出勤（${timeValue}）を記録しました`, "success");
-      } else {
-        const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
-        if (!openSession) { showToast("出勤していません", "error"); return; }
-        const res = await fetch("/api/crm?action=work-sessions", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: openSession.id, clock_out: timeValue }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "保存に失敗しました");
-        showToast(`🔴 退勤（${timeValue}）を記録しました`, "success");
-      }
+      const res = await fetch("/api/crm?action=work-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_name: userName, date: todayStr(), clock_in: timeValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+      showToast(`🟢 出勤（${timeValue}）を記録しました`, "success");
       await loadTodayData();
     } catch (err) {
       showToast("記録に失敗しました: " + esc(err.message), "error");
@@ -695,15 +824,91 @@
     }
   }
 
-  // ===== 音声入力(3つのマイクボタンで1つのSpeechRecognitionインスタンスを共有) =====
-  // target: "done"(やったこと) / "remaining"(残っているタスク) / "todo"(To Do)
+  // 🔴退勤: 直近の「まだclock_outが記録されていない」セッションが無ければモーダルを開かず
+  // 「出勤していません」と表示する。モーダルを開く際、ページ本体の「やったこと」「残っている
+  // タスク」欄の現在の内容をモーダル側にコピーしておく(TodoはcurrentTodoItemsを共有しているため
+  // renderTodoList()を呼ぶだけでモーダル側のリストにも反映される)
+  function openClockOutModal() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
+    if (!openSession) { showToast("出勤していません", "error"); return; }
+
+    document.getElementById("wlModalTasksDoneText").value = document.getElementById("wlTasksDoneText").value;
+    document.getElementById("wlModalTasksRemainingText").value = document.getElementById("wlTasksRemainingText").value;
+    renderTodoList();
+    document.getElementById("wlClockOutModal").classList.add("open");
+  }
+
+  function closeClockOutModal() {
+    document.getElementById("wlClockOutModal").classList.remove("open");
+  }
+
+  // 「退勤する」: 退勤時刻の記録(work-sessions)と、「やったこと」「残っているタスク」「Todo」の
+  // 保存(work-logs)を同時に行う。work-sessionsのclock_outはこの時点で初めて値が入るケースが
+  // 大半のため、通常はwork_session_edits(編集履歴)には記録されない(バックエンド側で
+  // 既存値がnullの場合は「編集」ではなく「初回記録」として扱う設計になっている)
+  async function confirmClockOut() {
+    const userName = getSelectedUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    const openSession = currentUserSessions.filter(s => !s.clock_out).slice(-1)[0];
+    if (!openSession) { showToast("出勤していません", "error"); closeClockOutModal(); return; }
+
+    const tasksDone = document.getElementById("wlModalTasksDoneText").value.trim();
+    const tasksRemaining = document.getElementById("wlModalTasksRemainingText").value.trim();
+    const existing = todayLogs.find(l => l.user_name === userName);
+
+    const btn = document.getElementById("wlModalConfirmBtn");
+    btn.disabled = true;
+    btn.textContent = "退勤処理中...";
+    try {
+      const timeValue = nowHm();
+      const sessionRes = await fetch("/api/crm?action=work-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: openSession.id, clock_out: timeValue }),
+      });
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok) throw new Error(sessionData.error || "退勤の記録に失敗しました");
+
+      const saveBody = existing
+        ? { id: existing.id, tasks_done: tasksDone, tasks_remaining: tasksRemaining, todo_items: currentTodoItems }
+        : { user_name: userName, date: todayStr(), tasks_done: tasksDone, tasks_remaining: tasksRemaining, todo_items: currentTodoItems };
+      const logRes = await fetch("/api/crm?action=work-logs", {
+        method: existing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saveBody),
+      });
+      const logData = await logRes.json();
+      if (!logRes.ok) throw new Error(logData.error || "記録の保存に失敗しました");
+
+      showToast(`🔴 退勤（${timeValue}）を記録しました`, "success");
+      closeClockOutModal();
+      await loadTodayData(true);
+    } catch (err) {
+      showToast("退勤処理に失敗しました: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "退勤する";
+    }
+  }
+
+  // ===== 音声入力(6つのマイクボタンで1つのSpeechRecognitionインスタンスを共有) =====
+  // target: "done"/"remaining"/"todo"(ページ本体) と "modalDone"/"modalRemaining"/"modalTodo"
+  // (退勤モーダル内)。同時に動作できるのは常に1つだけ
   let recognition = null;
   let isRecording = false;
   let recordingTarget = null;
   let isProcessingTodoVoice = false;
 
-  const MIC_BUTTON_IDS = { done: "wlMicBtnDone", remaining: "wlMicBtnRemaining", todo: "wlMicBtnTodo" };
-  const VOICE_TARGET_TEXTAREA_IDS = { done: "wlTasksDoneText", remaining: "wlTasksRemainingText" };
+  const MIC_BUTTON_IDS = {
+    done: "wlMicBtnDone", remaining: "wlMicBtnRemaining", todo: "wlMicBtnTodo",
+    modalDone: "wlModalMicBtnDone", modalRemaining: "wlModalMicBtnRemaining", modalTodo: "wlModalMicBtnTodo",
+  };
+  const VOICE_TARGET_TEXTAREA_IDS = {
+    done: "wlTasksDoneText", remaining: "wlTasksRemainingText",
+    modalDone: "wlModalTasksDoneText", modalRemaining: "wlModalTasksRemainingText",
+  };
 
   // ブラウザによってはマイク許可拒否時にonerror/onendが確実に発火しない既知の実装差異があるため、
   // toggleVoiceInput側のtry/catchと合わせて二重に状態をリセットできるようにしている
@@ -791,7 +996,7 @@
       ta.value = ta.value.trim() ? `${ta.value.trim()} ${transcript}` : transcript;
       return;
     }
-    if (target === "todo") {
+    if (target === "todo" || target === "modalTodo") {
       addTodoItemsFromVoice(transcript);
     }
   }
@@ -921,7 +1126,7 @@
       }
       const totalHours = sessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
       const sessionsHtml = sessions.length > 0
-        ? sessions.map(s => `<div>${fmtTime(s.clock_in)} 〜 ${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}</div>`).join("")
+        ? sessions.map(renderSessionTimeRow).join("")
         : '<div class="wl-team-empty">出退勤未記録</div>';
       const todoItems = log && Array.isArray(log.todo_items) ? log.todo_items : [];
       const todoHtml = todoItems.length > 0
@@ -936,6 +1141,131 @@
         ${todoHtml}
       </div>`;
     }).join("");
+  }
+
+  // 1件のセッションの出退勤時刻表示(クリックでインライン編集)+ 編集済みバッジを描画する
+  function renderSessionTimeRow(s) {
+    const editedBadge = s.is_edited
+      ? `<button type="button" class="wl-session-edited-badge" onclick="showSessionEditHistory(${s.id})">✏️編集済み</button>`
+      : "";
+    return `<div class="wl-session-row" data-session-id="${s.id}">
+      <span class="wl-session-time" onclick="startEditSessionTime(this, ${s.id}, 'clock_in')">${fmtTime(s.clock_in)}</span>
+      〜
+      <span class="wl-session-time" onclick="startEditSessionTime(this, ${s.id}, 'clock_out')">${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}</span>
+      ${editedBadge}
+    </div>`;
+  }
+
+  // 出退勤時刻をクリックするとtime inputに差し替えてインライン編集できるようにする。
+  // 保存(blur/Enter)時は現在フォームで選択している氏名をedited_byとしてPATCHに含める。
+  // Escapeまたは値が未変更の場合は保存せずrenderTeamStatus()で元の表示に戻す
+  function startEditSessionTime(el, sessionId, field) {
+    if (el.querySelector("input")) return;
+    const session = todaySessions.find(s => s.id === sessionId);
+    const currentValue = session ? (field === "clock_in" ? session.clock_in : session.clock_out) : null;
+    const timeValue = currentValue ? String(currentValue).slice(0, 5) : "";
+
+    const input = document.createElement("input");
+    input.type = "time";
+    input.className = "wl-session-time-input";
+    input.value = timeValue;
+
+    let settled = false;
+    input.onblur = () => {
+      if (settled) return;
+      settled = true;
+      if (input.value && input.value !== timeValue) {
+        openEditorSelectModal(sessionId, field, input.value);
+      } else {
+        renderTeamStatus();
+      }
+    };
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") { settled = true; renderTeamStatus(); }
+    };
+
+    el.textContent = "";
+    el.appendChild(input);
+    input.focus();
+  }
+
+  // 「編集者を選択」モーダル: 時刻編集を保存する直前に必ず挟む。ページ上部「本日の稼働記録」の
+  // 氏名選択(wlNameSelect/getSelectedUserName())とは完全に独立しており、社長が他人の記録を
+  // 修正した場合など、記録者本人ではない編集者を正しくedited_byとして残せるようにするための対応
+  let pendingSessionEdit = null;
+
+  function openEditorSelectModal(sessionId, field, newValue) {
+    pendingSessionEdit = { sessionId, field, newValue };
+    document.getElementById("wlEditorSelectOther").value = "";
+    document.getElementById("wlEditorSelectModal").classList.add("open");
+  }
+
+  function cancelEditorSelect() {
+    pendingSessionEdit = null;
+    document.getElementById("wlEditorSelectModal").classList.remove("open");
+    renderTeamStatus(); // インライン編集中の表示を元に戻す(編集自体はキャンセル)
+  }
+
+  function confirmEditorSelect(editorName) {
+    if (!pendingSessionEdit) return;
+    document.getElementById("wlEditorSelectModal").classList.remove("open");
+    const { sessionId, field, newValue } = pendingSessionEdit;
+    pendingSessionEdit = null;
+    saveEditedSessionTime(sessionId, field, newValue, editorName);
+  }
+
+  function confirmEditorSelectOther() {
+    const name = document.getElementById("wlEditorSelectOther").value.trim();
+    if (!name) { showToast("氏名を入力してください", "error"); return; }
+    confirmEditorSelect(name);
+  }
+
+  async function saveEditedSessionTime(sessionId, field, newTimeValue, editorName) {
+    try {
+      const res = await fetch("/api/crm?action=work-sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sessionId, [field]: newTimeValue, edited_by: editorName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新に失敗しました");
+      showToast("時刻を更新しました", "success");
+      await loadTodayData();
+    } catch (err) {
+      showToast("更新に失敗しました: " + esc(err.message), "error");
+      renderTeamStatus();
+    }
+  }
+
+  async function showSessionEditHistory(sessionId) {
+    try {
+      const res = await fetch(`/api/crm?action=work-session-edits&session_id=${sessionId}`);
+      const edits = await res.json();
+      if (!res.ok) throw new Error(edits.error || "取得に失敗しました");
+      renderEditHistoryModal(Array.isArray(edits) ? edits : []);
+      document.getElementById("wlEditHistoryModal").classList.add("open");
+    } catch (err) {
+      showToast("編集履歴の取得に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  function closeEditHistoryModal() {
+    document.getElementById("wlEditHistoryModal").classList.remove("open");
+  }
+
+  function renderEditHistoryModal(edits) {
+    const body = document.getElementById("wlEditHistoryBody");
+    if (edits.length === 0) {
+      body.innerHTML = '<p class="wl-todo-empty">編集履歴はありません</p>';
+      return;
+    }
+    const fieldLabel = f => f === "clock_in" ? "出勤時刻" : f === "clock_out" ? "退勤時刻" : f;
+    body.innerHTML = edits.map(e => `
+      <div class="wl-edit-history-item">
+        <div class="wl-edit-history-meta">${esc(new Date(e.edited_at).toLocaleString("ja-JP"))} ・ ${esc(e.edited_by)}</div>
+        <div>${esc(fieldLabel(e.field_changed))}: ${esc(e.old_value ?? "(未設定)")} → ${esc(e.new_value ?? "")}</div>
+      </div>`).join("");
   }
 
   // ===== 月次サマリー =====
@@ -1073,9 +1403,11 @@
             ? daySessions.map(s => `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`).join(", ")
             : "—";
           const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+          const editedMark = daySessions.some(s => s.is_edited)
+            ? ' <span title="この日に出退勤時刻の編集があります">✏️</span>' : "";
           return `
             <tr>
-              <td>${esc(date)}</td>
+              <td>${esc(date)}${editedMark}</td>
               <td>${esc(timesText)}</td>
               <td>${dayHours > 0 ? dayHours.toFixed(2) : "—"}</td>
               <td>${esc(truncate(log && log.tasks_done ? log.tasks_done : "", 40))}</td>

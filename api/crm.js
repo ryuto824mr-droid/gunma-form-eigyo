@@ -48,12 +48,13 @@ module.exports = async function handler(req, res) {
     case "sender-accounts": return handleSenderAccounts(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
     case "work-sessions":    return handleWorkSessions(req, res);
+    case "work-session-edits": return handleWorkSessionEdits(req, res);
     case "parse-work-log":  return handleParseWorkLog(req, res);
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -285,6 +286,19 @@ async function handleDbSetup(req, res) {
           ELSE NULL
         END
       ) STORED
+    `);
+    // work_sessions.is_edited/work_session_edits追加（出退勤時刻のインライン編集・監査ログ用）
+    await dbSql.query("ALTER TABLE work_sessions ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE");
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS work_session_edits (
+        id             SERIAL PRIMARY KEY,
+        session_id     INTEGER NOT NULL REFERENCES work_sessions(id),
+        edited_by      TEXT NOT NULL,
+        field_changed  TEXT NOT NULL,
+        old_value      TEXT,
+        new_value      TEXT,
+        edited_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
     `);
     // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
@@ -2704,19 +2718,52 @@ async function handleWorkSessions(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, clock_out } = req.body || {};
+    // clock_in/clock_outはどちらか一方だけ、または両方まとめて更新できる(退勤ボタン=clock_outのみ、
+    // インライン編集=どちらか片方が一般的だが両対応)。edited_byは監査ログ用(任意項目、値を実際に
+    // 変更する場合のみ使う)。既存値がnullの状態から初めて値を入れるケース(通常の出退勤打刻)は
+    // 「編集」ではなく「初回記録」として扱い、work_session_editsには記録しない
+    const { id, clock_in, clock_out, edited_by } = req.body || {};
     const sessionId = parseInt(id, 10);
     if (!sessionId || isNaN(sessionId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
     }
-    if (!clock_out) {
-      return res.status(400).json({ error: "clock_outが必要です" });
+    if (clock_in === undefined && clock_out === undefined) {
+      return res.status(400).json({ error: "clock_inまたはclock_outのいずれかが必要です" });
     }
     try {
-      const [updated] = await sql`
-        UPDATE work_sessions SET clock_out = ${clock_out} WHERE id = ${sessionId} RETURNING *
+      const [current] = await sql`SELECT * FROM work_sessions WHERE id = ${sessionId}`;
+      if (!current) return res.status(404).json({ error: "セッションが見つかりません" });
+
+      const newClockIn  = clock_in  !== undefined ? clock_in  : current.clock_in;
+      const newClockOut = clock_out !== undefined ? clock_out : current.clock_out;
+
+      await sql`
+        UPDATE work_sessions SET clock_in = ${newClockIn}, clock_out = ${newClockOut} WHERE id = ${sessionId}
       `;
-      if (!updated) return res.status(404).json({ error: "セッションが見つかりません" });
+
+      // 時刻同士の比較はHH:MM単位に正規化する(DBはHH:MM:SS、入力はHH:MMで返ってくるため、
+      // 表記ゆれだけで「変更あり」と誤判定しないようにする)
+      const normalizeTime = t => (t == null ? null : String(t).slice(0, 5));
+      const edits = [];
+      if (clock_in !== undefined && current.clock_in !== null && normalizeTime(current.clock_in) !== normalizeTime(newClockIn)) {
+        edits.push({ field: "clock_in", oldValue: normalizeTime(current.clock_in), newValue: normalizeTime(newClockIn) });
+      }
+      if (clock_out !== undefined && current.clock_out !== null && normalizeTime(current.clock_out) !== normalizeTime(newClockOut)) {
+        edits.push({ field: "clock_out", oldValue: normalizeTime(current.clock_out), newValue: normalizeTime(newClockOut) });
+      }
+
+      if (edits.length > 0) {
+        const editorName = typeof edited_by === "string" && edited_by.trim() ? edited_by.trim() : "不明";
+        for (const e of edits) {
+          await sql`
+            INSERT INTO work_session_edits (session_id, edited_by, field_changed, old_value, new_value)
+            VALUES (${sessionId}, ${editorName}, ${e.field}, ${e.oldValue}, ${e.newValue})
+          `;
+        }
+        await sql`UPDATE work_sessions SET is_edited = TRUE WHERE id = ${sessionId}`;
+      }
+
+      const [updated] = await sql`SELECT * FROM work_sessions WHERE id = ${sessionId}`;
       return res.status(200).json(updated);
     } catch (err) {
       return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
@@ -2724,6 +2771,26 @@ async function handleWorkSessions(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / PATCHのみ対応しています" });
+}
+
+// ==================== work-session-edits (出退勤時刻の編集履歴) ====================
+
+async function handleWorkSessionEdits(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  const sessionId = parseInt(req.query.session_id, 10);
+  if (!sessionId || isNaN(sessionId)) {
+    return res.status(400).json({ error: "有効なsession_idが必要です" });
+  }
+  try {
+    const edits = await sql`
+      SELECT * FROM work_session_edits WHERE session_id = ${sessionId} ORDER BY edited_at DESC
+    `;
+    return res.status(200).json(edits);
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
 }
 
 // ==================== parse-work-log (稼働ログのAIチャット解析) ====================
