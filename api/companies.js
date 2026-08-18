@@ -7,15 +7,30 @@ module.exports = async function handler(req, res) {
       const project = req.query?.project;
       const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 
+      // has_sent: send_logsにstatus='sent'の記録が1件でもある企業かどうか(ユニーク判定)。
+      // companies.htmlの統計サマリー「送信済み企業数」で使う。neon()のsqlタグは
+      // フラグメントの合成に対応していないため、各分岐にそのままインラインで書く
       let companies;
       if (hasProjectFilter && showArchived) {
-        companies = await sql`SELECT * FROM companies WHERE project = ${project} ORDER BY created_at DESC`;
+        companies = await sql`
+          SELECT c.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.company_id = c.id AND sl.status = 'sent') AS has_sent
+          FROM companies c WHERE c.project = ${project} ORDER BY c.created_at DESC
+        `;
       } else if (hasProjectFilter) {
-        companies = await sql`SELECT * FROM companies WHERE project = ${project} AND archived = FALSE ORDER BY created_at DESC`;
+        companies = await sql`
+          SELECT c.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.company_id = c.id AND sl.status = 'sent') AS has_sent
+          FROM companies c WHERE c.project = ${project} AND c.archived = FALSE ORDER BY c.created_at DESC
+        `;
       } else if (showArchived) {
-        companies = await sql`SELECT * FROM companies ORDER BY created_at DESC`;
+        companies = await sql`
+          SELECT c.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.company_id = c.id AND sl.status = 'sent') AS has_sent
+          FROM companies c ORDER BY c.created_at DESC
+        `;
       } else {
-        companies = await sql`SELECT * FROM companies WHERE archived = FALSE ORDER BY created_at DESC`;
+        companies = await sql`
+          SELECT c.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.company_id = c.id AND sl.status = 'sent') AS has_sent
+          FROM companies c WHERE c.archived = FALSE ORDER BY c.created_at DESC
+        `;
       }
       return res.status(200).json(companies);
     } catch (err) {
