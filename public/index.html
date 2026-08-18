@@ -12,6 +12,10 @@
     --green-400: #5BC952;
     --orange-500: #f97316;
     --orange-400: #fb923c;
+    --turquoise-500: #14b8a6;
+    --turquoise-400: #2dd4bf;
+    --purple-500: #8b5cf6;
+    --purple-400: #a78bfa;
     --navy: #0a0f1a;
     --navy-light: #141c2e;
     --navy-card: #1a2337;
@@ -110,7 +114,11 @@
     display: flex; gap: 36px; margin-top: 52px; flex-wrap: wrap; justify-content: center; opacity: 0;
   }
   .present-section.active .hero-stats { animation: heroFadeIn 0.8s ease 2.2s forwards; }
-  .stat-card { text-align: center; min-width: 140px; }
+  .stat-card {
+    text-align: center; min-width: 140px; cursor: default; border-radius: 14px; padding: 6px 4px;
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .stat-card:hover, .stat-card:active { transform: translateY(-8px) scale(1.07); }
   .stat-value {
     font-size: 38px; font-weight: 800;
     background: linear-gradient(135deg, var(--green-400), var(--green-500));
@@ -139,6 +147,31 @@
   .scroll-indicator .arrow { animation: arrowBounce 1.6s ease-in-out infinite; font-size: 14px; }
   @keyframes arrowBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 
+  /* ===== Per-section bottom-right scroll hint ===== */
+  .next-hint {
+    position: absolute; right: 28px; bottom: 28px; z-index: 30;
+    font-size: 18px; color: rgba(255,255,255,0.28); font-weight: 700;
+    opacity: 0; transition: opacity 0.6s ease; transition-delay: 1.2s; pointer-events: none;
+  }
+  .present-section.active .next-hint { opacity: 1; }
+  .next-hint .arrow-r { display: inline-block; animation: arrowSlideRight 1.5s ease-in-out infinite; }
+  @keyframes arrowSlideRight { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(7px); } }
+  @media (max-width: 860px) { .next-hint { display: none; } }
+
+  /* ===== Mock emoji sticker badge ===== */
+  /* .mock-boxはoverflow:hiddenのため、負のオフセットで枠外にはみ出させると
+     クリップされて見えなくなる。必ず枠内(top/right positive)に収める */
+  .mock-emoji-badge {
+    position: absolute; top: 12px; right: 12px; font-size: 20px; z-index: 40;
+    background: rgba(10,15,26,0.7); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px; padding: 5px 9px; box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    backdrop-filter: blur(4px);
+    opacity: 0; transform: scale(0.5) rotate(-6deg);
+    transition: opacity 0.5s cubic-bezier(0.34,1.56,0.64,1), transform 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    transition-delay: 0.55s; letter-spacing: 2px;
+  }
+  .present-section.active .mock-emoji-badge { opacity: 1; transform: scale(1) rotate(-6deg); }
+
   /* ===== Feature scenes ===== */
   .feature-scene .scene-inner {
     display: grid; grid-template-columns: 2fr 3fr; gap: 60px; align-items: center;
@@ -150,6 +183,17 @@
     opacity: 0; transform: translateY(10px); transition: all 0.5s ease;
   }
   .present-section.active .step-number { opacity: 1; transform: translateY(0); transition-delay: 0.1s; }
+
+  .scene-kicker {
+    font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.4);
+    letter-spacing: 0.02em; margin: 12px 0 4px; min-height: 1.2em;
+  }
+  .cta-kicker {
+    font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.4);
+    letter-spacing: 0.02em; margin-bottom: 14px; min-height: 1.2em;
+    opacity: 0; transition: opacity 0.6s ease; transition-delay: 0.1s;
+  }
+  .present-section.active .cta-kicker { opacity: 1; }
 
   .scene-title {
     font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.4;
@@ -397,6 +441,57 @@
   }
   .mock-toggle-knob.on { transform: translateX(19px); background: var(--orange-400); }
 
+  /* ===== Before/After section ===== */
+  .before-after-section { flex-direction: column; text-align: center; justify-content: center; }
+  .ba-inner { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 1100px; margin: 0 auto; }
+  .ba-title {
+    font-size: clamp(26px, 4.5vw, 42px); font-weight: 800; letter-spacing: -0.02em; min-height: 1.4em;
+    opacity: 0; transform: translateY(14px); transition: opacity 0.7s ease, transform 0.7s ease; transition-delay: 0.2s;
+  }
+  .present-section.active .ba-title { opacity: 1; transform: translateY(0); }
+  .ba-subtitle {
+    font-size: 14px; color: rgba(255,255,255,0.5); margin-top: 14px;
+    opacity: 0; transition: opacity 0.6s ease; transition-delay: 0.8s;
+  }
+  .present-section.active .ba-subtitle { opacity: 1; }
+
+  .ba-cards { display: flex; gap: 26px; margin-top: 52px; flex-wrap: wrap; justify-content: center; }
+  .ba-card {
+    width: 280px; background: var(--navy-card); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; padding: 28px 22px; position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 50px rgba(45,212,191,0.08);
+    opacity: 0; transform: translateY(24px) scale(0.96);
+    transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .present-section.active .ba-cards .ba-card:nth-child(1) { transition-delay: 0.4s; opacity: 1; transform: translateY(0) scale(1); }
+  .present-section.active .ba-cards .ba-card:nth-child(2) { transition-delay: 0.6s; opacity: 1; transform: translateY(0) scale(1); }
+  .present-section.active .ba-cards .ba-card:nth-child(3) { transition-delay: 0.8s; opacity: 1; transform: translateY(0) scale(1); }
+  .ba-card-emoji { font-size: 26px; margin-bottom: 8px; letter-spacing: 4px; }
+  .ba-card-label { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.5); margin-bottom: 18px; }
+
+  .ba-before {
+    font-size: 26px; font-weight: 800; color: rgba(255,255,255,0.55); transition: opacity 0.4s ease;
+  }
+  .ba-before.struck { opacity: 0.4; }
+  .ba-before.struck .ba-before-value, .ba-before.struck .ba-unit, .ba-before.struck .ba-prefix { text-decoration: line-through; }
+  .ba-prefix { font-size: 14px; font-weight: 700; margin-right: 3px; }
+  .ba-unit { font-size: 15px; font-weight: 700; margin-left: 2px; }
+
+  .ba-arrow {
+    font-size: 20px; color: var(--turquoise-400); margin: 10px 0; font-weight: 800;
+    opacity: 0; transform: scale(0.5); transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .ba-arrow.show { opacity: 1; transform: scale(1); animation: arrowBounce 1.4s ease-in-out 0.4s infinite; }
+
+  .ba-after {
+    font-size: 27px; font-weight: 800;
+    background: linear-gradient(135deg, var(--turquoise-400), var(--green-400));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    opacity: 0; transform: translateY(10px) scale(0.9);
+    transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .ba-after.show { opacity: 1; transform: translateY(0) scale(1); }
+
   /* ===== CTA section ===== */
   .cta-section { flex-direction: column; text-align: center; justify-content: center; }
   .cta-inner { display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -427,12 +522,13 @@
 
 <nav class="side-dots" id="sideDots">
   <button class="side-dot active" data-idx="0" aria-label="ヒーロー"></button>
-  <button class="side-dot" data-idx="1" aria-label="企業を集める"></button>
-  <button class="side-dot" data-idx="2" aria-label="文面を送る"></button>
-  <button class="side-dot" data-idx="3" aria-label="商談を管理する"></button>
-  <button class="side-dot" data-idx="4" aria-label="データで改善する"></button>
-  <button class="side-dot" data-idx="5" aria-label="チームで、育てる。"></button>
-  <button class="side-dot" data-idx="6" aria-label="CTA"></button>
+  <button class="side-dot" data-idx="1" aria-label="営業活動が、こう変わる。"></button>
+  <button class="side-dot" data-idx="2" aria-label="企業を集める"></button>
+  <button class="side-dot" data-idx="3" aria-label="文面を送る"></button>
+  <button class="side-dot" data-idx="4" aria-label="商談を管理する"></button>
+  <button class="side-dot" data-idx="5" aria-label="データで改善する"></button>
+  <button class="side-dot" data-idx="6" aria-label="チームで、育てる。"></button>
+  <button class="side-dot" data-idx="7" aria-label="CTA"></button>
 </nav>
 
 <div class="playback-controls">
@@ -459,12 +555,45 @@
   <div class="scroll-indicator"><span>↓ スクロールして機能を見る</span><span class="arrow">↓</span></div>
 </section>
 
-<!-- ===== Section 1: 企業を集める ===== -->
-<section class="present-section feature-scene" id="section1" data-idx="1">
+<!-- ===== Section 1: ビフォーアフター ===== -->
+<section class="present-section before-after-section" id="section1" data-idx="1">
+  <div class="ba-inner">
+    <h2 class="ba-title"><span class="typing-text" data-full="営業活動が、こう変わる。"></span></h2>
+    <p class="ba-subtitle">同じ1日で、これだけ変わります。</p>
+    <div class="ba-cards" id="baCards">
+      <div class="ba-card">
+        <div class="ba-card-emoji">🏢⏱️</div>
+        <div class="ba-card-label">1社への営業</div>
+        <div class="ba-before" id="baBeforeWrap1"><span class="ba-before-value" id="baBeforeVal1">0</span><span class="ba-unit">分</span></div>
+        <div class="ba-arrow" id="baArrow1">↓</div>
+        <div class="ba-after" id="baAfterWrap1"><span class="ba-after-value" id="baAfterVal1">0</span><span class="ba-unit">秒</span></div>
+      </div>
+      <div class="ba-card">
+        <div class="ba-card-emoji">📬🔎</div>
+        <div class="ba-card-label">返信の確認</div>
+        <div class="ba-before" id="baBeforeWrap2"><span class="ba-prefix">毎日</span><span class="ba-before-value" id="baBeforeVal2">0</span><span class="ba-unit">分</span></div>
+        <div class="ba-arrow" id="baArrow2">↓</div>
+        <div class="ba-after" id="baAfterWrap2">ワンクリック</div>
+      </div>
+      <div class="ba-card">
+        <div class="ba-card-emoji">✍️🤖</div>
+        <div class="ba-card-label">文面の作成</div>
+        <div class="ba-before" id="baBeforeWrap3"><span class="ba-before-value" id="baBeforeVal3">0</span><span class="ba-unit">時間</span></div>
+        <div class="ba-arrow" id="baArrow3">↓</div>
+        <div class="ba-after" id="baAfterWrap3"><span class="ba-prefix">AIで</span><span class="ba-after-value" id="baAfterVal3">0</span><span class="ba-unit">秒</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
+</section>
+
+<!-- ===== Section 2: 企業を集める ===== -->
+<section class="present-section feature-scene" id="section2" data-idx="2">
   <div class="scene-inner">
     <div class="scene-text-col">
       <div class="step-number">01</div>
       <h2 class="scene-title"><span class="typing-text" data-full="企業を集めて、すぐ動ける。"></span></h2>
+      <p class="scene-kicker"><span class="typing-text" data-full="月曜日の朝9時。"></span></p>
       <p class="scene-desc">URLを貼り付けるだけで企業を一括登録。業種・地域・規模で絞り込んだ検索結果から直接送信もできます。検索フォームはLOCLE・群馬お仕事図鑑で1つの画面に統一されており、お問い合わせフォームの有無・メールアドレスも自動で取得します。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>URLを貼るだけで一括登録</li>
@@ -476,6 +605,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene1">
+        <div class="mock-emoji-badge">🏢🔍</div>
         <button class="mock-btn-add" id="mockAddBtn1">＋ 追加</button>
         <table class="mock-table">
           <thead><tr><th>企業名</th><th>ステータス</th><th>自動化</th><th>操作</th></tr></thead>
@@ -511,14 +641,16 @@
       </div>
     </div>
   </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
 </section>
 
-<!-- ===== Section 2: 文面を送る ===== -->
-<section class="present-section feature-scene" id="section2" data-idx="2">
+<!-- ===== Section 3: 文面を送る ===== -->
+<section class="present-section feature-scene" id="section3" data-idx="3">
   <div class="scene-inner">
     <div class="scene-text-col">
       <div class="step-number">02</div>
       <h2 class="scene-title"><span class="typing-text" data-full="文面を選んで、ワンクリック送信。"></span></h2>
+      <p class="scene-kicker"><span class="typing-text" data-full="企業リストが集まったら、"></span></p>
       <p class="scene-desc">作成した文面テンプレートを選ぶだけで、企業名が自動で差し込まれた下書きが生成されます。文面スコアで品質チェックしてから、フォームまたはメールに自動送信。🤖完全自動パイプラインが毎日自動で企業を探して「送信待ちリスト」に追加しますが、実際の送信は必ず人の目で確認してから。送信履歴は全て自動で記録されます。</p>
       <p class="scene-reassurance">🤖 探すのは自動、送るのは手動確認。</p>
       <ul class="scene-points">
@@ -531,6 +663,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene2">
+        <div class="mock-emoji-badge">📧✨</div>
         <div class="mock-search-row">
           <div class="mock-select-fake"><span>株式会社上州メタル</span></div>
           <div class="mock-select-fake"><span>初回挨拶・短文</span></div>
@@ -545,14 +678,16 @@
       </div>
     </div>
   </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
 </section>
 
-<!-- ===== Section 3: 商談を管理する ===== -->
-<section class="present-section feature-scene" id="section3" data-idx="3">
+<!-- ===== Section 4: 商談を管理する ===== -->
+<section class="present-section feature-scene" id="section4" data-idx="4">
   <div class="scene-inner">
     <div class="scene-text-col">
       <div class="step-number">03</div>
       <h2 class="scene-title"><span class="typing-text" data-full="商談を、見える化する。"></span></h2>
+      <p class="scene-kicker"><span class="typing-text" data-full="返信が来たら、"></span></p>
       <p class="scene-desc">営業活動の全体像をカンバンボードで管理します。コンタクト・タスク・活動履歴を一元化して、フォローアップのモレをなくします。A/Bテストで文面を最適化することもできます。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>カンバンで商談進捗を可視化</li>
@@ -563,6 +698,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene3">
+        <div class="mock-emoji-badge">🤝📊</div>
         <div class="mock-kanban">
           <div class="mock-kanban-col">
             <div class="mock-kanban-col-title">リード(<span id="mockLeadCount3">2</span>)</div>
@@ -592,14 +728,16 @@
       </div>
     </div>
   </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
 </section>
 
-<!-- ===== Section 4: データで改善する ===== -->
-<section class="present-section feature-scene" id="section4" data-idx="4">
+<!-- ===== Section 5: データで改善する ===== -->
+<section class="present-section feature-scene" id="section5" data-idx="5">
   <div class="scene-inner">
     <div class="scene-text-col">
       <div class="step-number">04</div>
       <h2 class="scene-title"><span class="typing-text" data-full="データで、営業を改善する。"></span></h2>
+      <p class="scene-kicker"><span class="typing-text" data-full="週末、数字を振り返る。"></span></p>
       <p class="scene-desc">バリアント別・タグ別の反応率を自動集計。どの文面が効果的かをグラフで比較して、次の営業アクションに活かします。Gmailの返信を自動取得して反応を記録することもできます。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>バリアント別の反応率をグラフで比較</li>
@@ -610,6 +748,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene4">
+        <div class="mock-emoji-badge">📈💡</div>
         <div class="mock-bars-row">
           <div class="mock-bar-col">
             <span class="mock-bar-value" id="mockBarValue4-0">0%</span>
@@ -637,14 +776,16 @@
       </div>
     </div>
   </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
 </section>
 
-<!-- ===== Section 5: チームで、育てる。 ===== -->
-<section class="present-section feature-scene" id="section5" data-idx="5">
+<!-- ===== Section 6: チームで、育てる。 ===== -->
+<section class="present-section feature-scene" id="section6" data-idx="6">
   <div class="scene-inner">
     <div class="scene-text-col">
       <div class="step-number">05</div>
       <h2 class="scene-title"><span class="typing-text" data-full="チームで、育てる。"></span></h2>
+      <p class="scene-kicker"><span class="typing-text" data-full="そして、チーム全体も。"></span></p>
       <p class="scene-desc">出退勤・議事録・Todoも一元管理。LOCLE・群馬お仕事図鑑、2つのプロジェクトを1つのツールで切り替えながら、チーム全体の動きをカレンダーで見渡せます。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>音声入力で出退勤・日報を記録</li>
@@ -655,6 +796,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene5">
+        <div class="mock-emoji-badge">🎤📅</div>
         <div class="mock-cal-header"><span class="mock-cal-title">8月</span></div>
         <div class="mock-cal-grid" id="mockCalGrid5">
           <div class="mock-cal-cell"><span class="mock-cal-day">3</span><span class="mock-cal-dots"></span></div>
@@ -688,11 +830,13 @@
       </div>
     </div>
   </div>
+  <div class="next-hint"><span class="arrow-r">→</span></div>
 </section>
 
-<!-- ===== Section 6: CTA ===== -->
-<section class="present-section cta-section" id="section6" data-idx="6">
+<!-- ===== Section 7: CTA ===== -->
+<section class="present-section cta-section" id="section7" data-idx="7">
   <div class="cta-inner">
+    <p class="cta-kicker"><span class="typing-text" data-full="これが、新しい営業のかたち。"></span></p>
     <h2 class="cta-title"><span class="typing-text" data-full="さあ、営業を自動化しよう。"></span></h2>
     <a href="/app.html" class="btn-cta-huge cta-fade">今すぐ使い始める →</a>
     <ul class="feature-mini-list cta-fade">
@@ -706,12 +850,30 @@
 
 <script>
   /* ===================== Particle background ===================== */
+  // セクションごとにブランドカラー(緑・オレンジ)を軸としつつ、差し色(ターコイズ・
+  // パープル等)をパーティクルの一部だけ再着色して混ぜることで、単調な単色背景を避ける
+  const SECTION_PALETTES = [
+    ["#44B13F", "#5BC952"],                     // 0 hero
+    ["#2dd4bf", "#5BC952", "#44B13F"],           // 1 before/after (turquoise)
+    ["#44B13F", "#5BC952"],                      // 2 companies
+    ["#f97316", "#fb923c", "#44B13F"],           // 3 send (orange)
+    ["#a78bfa", "#8b5cf6", "#44B13F"],           // 4 crm (purple)
+    ["#2dd4bf", "#14b8a6", "#44B13F"],           // 5 analytics (turquoise)
+    ["#44B13F", "#f97316", "#fb923c"],           // 6 team (green+orange)
+    ["#44B13F", "#5BC952"],                      // 7 cta
+  ];
+  let applyParticlePalette = function () {}; // enterSection()から呼べるよう外側スコープに公開
+
   (function () {
     const canvas = document.getElementById("particleCanvas");
     const ctx = canvas.getContext("2d");
     let particles = [];
     let w, h;
 
+    function randomBaseColor() {
+      const basePalette = ["#44B13F", "#44B13F", "#5BC952", "#f97316"];
+      return basePalette[Math.floor(Math.random() * basePalette.length)];
+    }
     function resize() {
       w = canvas.width = window.innerWidth;
       h = canvas.height = document.documentElement.scrollHeight;
@@ -725,11 +887,11 @@
         vy: -(Math.random() * 0.25 + 0.05),
         vx: (Math.random() - 0.5) * 0.15,
         o: Math.random() * 0.5 + 0.15,
+        color: randomBaseColor(),
       }));
     }
     function tick() {
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "#44B13F";
       particles.forEach(p => {
         p.y += p.vy;
         p.x += p.vx;
@@ -737,6 +899,7 @@
         if (p.x < -10) p.x = w + 10;
         if (p.x > w + 10) p.x = -10;
         ctx.globalAlpha = p.o;
+        ctx.fillStyle = p.color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
@@ -748,6 +911,16 @@
     makeParticles();
     tick();
     window.addEventListener("resize", () => { resize(); makeParticles(); });
+
+    // セクション遷移のたびに、パーティクルの一部(約35%)だけをそのセクションの
+    // アクセントカラーへ再着色する。全部ではなく一部だけ変えることで、
+    // 「部分的に混ざる」グラデーション感を出しつつ緑・オレンジの基調は保つ
+    applyParticlePalette = function (idx) {
+      const palette = SECTION_PALETTES[idx] || SECTION_PALETTES[0];
+      particles.forEach(p => {
+        if (Math.random() < 0.35) p.color = palette[Math.floor(Math.random() * palette.length)];
+      });
+    };
   })();
 
   /* ===================== Typing / count-up helpers ===================== */
@@ -791,13 +964,13 @@
   let playGen = 0;
   let userPaused = false;
 
-  const mockIds = ["mockScene1", "mockScene2", "mockScene3", "mockScene4", "mockScene5"];
+  const mockIds = ["baCards", "mockScene1", "mockScene2", "mockScene3", "mockScene4", "mockScene5"];
   const mockSnapshot = {};
   mockIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) mockSnapshot[id] = el.innerHTML;
   });
-  const sceneMockId = { 1: "mockScene1", 2: "mockScene2", 3: "mockScene3", 4: "mockScene4", 5: "mockScene5" };
+  const sceneMockId = { 1: "baCards", 2: "mockScene1", 3: "mockScene2", 4: "mockScene3", 5: "mockScene4", 6: "mockScene5" };
 
   function resetMock(id) {
     const el = document.getElementById(id);
@@ -1056,6 +1229,35 @@
     }, 6900);
   }
 
+  /* ===================== Before/After runner ===================== */
+  function runBeforeAfter(myGen) {
+    const cards = [
+      { beforeVal: document.getElementById("baBeforeVal1"), beforeTarget: 5,
+        beforeWrap: document.getElementById("baBeforeWrap1"), arrow: document.getElementById("baArrow1"),
+        afterWrap: document.getElementById("baAfterWrap1"), afterVal: document.getElementById("baAfterVal1"), afterTarget: 30 },
+      { beforeVal: document.getElementById("baBeforeVal2"), beforeTarget: 15,
+        beforeWrap: document.getElementById("baBeforeWrap2"), arrow: document.getElementById("baArrow2"),
+        afterWrap: document.getElementById("baAfterWrap2"), afterVal: null, afterTarget: null },
+      { beforeVal: document.getElementById("baBeforeVal3"), beforeTarget: 1,
+        beforeWrap: document.getElementById("baBeforeWrap3"), arrow: document.getElementById("baArrow3"),
+        afterWrap: document.getElementById("baAfterWrap3"), afterVal: document.getElementById("baAfterVal3"), afterTarget: 30 },
+    ];
+    cards.forEach((c, i) => {
+      const base = 1200 + i * 1400;
+      setTimeout(() => { if (myGen === playGen) countUp(c.beforeVal, c.beforeTarget, { duration: 650 }); }, base);
+      setTimeout(() => {
+        if (myGen !== playGen) return;
+        c.beforeWrap.classList.add("struck");
+        c.arrow.classList.add("show");
+      }, base + 950);
+      setTimeout(() => {
+        if (myGen !== playGen) return;
+        c.afterWrap.classList.add("show");
+        if (c.afterVal && c.afterTarget != null) countUp(c.afterVal, c.afterTarget, { duration: 550 });
+      }, base + 1600);
+    });
+  }
+
   /* ===================== Hero runner ===================== */
   function runHero(myGen) {
     const c = document.getElementById("statCompanies");
@@ -1067,7 +1269,7 @@
     setTimeout(() => { if (myGen === playGen) countUp(n, 20, { suffix: "+", duration: 900 }); }, 2500);
   }
 
-  const sceneRunnerMap = { 0: runHero, 1: runScene1, 2: runScene2, 3: runScene3, 4: runScene4, 5: runScene5 };
+  const sceneRunnerMap = { 0: runHero, 1: runBeforeAfter, 2: runScene1, 3: runScene2, 4: runScene3, 5: runScene4, 6: runScene5 };
 
   /* ===================== Auto-advance timer (rAF-driven, pause-aware) ===================== */
   const AUTO_MS = 8000;
@@ -1129,17 +1331,29 @@
     sections.forEach(s => s.classList.remove("active"));
 
     if (sceneMockId[idx]) resetMock(sceneMockId[idx]);
+    applyParticlePalette(idx);
 
     const sec = sections[idx];
-    const titleSpan = sec.querySelector(".typing-text[data-full]");
-    if (titleSpan) titleSpan.textContent = "";
+    // ナレーション用の「キッカー」フレーズがある節では、キッカー→本タイトルの
+    // 順にタイピングさせる(同一節内に.typing-text[data-full]が複数存在しうる)
+    const typingEls = Array.from(sec.querySelectorAll(".typing-text[data-full]"));
+    typingEls.forEach(el => { el.textContent = ""; });
 
     void sec.offsetWidth; // force reflow so CSS animations restart
     sec.classList.add("active");
 
-    if (titleSpan) {
-      const speed = idx === 0 ? 90 : (idx === 6 ? 70 : 55);
-      typeText(titleSpan, titleSpan.dataset.full, speed);
+    if (typingEls.length > 0) {
+      (async () => {
+        for (let i = 0; i < typingEls.length; i++) {
+          if (myGen !== playGen) return;
+          const el = typingEls[i];
+          const isKicker = !!el.closest(".scene-kicker, .cta-kicker");
+          const speed = isKicker ? 42 : (idx === 0 ? 90 : (idx === 7 ? 70 : 55));
+          await typeText(el, el.dataset.full, speed);
+          if (myGen !== playGen) return;
+          if (i < typingEls.length - 1) await new Promise(r => setTimeout(r, 250));
+        }
+      })();
     }
 
     const runner = sceneRunnerMap[idx];
