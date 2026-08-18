@@ -137,6 +137,7 @@
     box-shadow: 0 8px 24px rgba(68,177,63,0.35);
   }
   .btn-cta-primary:hover, .btn-cta-huge:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(68,177,63,0.5); }
+  .btn-cta-primary svg, .btn-cta-huge svg { width: 16px; height: 16px; stroke-width: 2.4; }
 
   .scroll-indicator {
     position: absolute; left: 50%; bottom: 42px; transform: translateX(-50%);
@@ -144,33 +145,37 @@
     opacity: 0; display: flex; flex-direction: column; align-items: center; gap: 6px;
   }
   .present-section.active .scroll-indicator { animation: heroFadeIn 0.8s ease 2.9s forwards; }
-  .scroll-indicator .arrow { animation: arrowBounce 1.6s ease-in-out infinite; font-size: 14px; }
+  .scroll-indicator span { display: inline-flex; align-items: center; gap: 4px; }
+  .scroll-indicator .arrow { animation: arrowBounce 1.6s ease-in-out infinite; }
+  .scroll-indicator svg { width: 13px; height: 13px; stroke-width: 2.4; }
   @keyframes arrowBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 
   /* ===== Per-section bottom-right scroll hint ===== */
   .next-hint {
     position: absolute; right: 28px; bottom: 28px; z-index: 30;
-    font-size: 18px; color: rgba(255,255,255,0.28); font-weight: 700;
+    color: rgba(255,255,255,0.28);
     opacity: 0; transition: opacity 0.6s ease; transition-delay: 1.2s; pointer-events: none;
   }
   .present-section.active .next-hint { opacity: 1; }
-  .next-hint .arrow-r { display: inline-block; animation: arrowSlideRight 1.5s ease-in-out infinite; }
-  @keyframes arrowSlideRight { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(7px); } }
+  .next-hint .arrow-r { display: inline-block; animation: arrowBounce 1.5s ease-in-out infinite; }
+  .next-hint svg { width: 19px; height: 19px; stroke-width: 2.2; }
   @media (max-width: 860px) { .next-hint { display: none; } }
 
   /* ===== Mock emoji sticker badge ===== */
   /* .mock-boxはoverflow:hiddenのため、負のオフセットで枠外にはみ出させると
      クリップされて見えなくなる。必ず枠内(top/right positive)に収める */
   .mock-emoji-badge {
-    position: absolute; top: 12px; right: 12px; font-size: 20px; z-index: 40;
+    position: absolute; top: 12px; right: 12px; z-index: 40;
+    display: flex; align-items: center; gap: 8px;
     background: rgba(10,15,26,0.7); border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px; padding: 5px 9px; box-shadow: 0 6px 16px rgba(0,0,0,0.35);
-    backdrop-filter: blur(4px);
+    border-radius: 10px; padding: 7px 10px; box-shadow: 0 6px 16px rgba(0,0,0,0.35);
+    backdrop-filter: blur(4px); color: var(--green-400);
     opacity: 0; transform: scale(0.5) rotate(-6deg);
     transition: opacity 0.5s cubic-bezier(0.34,1.56,0.64,1), transform 0.5s cubic-bezier(0.34,1.56,0.64,1);
-    transition-delay: 0.55s; letter-spacing: 2px;
+    transition-delay: 0.55s;
   }
   .present-section.active .mock-emoji-badge { opacity: 1; transform: scale(1) rotate(-6deg); }
+  .mock-emoji-badge svg { width: 17px; height: 17px; stroke-width: 2.1; }
 
   /* ===== Feature scenes ===== */
   .feature-scene .scene-inner {
@@ -216,6 +221,7 @@
     transition-delay: 0.75s;
   }
   .present-section.active .scene-reassurance { opacity: 1; transform: translateY(0); }
+  .scene-reassurance svg { width: 14px; height: 14px; stroke-width: 2.4; }
 
   .scene-points { list-style: none; display: flex; flex-direction: column; gap: 10px; }
   .scene-points li {
@@ -408,9 +414,10 @@
   }
   .mock-mic-circle {
     width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 17px; background: linear-gradient(135deg, var(--green-500), var(--green-400));
+    color: #fff; background: linear-gradient(135deg, var(--green-500), var(--green-400));
     position: relative; z-index: 2; box-shadow: 0 6px 18px rgba(68,177,63,0.4);
   }
+  .mock-mic-circle svg { width: 19px; height: 19px; stroke-width: 2.3; }
   .mock-mic-ring {
     position: absolute; width: 40px; height: 40px; border-radius: 50%;
     border: 2px solid var(--green-400); opacity: 0;
@@ -466,7 +473,8 @@
   .present-section.active .ba-cards .ba-card:nth-child(1) { transition-delay: 0.4s; opacity: 1; transform: translateY(0) scale(1); }
   .present-section.active .ba-cards .ba-card:nth-child(2) { transition-delay: 0.6s; opacity: 1; transform: translateY(0) scale(1); }
   .present-section.active .ba-cards .ba-card:nth-child(3) { transition-delay: 0.8s; opacity: 1; transform: translateY(0) scale(1); }
-  .ba-card-emoji { font-size: 26px; margin-bottom: 8px; letter-spacing: 4px; }
+  .ba-card-emoji { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; color: var(--turquoise-400); }
+  .ba-card-emoji svg { width: 34px; height: 34px; stroke-width: 1.6; }
   .ba-card-label { font-size: 13px; font-weight: 700; color: rgba(255,255,255,0.5); margin-bottom: 18px; }
 
   .ba-before {
@@ -478,9 +486,11 @@
   .ba-unit { font-size: 15px; font-weight: 700; margin-left: 2px; }
 
   .ba-arrow {
-    font-size: 20px; color: var(--turquoise-400); margin: 10px 0; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--turquoise-400); margin: 10px 0;
     opacity: 0; transform: scale(0.5); transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
   }
+  .ba-arrow svg { width: 22px; height: 22px; stroke-width: 2.4; transform: rotate(90deg); }
   .ba-arrow.show { opacity: 1; transform: scale(1); animation: arrowBounce 1.4s ease-in-out 0.4s infinite; }
 
   .ba-after {
@@ -549,10 +559,10 @@
       <div class="stat-card"><div class="stat-value" id="statAnalysis">0</div><div class="stat-label">分析項目</div></div>
     </div>
     <div class="hero-actions">
-      <a href="/app.html" class="btn-cta-primary">今すぐ使う →</a>
+      <a href="/app.html" class="btn-cta-primary">今すぐ使う <i data-lucide="arrow-right"></i></a>
     </div>
   </div>
-  <div class="scroll-indicator"><span>↓ スクロールして機能を見る</span><span class="arrow">↓</span></div>
+  <div class="scroll-indicator"><span><i data-lucide="chevron-down"></i> スクロールして機能を見る</span><span class="arrow"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 1: ビフォーアフター ===== -->
@@ -562,29 +572,29 @@
     <p class="ba-subtitle">同じ1日で、これだけ変わります。</p>
     <div class="ba-cards" id="baCards">
       <div class="ba-card">
-        <div class="ba-card-emoji">🏢⏱️</div>
+        <div class="ba-card-emoji"><i data-lucide="building-2"></i><i data-lucide="timer"></i></div>
         <div class="ba-card-label">1社への営業</div>
         <div class="ba-before" id="baBeforeWrap1"><span class="ba-before-value" id="baBeforeVal1">0</span><span class="ba-unit">分</span></div>
-        <div class="ba-arrow" id="baArrow1">↓</div>
+        <div class="ba-arrow" id="baArrow1"><i data-lucide="arrow-right"></i></div>
         <div class="ba-after" id="baAfterWrap1"><span class="ba-after-value" id="baAfterVal1">0</span><span class="ba-unit">秒</span></div>
       </div>
       <div class="ba-card">
-        <div class="ba-card-emoji">📬🔎</div>
+        <div class="ba-card-emoji"><i data-lucide="inbox"></i><i data-lucide="search"></i></div>
         <div class="ba-card-label">返信の確認</div>
         <div class="ba-before" id="baBeforeWrap2"><span class="ba-prefix">毎日</span><span class="ba-before-value" id="baBeforeVal2">0</span><span class="ba-unit">分</span></div>
-        <div class="ba-arrow" id="baArrow2">↓</div>
+        <div class="ba-arrow" id="baArrow2"><i data-lucide="arrow-right"></i></div>
         <div class="ba-after" id="baAfterWrap2">ワンクリック</div>
       </div>
       <div class="ba-card">
-        <div class="ba-card-emoji">✍️🤖</div>
+        <div class="ba-card-emoji"><i data-lucide="pen-line"></i><i data-lucide="bot"></i></div>
         <div class="ba-card-label">文面の作成</div>
         <div class="ba-before" id="baBeforeWrap3"><span class="ba-before-value" id="baBeforeVal3">0</span><span class="ba-unit">時間</span></div>
-        <div class="ba-arrow" id="baArrow3">↓</div>
+        <div class="ba-arrow" id="baArrow3"><i data-lucide="arrow-right"></i></div>
         <div class="ba-after" id="baAfterWrap3"><span class="ba-prefix">AIで</span><span class="ba-after-value" id="baAfterVal3">0</span><span class="ba-unit">秒</span></div>
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 2: 企業を集める ===== -->
@@ -605,7 +615,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene1">
-        <div class="mock-emoji-badge">🏢🔍</div>
+        <div class="mock-emoji-badge"><i data-lucide="building-2"></i><i data-lucide="search"></i></div>
         <button class="mock-btn-add" id="mockAddBtn1">＋ 追加</button>
         <table class="mock-table">
           <thead><tr><th>企業名</th><th>ステータス</th><th>自動化</th><th>操作</th></tr></thead>
@@ -641,7 +651,7 @@
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 3: 文面を送る ===== -->
@@ -652,7 +662,7 @@
       <h2 class="scene-title"><span class="typing-text" data-full="文面を選んで、ワンクリック送信。"></span></h2>
       <p class="scene-kicker"><span class="typing-text" data-full="企業リストが集まったら、"></span></p>
       <p class="scene-desc">作成した文面テンプレートを選ぶだけで、企業名が自動で差し込まれた下書きが生成されます。文面スコアで品質チェックしてから、フォームまたはメールに自動送信。🤖完全自動パイプラインが毎日自動で企業を探して「送信待ちリスト」に追加しますが、実際の送信は必ず人の目で確認してから。送信履歴は全て自動で記録されます。</p>
-      <p class="scene-reassurance">🤖 探すのは自動、送るのは手動確認。</p>
+      <p class="scene-reassurance"><i data-lucide="bot"></i> 探すのは自動、送るのは手動確認。</p>
       <ul class="scene-points">
         <li><span class="check">✓</span>{{company_name}}で企業名を自動差し込み</li>
         <li><span class="check">✓</span>文字数・読みやすさスコアで品質チェック</li>
@@ -663,7 +673,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene2">
-        <div class="mock-emoji-badge">📧✨</div>
+        <div class="mock-emoji-badge"><i data-lucide="mail"></i><i data-lucide="sparkles"></i></div>
         <div class="mock-search-row">
           <div class="mock-select-fake"><span>株式会社上州メタル</span></div>
           <div class="mock-select-fake"><span>初回挨拶・短文</span></div>
@@ -678,7 +688,7 @@
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 4: 商談を管理する ===== -->
@@ -698,7 +708,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene3">
-        <div class="mock-emoji-badge">🤝📊</div>
+        <div class="mock-emoji-badge"><i data-lucide="handshake"></i><i data-lucide="bar-chart-3"></i></div>
         <div class="mock-kanban">
           <div class="mock-kanban-col">
             <div class="mock-kanban-col-title">リード(<span id="mockLeadCount3">2</span>)</div>
@@ -728,7 +738,7 @@
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 5: データで改善する ===== -->
@@ -748,7 +758,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene4">
-        <div class="mock-emoji-badge">📈💡</div>
+        <div class="mock-emoji-badge"><i data-lucide="trending-up"></i><i data-lucide="lightbulb"></i></div>
         <div class="mock-bars-row">
           <div class="mock-bar-col">
             <span class="mock-bar-value" id="mockBarValue4-0">0%</span>
@@ -776,7 +786,7 @@
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 6: チームで、育てる。 ===== -->
@@ -796,7 +806,7 @@
     </div>
     <div class="scene-mock-col">
       <div class="mock-box" id="mockScene5">
-        <div class="mock-emoji-badge">🎤📅</div>
+        <div class="mock-emoji-badge"><i data-lucide="mic"></i><i data-lucide="calendar"></i></div>
         <div class="mock-cal-header"><span class="mock-cal-title">8月</span></div>
         <div class="mock-cal-grid" id="mockCalGrid5">
           <div class="mock-cal-cell"><span class="mock-cal-day">3</span><span class="mock-cal-dots"></span></div>
@@ -817,7 +827,7 @@
         <div class="mock-team-row">
           <div class="mock-mic-box">
             <div class="mock-mic-ring" id="mockMicRing5"></div>
-            <div class="mock-mic-circle" id="mockMicCircle5">🎤</div>
+            <div class="mock-mic-circle" id="mockMicCircle5"><i data-lucide="mic"></i></div>
             <div class="mock-mic-label" id="mockMicLabel5">話すだけで記録</div>
           </div>
           <div class="mock-project-toggle">
@@ -830,7 +840,7 @@
       </div>
     </div>
   </div>
-  <div class="next-hint"><span class="arrow-r">→</span></div>
+  <div class="next-hint"><span class="arrow-r"><i data-lucide="chevron-down"></i></span></div>
 </section>
 
 <!-- ===== Section 7: CTA ===== -->
@@ -838,7 +848,7 @@
   <div class="cta-inner">
     <p class="cta-kicker"><span class="typing-text" data-full="これが、新しい営業のかたち。"></span></p>
     <h2 class="cta-title"><span class="typing-text" data-full="さあ、営業を自動化しよう。"></span></h2>
-    <a href="/app.html" class="btn-cta-huge cta-fade">今すぐ使い始める →</a>
+    <a href="/app.html" class="btn-cta-huge cta-fade">今すぐ使い始める <i data-lucide="arrow-right"></i></a>
     <ul class="feature-mini-list cta-fade">
       <li>企業管理</li><li>自動リサーチ</li><li>フォーム送信</li><li>メール送信</li>
       <li>CRM管理</li><li>A/Bテスト</li><li>反応分析</li><li>レポート</li>
@@ -848,7 +858,12 @@
   </div>
 </section>
 
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
+  // アイコンは他ページ(companies.html等)と同じLucideに統一する。mockSnapshot
+  // (mockIds.forEach内)がinnerHTMLをキャプチャする前に、必ず先にSVG化しておく
+  lucide.createIcons();
+
   /* ===================== Particle background ===================== */
   // セクションごとにブランドカラー(緑・オレンジ)を軸としつつ、差し色(ターコイズ・
   // パープル等)をパーティクルの一部だけ再着色して混ぜることで、単調な単色背景を避ける
