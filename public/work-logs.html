@@ -233,6 +233,16 @@
     border-radius: 999px; padding: 1px 6px; cursor: pointer; margin-left: 2px; border: none; font-family: inherit;
   }
   .wl-session-edited-badge:hover { background: var(--gray-200); }
+  .wl-session-delete-btn {
+    flex-shrink: 0; background: none; border: none; cursor: pointer;
+    color: var(--gray-400); font-size: 13px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+    margin-left: auto;
+  }
+  .wl-session-delete-btn:hover { color: #dc2626; background: #fff5f5; }
+
+  .wl-confirm-mark { cursor: pointer; font-weight: 700; color: var(--gray-400); }
+  .wl-confirm-mark.done { color: var(--green-600); }
+  .wl-confirm-mark:hover { text-decoration: underline; }
   .wl-edit-history-item { padding: 8px 10px; background: var(--gray-50); border-radius: var(--radius-sm); font-size: 13px; color: var(--gray-700); }
   .wl-edit-history-item + .wl-edit-history-item { margin-top: 8px; }
   .wl-edit-history-meta { font-size: 11px; color: var(--gray-400); margin-bottom: 3px; }
@@ -514,12 +524,32 @@
     </ul>
   </div>
 
-  <div class="wl-section reveal-on-scroll">
+  <div class="wl-section reveal-on-scroll" id="wlConfirmDateSection">
     <p class="wl-section-title">✅ 確認</p>
+    <div class="wl-form-grid">
+      <div class="wl-form-group">
+        <label for="wlConfirmDate">日付</label>
+        <input type="date" id="wlConfirmDate" onchange="loadConfirmTarget()">
+      </div>
+      <div class="wl-form-group">
+        <label for="wlConfirmUserSelect">氏名</label>
+        <select id="wlConfirmUserSelect" onchange="onConfirmUserSelectChange()">
+          <option value="りゅうと">りゅうと</option>
+          <option value="宮田">宮田</option>
+          <option value="岡田">岡田</option>
+          <option value="__other__">その他</option>
+        </select>
+      </div>
+      <div class="wl-form-group" id="wlConfirmUserOtherGroup" hidden>
+        <label for="wlConfirmUserOther">氏名（その他）</label>
+        <input type="text" id="wlConfirmUserOther" placeholder="氏名を入力" oninput="loadConfirmTarget()">
+      </div>
+    </div>
     <label class="wl-confirm-row">
-      <input type="checkbox" id="wlConfirmedCheckbox" onchange="toggleConfirmedByBoss()">
+      <input type="checkbox" id="wlConfirmDateCheckbox" onchange="toggleConfirmForDate()">
       社長確認済み
     </label>
+    <p class="wl-todo-hint" id="wlConfirmDateStatus" style="margin-top:8px;"></p>
   </div>
 
   <div class="wl-section reveal-on-scroll">
@@ -576,6 +606,14 @@
     <div class="wl-summary-total-big" id="wlSummaryTotalBig" hidden></div>
   </div>
 
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">📋 全員のTo Do・残タスク一覧</p>
+    <p class="wl-todo-hint">直近30日分の未完了Todoと残っているタスクをユーザーごとに一覧表示します。</p>
+    <div id="wlAllTodosContainer">
+      <p style="font-size:13px; color:var(--gray-400);">読み込み中...</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -618,6 +656,11 @@
     return String(s || "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;")
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  // Todo項目の識別に使う一意なID。サーバー側(normalizeTodoItems)でも未付与の項目には
+  // 採番するため、クライアント側では保存前のプレビュー表示を一貫させる目的で付与する
+  function genTodoId() {
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : `t${Date.now()}${Math.random().toString(16).slice(2)}`;
   }
   function truncate(s, n) {
     return s.length > n ? s.slice(0, n) + "…" : s;
@@ -672,7 +715,6 @@
     }
     updateStatusDisplay();
     renderTodoList();
-    document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
   }
 
   function updateStatusDisplay() {
@@ -693,11 +735,11 @@
   function renderTodoList() {
     const html = currentTodoItems.length === 0
       ? '<li class="wl-todo-empty">Todoはまだありません</li>'
-      : currentTodoItems.map((item, i) => `
+      : currentTodoItems.map(item => `
           <li class="wl-todo-item ${item.done ? "done" : ""}">
-            <input type="checkbox" ${item.done ? "checked" : ""} onchange="toggleTodoItem(${i})">
+            <input type="checkbox" ${item.done ? "checked" : ""} onchange="toggleTodoItem('${esc(item.id)}')">
             <span class="wl-todo-text">${esc(item.text)}</span>
-            <button type="button" class="wl-todo-delete" onclick="deleteTodoItem(${i})" title="削除">×</button>
+            <button type="button" class="wl-todo-delete" onclick="deleteTodoItem('${esc(item.id)}')" title="削除">×</button>
           </li>`).join("");
     document.getElementById("wlTodoList").innerHTML = html;
     const modalList = document.getElementById("wlModalTodoList");
@@ -731,32 +773,22 @@
     const input = document.getElementById(inputId || "wlTodoInput");
     const text = input.value.trim();
     if (!text) return;
-    currentTodoItems = currentTodoItems.concat([{ text, done: false }]);
+    currentTodoItems = currentTodoItems.concat([{ id: genTodoId(), text, done: false }]);
     input.value = "";
     renderTodoList();
     saveTodoAndConfirmState();
   }
 
-  function toggleTodoItem(index) {
-    if (!currentTodoItems[index]) return;
-    currentTodoItems = currentTodoItems.map((item, i) => i === index ? { ...item, done: !item.done } : item);
+  function toggleTodoItem(id) {
+    if (!currentTodoItems.some(item => item.id === id)) return;
+    currentTodoItems = currentTodoItems.map(item => item.id === id ? { ...item, done: !item.done } : item);
     renderTodoList();
     saveTodoAndConfirmState();
   }
 
-  function deleteTodoItem(index) {
-    currentTodoItems = currentTodoItems.filter((_, i) => i !== index);
+  function deleteTodoItem(id) {
+    currentTodoItems = currentTodoItems.filter(item => item.id !== id);
     renderTodoList();
-    saveTodoAndConfirmState();
-  }
-
-  function toggleConfirmedByBoss() {
-    if (!getSelectedUserName()) {
-      showToast("氏名を選択または入力してください", "error");
-      document.getElementById("wlConfirmedCheckbox").checked = currentConfirmedByBoss;
-      return;
-    }
-    currentConfirmedByBoss = document.getElementById("wlConfirmedCheckbox").checked;
     saveTodoAndConfirmState();
   }
 
@@ -1153,6 +1185,7 @@
       〜
       <span class="wl-session-time" onclick="startEditSessionTime(this, ${s.id}, 'clock_out')">${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}</span>
       ${editedBadge}
+      <button type="button" class="wl-session-delete-btn" onclick="deleteSession(${s.id})" title="この出退勤記録を削除">🗑</button>
     </div>`;
   }
 
@@ -1175,7 +1208,7 @@
       if (settled) return;
       settled = true;
       if (input.value && input.value !== timeValue) {
-        openEditorSelectModal(sessionId, field, input.value);
+        openEditorSelectModal({ type: "edit", sessionId, field, newValue: input.value });
       } else {
         renderTeamStatus();
       }
@@ -1190,29 +1223,41 @@
     input.focus();
   }
 
-  // 「編集者を選択」モーダル: 時刻編集を保存する直前に必ず挟む。ページ上部「本日の稼働記録」の
-  // 氏名選択(wlNameSelect/getSelectedUserName())とは完全に独立しており、社長が他人の記録を
-  // 修正した場合など、記録者本人ではない編集者を正しくedited_byとして残せるようにするための対応
-  let pendingSessionEdit = null;
+  // このセッション全体を削除する。確認ダイアログの後、時刻編集と同じ「編集者を選択」モーダルを
+  // 挟んでから実際にDELETEする(誰が削除したか、time編集と同様にwork_session_editsへ記録するため)
+  function deleteSession(sessionId) {
+    if (!confirm("この出退勤記録を削除しますか？")) return;
+    openEditorSelectModal({ type: "delete", sessionId });
+  }
 
-  function openEditorSelectModal(sessionId, field, newValue) {
-    pendingSessionEdit = { sessionId, field, newValue };
+  // 「編集者を選択」モーダル: 時刻編集・セッション削除を保存する直前に必ず挟む。ページ上部
+  // 「本日の稼働記録」の氏名選択(wlNameSelect/getSelectedUserName())とは完全に独立しており、
+  // 社長が他人の記録を修正・削除した場合など、記録者本人ではない編集者を正しくedited_byとして
+  // 残せるようにするための対応。pendingSessionActionのtypeで編集/削除どちらの続きを行うか分岐する
+  let pendingSessionAction = null;
+
+  function openEditorSelectModal(action) {
+    pendingSessionAction = action;
     document.getElementById("wlEditorSelectOther").value = "";
     document.getElementById("wlEditorSelectModal").classList.add("open");
   }
 
   function cancelEditorSelect() {
-    pendingSessionEdit = null;
+    pendingSessionAction = null;
     document.getElementById("wlEditorSelectModal").classList.remove("open");
-    renderTeamStatus(); // インライン編集中の表示を元に戻す(編集自体はキャンセル)
+    renderTeamStatus(); // インライン編集中の表示を元に戻す(編集・削除自体はキャンセル)
   }
 
   function confirmEditorSelect(editorName) {
-    if (!pendingSessionEdit) return;
+    if (!pendingSessionAction) return;
     document.getElementById("wlEditorSelectModal").classList.remove("open");
-    const { sessionId, field, newValue } = pendingSessionEdit;
-    pendingSessionEdit = null;
-    saveEditedSessionTime(sessionId, field, newValue, editorName);
+    const action = pendingSessionAction;
+    pendingSessionAction = null;
+    if (action.type === "edit") {
+      saveEditedSessionTime(action.sessionId, action.field, action.newValue, editorName);
+    } else if (action.type === "delete") {
+      deleteSessionConfirmed(action.sessionId, editorName);
+    }
   }
 
   function confirmEditorSelectOther() {
@@ -1234,6 +1279,23 @@
       await loadTodayData();
     } catch (err) {
       showToast("更新に失敗しました: " + esc(err.message), "error");
+      renderTeamStatus();
+    }
+  }
+
+  async function deleteSessionConfirmed(sessionId, editorName) {
+    try {
+      const res = await fetch("/api/crm?action=work-sessions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sessionId, edited_by: editorName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "削除に失敗しました");
+      showToast("出退勤記録を削除しました", "success");
+      await loadTodayData();
+    } catch (err) {
+      showToast("削除に失敗しました: " + esc(err.message), "error");
       renderTeamStatus();
     }
   }
@@ -1266,6 +1328,97 @@
         <div class="wl-edit-history-meta">${esc(new Date(e.edited_at).toLocaleString("ja-JP"))} ・ ${esc(e.edited_by)}</div>
         <div>${esc(fieldLabel(e.field_changed))}: ${esc(e.old_value ?? "(未設定)")} → ${esc(e.new_value ?? "")}</div>
       </div>`).join("");
+  }
+
+  // ===== 日ごとの確認 =====
+  // ページ上部「本日の稼働記録」の氏名選択(今日限定)とは別に、日付+氏名を自由に選んで
+  // 過去分も含めた任意の1日のconfirmed_by_bossを表示・更新できるようにする独立セクション
+  let confirmTargetLog = null;
+
+  function getConfirmUserName() {
+    const sel = document.getElementById("wlConfirmUserSelect").value;
+    if (sel === "__other__") return document.getElementById("wlConfirmUserOther").value.trim();
+    return sel;
+  }
+
+  // 月次サマリーの確認マークから遷移してきた際など、日付・氏名をプログラム的に設定するための補助
+  function setConfirmUserName(name) {
+    const sel = document.getElementById("wlConfirmUserSelect");
+    if (FIXED_MEMBERS.includes(name)) {
+      sel.value = name;
+      document.getElementById("wlConfirmUserOtherGroup").hidden = true;
+    } else {
+      sel.value = "__other__";
+      document.getElementById("wlConfirmUserOtherGroup").hidden = false;
+      document.getElementById("wlConfirmUserOther").value = name;
+    }
+  }
+
+  function onConfirmUserSelectChange() {
+    const isOther = document.getElementById("wlConfirmUserSelect").value === "__other__";
+    document.getElementById("wlConfirmUserOtherGroup").hidden = !isOther;
+    loadConfirmTarget();
+  }
+
+  async function loadConfirmTarget() {
+    const userName = getConfirmUserName();
+    const date = document.getElementById("wlConfirmDate").value;
+    const checkbox = document.getElementById("wlConfirmDateCheckbox");
+    const statusEl = document.getElementById("wlConfirmDateStatus");
+    if (!userName || !date) {
+      confirmTargetLog = null;
+      checkbox.checked = false;
+      checkbox.disabled = true;
+      statusEl.textContent = "氏名と日付を選択してください";
+      return;
+    }
+    checkbox.disabled = false;
+    try {
+      const res = await fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${date}&to=${date}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      const logs = Array.isArray(data.logs) ? data.logs : [];
+      confirmTargetLog = logs[0] || null;
+      checkbox.checked = !!(confirmTargetLog && confirmTargetLog.confirmed_by_boss);
+      statusEl.textContent = confirmTargetLog
+        ? (confirmTargetLog.confirmed_by_boss && confirmTargetLog.confirmed_at
+            ? `${esc(new Date(confirmTargetLog.confirmed_at).toLocaleString("ja-JP"))}に確認済み`
+            : "")
+        : "この日の記録はまだありません(チェックすると記録が作成されます)";
+    } catch (err) {
+      statusEl.textContent = "取得エラー: " + err.message;
+    }
+  }
+
+  async function toggleConfirmForDate() {
+    const userName = getConfirmUserName();
+    const date = document.getElementById("wlConfirmDate").value;
+    const checkbox = document.getElementById("wlConfirmDateCheckbox");
+    if (!userName || !date) {
+      showToast("氏名と日付を選択してください", "error");
+      checkbox.checked = false;
+      return;
+    }
+    const newValue = checkbox.checked;
+    const body = confirmTargetLog
+      ? { id: confirmTargetLog.id, confirmed_by_boss: newValue }
+      : { user_name: userName, date, confirmed_by_boss: newValue };
+    try {
+      const res = await fetch("/api/crm?action=work-logs", {
+        method: confirmTargetLog ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存に失敗しました");
+      confirmTargetLog = data;
+      showToast(newValue ? "確認済みにしました" : "確認を取り消しました", "success");
+      await loadConfirmTarget();
+      if (date === todayStr()) await loadTodayData(); // 今日の分なら、他の表示にも反映する
+    } catch (err) {
+      showToast("保存に失敗しました: " + esc(err.message), "error");
+      checkbox.checked = !newValue;
+    }
   }
 
   // ===== 月次サマリー =====
@@ -1405,13 +1558,17 @@
           const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
           const editedMark = daySessions.some(s => s.is_edited)
             ? ' <span title="この日に出退勤時刻の編集があります">✏️</span>' : "";
+          const confirmedAt = log && log.confirmed_at ? log.confirmed_at : "";
+          const confirmMark = log && log.confirmed_by_boss
+            ? `<span class="wl-confirm-mark done" onclick="onConfirmMarkClick('${date}','${confirmedAt}')" title="クリックで詳細">✓</span>`
+            : `<span class="wl-confirm-mark" onclick="onConfirmMarkClick('${date}','')" title="クリックで確認セクションへ">－</span>`;
           return `
             <tr>
               <td>${esc(date)}${editedMark}</td>
               <td>${esc(timesText)}</td>
               <td>${dayHours > 0 ? dayHours.toFixed(2) : "—"}</td>
               <td>${esc(truncate(log && log.tasks_done ? log.tasks_done : "", 40))}</td>
-              <td>${log && log.confirmed_by_boss ? "✓" : ""}</td>
+              <td>${confirmMark}</td>
             </tr>`;
         }).join("");
       }
@@ -1422,8 +1579,106 @@
     }
   }
 
+  // 月次サマリーの確認マーク(✓/－)クリック時: 確認済みなら詳細をトースト表示、
+  // 未確認なら「日ごとの確認」セクションに日付・氏名をセットしてスクロールする
+  function onConfirmMarkClick(date, confirmedAt) {
+    const userName = getSummaryUserName();
+    if (confirmedAt) {
+      showToast(`${esc(userName)}さんの${esc(date)}の記録は${esc(new Date(confirmedAt).toLocaleString("ja-JP"))}に確認済みです`, "info");
+      return;
+    }
+    document.getElementById("wlConfirmDate").value = date;
+    setConfirmUserName(userName);
+    loadConfirmTarget();
+    document.getElementById("wlConfirmDateSection").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  // ===== 全員のTo Do・残タスク一覧 =====
+  async function loadAllTodosSummary() {
+    const container = document.getElementById("wlAllTodosContainer");
+    try {
+      const res = await fetch("/api/crm?action=work-logs-todos-summary");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      renderAllTodosSummary(Array.isArray(data) ? data : []);
+    } catch (err) {
+      container.innerHTML = `<p style="font-size:13px; color:var(--gray-400);">エラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderAllTodosSummary(entries) {
+    const container = document.getElementById("wlAllTodosContainer");
+    const hasAny = entries.some(e => e.todos.length > 0 || e.tasks_remaining);
+    if (!hasAny) {
+      container.innerHTML = '<p style="font-size:13px; color:var(--gray-400);">未完了のTo Doはありません</p>';
+      return;
+    }
+    container.innerHTML = FIXED_MEMBERS.map(name => {
+      const userEntries = entries.filter(e => e.user_name === name)
+        .sort((a, b) => a.date < b.date ? 1 : -1);
+      const todoCount = userEntries.reduce((sum, e) => sum + e.todos.length, 0);
+      const remainingEntries = userEntries.filter(e => e.tasks_remaining);
+      if (todoCount === 0 && remainingEntries.length === 0) {
+        return `<div class="wl-team-card empty" style="margin-bottom:10px;">
+          <strong>${esc(name)}</strong>
+          <p style="font-size:13px; color:var(--gray-400); margin:6px 0 0;">未完了のTo Doはありません</p>
+        </div>`;
+      }
+      const todoHtml = userEntries.flatMap(e =>
+        e.todos.map(t => `
+          <li class="wl-todo-item">
+            <input type="checkbox" onchange="toggleAllTodosItem('${esc(name)}','${esc(e.date)}','${esc(t.id)}')">
+            <span class="wl-todo-text">${esc(e.date)}: ${esc(t.text)}</span>
+          </li>`)
+      ).join("");
+      const remainingHtml = remainingEntries.map(e => `
+        <li class="wl-todo-item">
+          <span class="wl-todo-text">${esc(e.date)}: ${esc(e.tasks_remaining)}</span>
+        </li>`).join("");
+      return `<div class="wl-team-card" style="margin-bottom:10px;">
+        <strong>${esc(name)}</strong>
+        ${todoCount > 0 ? `<p style="font-size:12px; color:var(--gray-400); margin:8px 0 4px;">未完了Todo</p><ul class="wl-todo-list">${todoHtml}</ul>` : ""}
+        ${remainingEntries.length > 0 ? `<p style="font-size:12px; color:var(--gray-400); margin:8px 0 4px;">残タスク</p><ul class="wl-todo-list">${remainingHtml}</ul>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  // 一覧はfrom=all-users(直近30日)の未完了Todoのみを含む集約結果なので、チェック時は
+  // user_name+dateでその日のwork_logsを取り直し、todoIdが一致する項目をdoneにしてPATCHする。
+  // インデックスではなくID一致で対象を特定するため、他のTodoが並行して完了/削除されて
+  // 配列内の位置がずれても誤った項目を更新することがない
+  async function toggleAllTodosItem(userName, date, todoId) {
+    try {
+      const res = await fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${date}&to=${date}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      const log = (Array.isArray(data.logs) ? data.logs : [])[0];
+      if (!log) throw new Error("記録が見つかりません");
+      const todoItems = Array.isArray(log.todo_items) ? [...log.todo_items] : [];
+      const targetIndex = todoItems.findIndex(t => t.id === todoId);
+      if (targetIndex === -1) throw new Error("対象のTodoが見つかりません(既に更新されている可能性があります)");
+      todoItems[targetIndex] = { ...todoItems[targetIndex], done: true };
+      const patchRes = await fetch("/api/crm?action=work-logs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: log.id, todo_items: todoItems }),
+      });
+      const patchData = await patchRes.json();
+      if (!patchRes.ok) throw new Error(patchData.error || "保存に失敗しました");
+      showToast("完了にしました", "success");
+      await loadAllTodosSummary();
+      if (date === todayStr()) await loadTodayData();
+    } catch (err) {
+      showToast("更新に失敗しました: " + esc(err.message), "error");
+      loadAllTodosSummary();
+    }
+  }
+
   initSpeechRecognition();
   loadTodayData(true);
+  document.getElementById("wlConfirmDate").value = todayStr();
+  loadConfirmTarget();
+  loadAllTodosSummary();
   initScrollReveal();
   initNavMenu("work-logs");
 </script>

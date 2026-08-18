@@ -5,6 +5,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { neon } = require("@neondatabase/serverless");
 const { sql, getSettings } = require("../lib/db");
 const submitFormHandler = require("./submit-form");
@@ -49,12 +50,13 @@ module.exports = async function handler(req, res) {
     case "work-logs":        return handleWorkLogs(req, res);
     case "work-sessions":    return handleWorkSessions(req, res);
     case "work-session-edits": return handleWorkSessionEdits(req, res);
+    case "work-logs-todos-summary": return handleWorkLogsTodosSummary(req, res);
     case "parse-work-log":  return handleParseWorkLog(req, res);
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -292,7 +294,7 @@ async function handleDbSetup(req, res) {
     await dbSql.query(`
       CREATE TABLE IF NOT EXISTS work_session_edits (
         id             SERIAL PRIMARY KEY,
-        session_id     INTEGER NOT NULL REFERENCES work_sessions(id),
+        session_id     INTEGER REFERENCES work_sessions(id) ON DELETE SET NULL,
         edited_by      TEXT NOT NULL,
         field_changed  TEXT NOT NULL,
         old_value      TEXT,
@@ -300,6 +302,22 @@ async function handleDbSetup(req, res) {
         edited_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // work_session_edits.session_idの制約修正: セッション削除機能の追加に伴い、削除時にも
+    // 「誰が・何を削除したか」の監査ログを残せるようにする必要がある。当初はsession_idが
+    // NOT NULL + 通常の外部キー(ON DELETE制約なし=デフォルトNO ACTION)だったため、
+    // work_sessionsの行を削除しようとすると、それを参照するwork_session_edits行があると
+    // 外部キー制約違反でDELETE自体が失敗してしまっていた。session_idをNULL許容にした上で
+    // ON DELETE SET NULLに変更し、セッション削除後も監査ログ自体は(session_idがNULLに
+    // なるだけで)残り続けるようにする(CREATE TABLE IF NOT EXISTSは初回作成時のみ有効なため、
+    // 既存環境にも反映させる必要があり無条件で実行する)
+    await dbSql.query("ALTER TABLE work_session_edits ALTER COLUMN session_id DROP NOT NULL");
+    await dbSql.query("ALTER TABLE work_session_edits DROP CONSTRAINT IF EXISTS work_session_edits_session_id_fkey");
+    await dbSql.query(`
+      ALTER TABLE work_session_edits ADD CONSTRAINT work_session_edits_session_id_fkey
+      FOREIGN KEY (session_id) REFERENCES work_sessions(id) ON DELETE SET NULL
+    `);
+    // work_logs.confirmed_at追加（社長確認の日時記録用。月次サマリーの確認マーククリックで表示する）
+    await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ");
     // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
     await dbSql.query(`
@@ -2524,13 +2542,53 @@ function todayJst() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-// todo_itemsは[{ text, done }]の配列のみ受け付ける。不正な値が混ざっていた場合は
-// その項目だけを除外する(textが空/非文字列の項目、null等)
+// todo_itemsは[{ id, text, done }]の配列のみ受け付ける。不正な値が混ざっていた場合は
+// その項目だけを除外する(textが空/非文字列の項目、null等)。idを持たない項目(古いクライアント
+// からの送信や、id補完前のデータ)にはここで新規に一意なIDを採番する
 function normalizeTodoItems(items) {
   if (!Array.isArray(items)) return null;
   return items
     .filter(t => t && typeof t.text === "string" && t.text.trim())
-    .map(t => ({ text: t.text.trim(), done: !!t.done }));
+    .map(t => ({
+      id: typeof t.id === "string" && t.id ? t.id : crypto.randomUUID(),
+      text: t.text.trim(),
+      done: !!t.done,
+    }));
+}
+
+// 古いtodo_items(id未付与)を検出し、その場でIDを補完した配列を返す({items, changed})。
+// changedがtrueの場合、呼び出し元でDBへ書き戻して以後同じIDで参照できるようにする
+function backfillTodoItemIds(items) {
+  if (!Array.isArray(items)) return { items: items || [], changed: false };
+  let changed = false;
+  const result = items.map(t => {
+    if (t && typeof t.id === "string" && t.id) return t;
+    changed = true;
+    return { ...t, id: crypto.randomUUID() };
+  });
+  return { items: result, changed };
+}
+
+// work_logs行の配列を受け取り、todo_itemsにidが無い項目があれば補完してDBにも永続化する。
+// レスポンスを返す前に呼ぶことで、一覧表示時点で全項目が安定したIDを持つことを保証する
+async function backfillLogsTodoIds(logs) {
+  for (const row of logs) {
+    const { items, changed } = backfillTodoItemIds(row.todo_items);
+    if (changed) {
+      row.todo_items = items;
+      await sql`UPDATE work_logs SET todo_items = ${JSON.stringify(items)} WHERE id = ${row.id}`;
+    }
+  }
+}
+
+// confirmed_by_bossがfalse→trueに変わった瞬間だけconfirmed_atを現在時刻にする。
+// 既に確認済みのまま再送信された場合(Todo操作のたびにconfirmed_by_bossを毎回re-sendする
+// 既存のフロント実装があるため)は既存のconfirmed_atを保持し、確認日時が毎回更新されて
+// しまわないようにする。false(未確認)に戻した場合はconfirmed_atもクリアする
+function computeConfirmedAt(newConfirmed, wasConfirmed, existingConfirmedAt) {
+  if (!newConfirmed) return null;
+  if (!wasConfirmed) return new Date().toISOString();
+  return existingConfirmedAt || new Date().toISOString();
 }
 
 async function handleWorkLogs(req, res) {
@@ -2547,12 +2605,14 @@ async function handleWorkLogs(req, res) {
           WHERE user_name = ${userName} AND date >= ${from} AND date <= ${to}
           ORDER BY date ASC
         `;
+        await backfillLogsTodoIds(logs);
         return res.status(200).json({ logs });
       }
 
       // 日付指定: その日の全ユーザー分
       const date = req.query.date || todayJst();
       const logs = await sql`SELECT * FROM work_logs WHERE date = ${date} ORDER BY user_name ASC`;
+      await backfillLogsTodoIds(logs);
       return res.status(200).json(logs);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -2582,13 +2642,14 @@ async function handleWorkLogs(req, res) {
         const newMemo           = memo            !== undefined ? (memo || null)            : existing.memo;
         const newTodoItems      = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : (existing.todo_items || []));
         const newConfirmed      = confirmed_by_boss !== undefined ? !!confirmed_by_boss : existing.confirmed_by_boss;
+        const newConfirmedAt    = computeConfirmedAt(newConfirmed, existing.confirmed_by_boss, existing.confirmed_at);
 
         [row] = hasProject
           ? await sql`
               UPDATE work_logs
               SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
                   memo = ${newMemo}, project = ${project},
-                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
+                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}, confirmed_at = ${newConfirmedAt}
               WHERE id = ${existing.id}
               RETURNING *
             `
@@ -2596,23 +2657,24 @@ async function handleWorkLogs(req, res) {
               UPDATE work_logs
               SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining},
                   memo = ${newMemo},
-                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
+                  todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}, confirmed_at = ${newConfirmedAt}
               WHERE id = ${existing.id}
               RETURNING *
             `;
       } else {
         const insertTodoItems = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : []);
         const insertConfirmed = !!confirmed_by_boss;
+        const insertConfirmedAt = insertConfirmed ? new Date().toISOString() : null;
 
         [row] = hasProject
           ? await sql`
-              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss)
-              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project}, ${insertTodoItems}, ${insertConfirmed})
+              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, project, todo_items, confirmed_by_boss, confirmed_at)
+              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${project}, ${insertTodoItems}, ${insertConfirmed}, ${insertConfirmedAt})
               RETURNING *
             `
           : await sql`
-              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss)
-              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${insertTodoItems}, ${insertConfirmed})
+              INSERT INTO work_logs (user_name, date, tasks_done, tasks_remaining, memo, todo_items, confirmed_by_boss, confirmed_at)
+              VALUES (${name}, ${date}, ${tasks_done || null}, ${tasks_remaining || null}, ${memo || null}, ${insertTodoItems}, ${insertConfirmed}, ${insertConfirmedAt})
               RETURNING *
             `;
       }
@@ -2638,11 +2700,12 @@ async function handleWorkLogs(req, res) {
       const normalizedTodoItems = normalizeTodoItems(todo_items);
       const newTodoItems      = JSON.stringify(normalizedTodoItems !== null ? normalizedTodoItems : (current.todo_items || []));
       const newConfirmed      = confirmed_by_boss !== undefined ? !!confirmed_by_boss : current.confirmed_by_boss;
+      const newConfirmedAt    = computeConfirmedAt(newConfirmed, current.confirmed_by_boss, current.confirmed_at);
 
       const [updated] = await sql`
         UPDATE work_logs
         SET tasks_done = ${newTasksDone}, tasks_remaining = ${newTasksRemaining}, memo = ${newMemo},
-            todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}
+            todo_items = ${newTodoItems}, confirmed_by_boss = ${newConfirmed}, confirmed_at = ${newConfirmedAt}
         WHERE id = ${logId}
         RETURNING *
       `;
@@ -2770,7 +2833,32 @@ async function handleWorkSessions(req, res) {
     }
   }
 
-  return res.status(405).json({ error: "GET / POST / PATCHのみ対応しています" });
+  if (req.method === "DELETE") {
+    // 削除前のセッション内容をJSON文字列としてold_valueに残し、field_changed='deleted'として
+    // 監査ログに記録してから実際にDELETEする。work_session_edits.session_idはON DELETE SET NULLの
+    // ため、削除後もこのログ自体は消えずに残る(session_idだけがNULLになる)
+    const { id, edited_by } = req.body || {};
+    const sessionId = parseInt(id, 10);
+    if (!sessionId || isNaN(sessionId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      const [session] = await sql`SELECT * FROM work_sessions WHERE id = ${sessionId}`;
+      if (!session) return res.status(404).json({ error: "セッションが見つかりません" });
+
+      const editorName = typeof edited_by === "string" && edited_by.trim() ? edited_by.trim() : "不明";
+      await sql`
+        INSERT INTO work_session_edits (session_id, edited_by, field_changed, old_value, new_value)
+        VALUES (${sessionId}, ${editorName}, 'deleted', ${JSON.stringify(session)}, NULL)
+      `;
+      await sql`DELETE FROM work_sessions WHERE id = ${sessionId}`;
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETEのみ対応しています" });
 }
 
 // ==================== work-session-edits (出退勤時刻の編集履歴) ====================
@@ -2788,6 +2876,49 @@ async function handleWorkSessionEdits(req, res) {
       SELECT * FROM work_session_edits WHERE session_id = ${sessionId} ORDER BY edited_at DESC
     `;
     return res.status(200).json(edits);
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== work-logs-todos-summary (全員の未完了Todo・残タスク一覧) ====================
+
+// todayJst()の日付文字列を基準に、そこからdays日前(当日を含む)の日付文字列を返す。
+// サーバーのローカルタイムゾーンに依存せず、Y-M-Dの純粋な暦日として計算するため、
+// 一旦UTC正午相当のDateとして組み立ててからdaysを引く(DST等の影響を受けない)
+function daysAgoJst(days) {
+  const [y, m, d] = todayJst().split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() - days);
+  return dt.toISOString().slice(0, 10);
+}
+
+async function handleWorkLogsTodosSummary(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    const from = daysAgoJst(29); // 直近30日分(当日を含む)
+    const to = todayJst();
+    const logs = await sql`
+      SELECT id, user_name, date, todo_items, tasks_remaining FROM work_logs
+      WHERE date >= ${from} AND date <= ${to}
+      ORDER BY date DESC
+    `;
+    await backfillLogsTodoIds(logs);
+    const results = [];
+    logs.forEach(l => {
+      const todos = Array.isArray(l.todo_items) ? l.todo_items.filter(t => !t.done) : [];
+      const hasRemaining = !!(l.tasks_remaining && l.tasks_remaining.trim());
+      if (todos.length === 0 && !hasRemaining) return; // 未完了Todo・残タスクどちらも無い日は含めない
+      results.push({
+        user_name: l.user_name,
+        date: toDateKey(l.date),
+        todos,
+        tasks_remaining: l.tasks_remaining || "",
+      });
+    });
+    return res.status(200).json(results);
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }
