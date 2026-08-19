@@ -282,6 +282,35 @@
   }
   .wl-summary-total-big .wl-summary-total-value { font-size: 30px; font-weight: 800; color: var(--green-700); }
 
+  /* カスタム期間 */
+  .wl-custom-period-group { margin-top: 8px; }
+
+  /* カレンダー表示 */
+  .wl-cal-header { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 14px; }
+  .wl-cal-nav-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--gray-200);
+    background: var(--white); color: var(--gray-700); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; transition: all 150ms;
+  }
+  .wl-cal-nav-btn:hover { border-color: var(--gray-400); color: var(--gray-900); }
+  .wl-cal-month-label { font-size: 16px; font-weight: 700; color: var(--gray-900); min-width: 110px; text-align: center; }
+  .wl-cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+  .wl-cal-weekdays span { text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-400); padding: 4px 0; }
+  .wl-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .wl-cal-cell {
+    min-height: 64px; border: 1px solid var(--gray-100); border-radius: var(--radius-sm);
+    padding: 4px 6px; font-size: 12px; color: var(--gray-700); cursor: pointer;
+    display: flex; flex-direction: column; gap: 2px; transition: all 150ms;
+  }
+  .wl-cal-cell:hover { border-color: var(--green-500); }
+  .wl-cal-cell.other-month { opacity: 0.35; cursor: default; }
+  .wl-cal-cell.other-month:hover { border-color: var(--gray-100); }
+  .wl-cal-cell.today { border-color: var(--green-600); border-width: 2px; }
+  .wl-cal-cell.selected { border-color: var(--green-600); box-shadow: 0 0 0 2px var(--green-100); }
+  .wl-cal-date-num { font-weight: 600; color: var(--gray-900); }
+  .wl-cal-hours { font-size: 12px; font-weight: 700; color: var(--green-800); }
+  .wl-cal-day-panel { margin-top: 16px; background: var(--gray-50); border-radius: var(--radius-md); padding: 16px; }
+
   @media (max-width: 700px) {
     .page-header { padding: 0 12px; }
     .page-nav { overflow-x: auto; padding-bottom: 2px; }
@@ -343,6 +372,8 @@
     .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
     .wl-status-display { background: #1e293b; }
     .wl-mic-btn { background: #1e293b; border-color: #334155; }
+    .wl-cal-nav-btn { background: #1e293b; border-color: #334155; }
+    .wl-cal-day-panel { background: #0f172a; }
   }
   html.dark {
     --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
@@ -360,6 +391,8 @@
   html.dark .wl-period-btn:not(.active) { background: #1e293b; color: #cbd5e1; }
   html.dark .wl-status-display { background: #1e293b; }
   html.dark .wl-mic-btn { background: #1e293b; border-color: #334155; }
+  html.dark .wl-cal-nav-btn { background: #1e293b; border-color: #334155; }
+  html.dark .wl-cal-day-panel { background: #0f172a; }
 </style>
 </head>
 <body>
@@ -584,9 +617,20 @@
           <button type="button" class="wl-period-btn" id="wlPeriodLast" onclick="setSummaryPeriod('last')">先月</button>
           <button type="button" class="wl-period-btn" id="wlPeriodThisYear" onclick="setSummaryPeriod('thisYear')">今年</button>
           <button type="button" class="wl-period-btn" id="wlPeriodLastYear" onclick="setSummaryPeriod('lastYear')">去年</button>
+          <button type="button" class="wl-period-btn" id="wlPeriodCustom" onclick="setSummaryPeriod('custom')">カスタム期間</button>
         </div>
       </div>
       <button type="button" class="btn-primary" id="wlExportExcelBtn" onclick="exportSummaryToExcel()">📥 Excelでダウンロード</button>
+    </div>
+    <div class="wl-form-grid wl-custom-period-group" id="wlCustomPeriodGroup" hidden>
+      <div class="wl-form-group">
+        <label for="wlCustomFrom">開始日</label>
+        <input type="date" id="wlCustomFrom" onchange="loadSummary()">
+      </div>
+      <div class="wl-form-group">
+        <label for="wlCustomTo">終了日</label>
+        <input type="date" id="wlCustomTo" onchange="loadSummary()">
+      </div>
     </div>
     <div class="wl-summary-table-wrap" id="wlSummaryDailyWrap">
       <table class="wl-summary-table">
@@ -606,6 +650,44 @@
     </div>
     <p class="wl-summary-total" id="wlSummaryTotal"></p>
     <div class="wl-summary-total-big" id="wlSummaryTotalBig" hidden></div>
+  </div>
+
+  <div class="wl-section reveal-on-scroll">
+    <p class="wl-section-title">📅 カレンダー表示</p>
+    <p class="wl-todo-hint" style="margin-top:-8px;">日付セルには稼働時間の合計を表示します(色が濃いほど稼働時間が長い日です)。クリックするとその日の詳細を確認できます。</p>
+    <div class="wl-form-grid" style="margin-bottom:12px;">
+      <div class="wl-form-group">
+        <label for="wlCalUserSelect">ユーザー</label>
+        <select id="wlCalUserSelect" onchange="onCalUserSelectChange()">
+          <option value="りゅうと">りゅうと</option>
+          <option value="宮田">宮田</option>
+          <option value="岡田">岡田</option>
+          <option value="__other__">その他</option>
+          <option value="__all__">全員</option>
+        </select>
+      </div>
+      <div class="wl-form-group" id="wlCalUserOtherGroup" hidden>
+        <label for="wlCalUserOther">氏名（その他）</label>
+        <input type="text" id="wlCalUserOther" placeholder="氏名を入力" oninput="loadCalendarHours()">
+      </div>
+    </div>
+    <div class="wl-cal-header">
+      <button type="button" class="wl-cal-nav-btn" onclick="changeWlCalMonth(-1)">←</button>
+      <span class="wl-cal-month-label" id="wlCalMonthLabel"></span>
+      <button type="button" class="wl-cal-nav-btn" onclick="changeWlCalMonth(1)">→</button>
+    </div>
+    <div class="wl-cal-weekdays">
+      <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+    </div>
+    <div class="wl-cal-grid" id="wlCalGrid"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px;">
+      <a href="/calendar.html" style="font-size:12px; color:var(--gray-500);">全体カレンダー(予定・議事録含む)を見る →</a>
+      <button type="button" class="btn-primary" id="wlCalExportBtn" onclick="exportCalendarMonthToExcel()">📥 この月をExcel出力</button>
+    </div>
+    <div class="wl-cal-day-panel" id="wlCalDayPanel" style="display:none;">
+      <p class="wl-section-title" id="wlCalDayPanelTitle" style="font-size:15px; margin-bottom:10px;"></p>
+      <div id="wlCalDayPanelBody"></div>
+    </div>
   </div>
 
   <div class="wl-section reveal-on-scroll">
@@ -1444,11 +1526,30 @@
     document.getElementById("wlPeriodLast").classList.toggle("active", period === "last");
     document.getElementById("wlPeriodThisYear").classList.toggle("active", period === "thisYear");
     document.getElementById("wlPeriodLastYear").classList.toggle("active", period === "lastYear");
+    document.getElementById("wlPeriodCustom").classList.toggle("active", period === "custom");
+    document.getElementById("wlCustomPeriodGroup").hidden = period !== "custom";
+    if (period === "custom") {
+      // 初めてカスタム期間を選んだ際、開始日・終了日が未入力なら今月の範囲を初期値として入れておく
+      const fromEl = document.getElementById("wlCustomFrom");
+      const toEl = document.getElementById("wlCustomTo");
+      if (!fromEl.value || !toEl.value) {
+        const r = getMonthRange("this");
+        fromEl.value = fromEl.value || r.from;
+        toEl.value = toEl.value || r.to;
+      }
+    }
     loadSummary();
   }
 
   function isYearlyPeriod(period) {
     return period === "thisYear" || period === "lastYear";
+  }
+
+  function getCustomRange() {
+    return {
+      from: document.getElementById("wlCustomFrom").value,
+      to: document.getElementById("wlCustomTo").value,
+    };
   }
 
   function getMonthRange(which) {
@@ -1523,8 +1624,25 @@
       return;
     }
 
-    // 今月/先月: 日ごとの表(出退勤はその日の全セッションを列挙、やったこと・確認はwork_logsから)
-    const { from, to } = getMonthRange(summaryPeriod);
+    // 今月/先月/カスタム期間: 日ごとの表(出退勤はその日の全セッションを列挙、やったこと・確認はwork_logsから)
+    let from, to;
+    if (summaryPeriod === "custom") {
+      const r = getCustomRange();
+      if (!r.from || !r.to) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">開始日・終了日を選択してください</td></tr>';
+        totalEl.textContent = "";
+        return;
+      }
+      if (r.from > r.to) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">開始日は終了日より前の日付にしてください</td></tr>';
+        totalEl.textContent = "";
+        return;
+      }
+      from = r.from; to = r.to;
+    } else {
+      const r = getMonthRange(summaryPeriod);
+      from = r.from; to = r.to;
+    }
     tbody.innerHTML = '<tr class="empty-row"><td colspan="5">読み込み中...</td></tr>';
     try {
       const [sessionsRes, logsRes] = await Promise.all([
@@ -1581,7 +1699,82 @@
     }
   }
 
-  // 現在選択中のユーザー・期間(今月/先月/今年/去年)のwork_logs・work_sessionsを取得し、
+  // 指定ユーザー・期間のwork_sessions/work_logsを取得し、Excelシート用の行データ(ヘッダー行+
+  // 日ごとの明細+合計行)を組み立てる。exportSummaryToExcel()・exportCalendarMonthToExcel()の
+  // 両方から共有される
+  async function fetchWorkLogRows(userName, from, to) {
+    const [sessionsRes, logsRes] = await Promise.all([
+      fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+      fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+    ]);
+    const sessionsData = await sessionsRes.json();
+    const logsData = await logsRes.json();
+    if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
+    if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
+    const sessions = Array.isArray(sessionsData.sessions) ? sessionsData.sessions : [];
+    const logs = Array.isArray(logsData.logs) ? logsData.logs : [];
+
+    const sessionsByDate = {};
+    sessions.forEach(s => {
+      const key = String(s.date).slice(0, 10);
+      (sessionsByDate[key] = sessionsByDate[key] || []).push(s);
+    });
+    const logsByDate = {};
+    logs.forEach(l => { logsByDate[String(l.date).slice(0, 10)] = l; });
+
+    const allDates = [...new Set([...Object.keys(sessionsByDate), ...Object.keys(logsByDate)])].sort();
+    if (allDates.length === 0) return { rows: null, hasData: false };
+
+    const header = ["日付", "出勤時刻", "退勤時刻", "稼働時間", "やったこと", "残っているタスク", "To Do", "山田さん確認"];
+    const rows = [header];
+    let totalHours = 0;
+    allDates.forEach(date => {
+      const daySessions = (sessionsByDate[date] || [])
+        .slice()
+        .sort((a, b) => (a.clock_in || "").localeCompare(b.clock_in || ""));
+      const log = logsByDate[date];
+      const clockInText = daySessions.map(s => fmtTime(s.clock_in)).join(", ");
+      const clockOutText = daySessions.map(s => s.clock_out ? fmtTime(s.clock_out) : "勤務中").join(", ");
+      const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+      totalHours += dayHours;
+      const todoText = log && Array.isArray(log.todo_items)
+        ? log.todo_items.filter(t => !t.done).map(t => t.text).join("\n")
+        : "";
+      rows.push([
+        date,
+        clockInText,
+        clockOutText,
+        dayHours > 0 ? Number(dayHours.toFixed(2)) : "",
+        log && log.tasks_done ? log.tasks_done : "",
+        log && log.tasks_remaining ? log.tasks_remaining : "",
+        todoText,
+        log && log.confirmed_by_boss ? "済" : "未確認",
+      ]);
+    });
+    rows.push(["合計", "", "", Number(totalHours.toFixed(2)), "", "", "", ""]);
+    return { rows, hasData: true };
+  }
+
+  // ヘッダー行の太字・To Do列(改行を含みうる)の折り返しは、xlsx.full.min.jsの簡易スタイリングで
+  // 対応できる範囲でベストエフォート適用する(未対応ビューアでは無視されるだけで、データ自体には影響しない)
+  function styleWorkLogSheet(ws, rows) {
+    ws["!cols"] = [
+      { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 10 },
+      { wch: 32 }, { wch: 32 }, { wch: 32 }, { wch: 10 },
+    ];
+    for (let c = 0; c < 8; c++) {
+      const ref = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[ref]) ws[ref].s = { font: { bold: true } };
+    }
+    for (let r = 1; r < rows.length; r++) {
+      const ref = XLSX.utils.encode_cell({ r, c: 6 }); // To Do列
+      if (ws[ref] && ws[ref].v) ws[ref].s = { alignment: { wrapText: true, vertical: "top" } };
+    }
+    const totalRef = XLSX.utils.encode_cell({ r: rows.length - 1, c: 0 });
+    if (ws[totalRef]) ws[totalRef].s = { font: { bold: true } };
+  }
+
+  // 現在選択中のユーザー・期間(今月/先月/今年/去年/カスタム期間)のwork_logs・work_sessionsを取得し、
   // 日ごとの明細をExcel(.xlsx)としてダウンロードする。今年/去年選択時も画面上の
   // 月別集計とは別に、1年分の日次データを取り直して日ごとの明細シートを作る
   async function exportSummaryToExcel() {
@@ -1599,86 +1792,236 @@
       if (yearly) {
         const r = getYearRange(summaryPeriod);
         from = r.from; to = r.to; fileLabel = String(r.year);
+      } else if (summaryPeriod === "custom") {
+        const r = getCustomRange();
+        if (!r.from || !r.to) { showToast("開始日・終了日を選択してください", "error"); return; }
+        if (r.from > r.to) { showToast("開始日は終了日より前の日付にしてください", "error"); return; }
+        from = r.from; to = r.to; fileLabel = `${from}_${to}`;
       } else {
         const r = getMonthRange(summaryPeriod);
         from = r.from; to = r.to; fileLabel = from.slice(0, 7);
       }
 
-      const [sessionsRes, logsRes] = await Promise.all([
-        fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
-        fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
-      ]);
-      const sessionsData = await sessionsRes.json();
-      const logsData = await logsRes.json();
-      if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
-      if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
-      const sessions = Array.isArray(sessionsData.sessions) ? sessionsData.sessions : [];
-      const logs = Array.isArray(logsData.logs) ? logsData.logs : [];
-
-      const sessionsByDate = {};
-      sessions.forEach(s => {
-        const key = String(s.date).slice(0, 10);
-        (sessionsByDate[key] = sessionsByDate[key] || []).push(s);
-      });
-      const logsByDate = {};
-      logs.forEach(l => { logsByDate[String(l.date).slice(0, 10)] = l; });
-
-      const allDates = [...new Set([...Object.keys(sessionsByDate), ...Object.keys(logsByDate)])].sort();
-      if (allDates.length === 0) {
-        showToast("この期間の記録がありません", "warning");
-        return;
-      }
-
-      const header = ["日付", "出勤時刻", "退勤時刻", "稼働時間", "やったこと", "残っているタスク", "To Do", "山田さん確認"];
-      const rows = [header];
-      let totalHours = 0;
-      allDates.forEach(date => {
-        const daySessions = (sessionsByDate[date] || [])
-          .slice()
-          .sort((a, b) => (a.clock_in || "").localeCompare(b.clock_in || ""));
-        const log = logsByDate[date];
-        const clockInText = daySessions.map(s => fmtTime(s.clock_in)).join(", ");
-        const clockOutText = daySessions.map(s => s.clock_out ? fmtTime(s.clock_out) : "勤務中").join(", ");
-        const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
-        totalHours += dayHours;
-        const todoText = log && Array.isArray(log.todo_items)
-          ? log.todo_items.filter(t => !t.done).map(t => t.text).join("\n")
-          : "";
-        rows.push([
-          date,
-          clockInText,
-          clockOutText,
-          dayHours > 0 ? Number(dayHours.toFixed(2)) : "",
-          log && log.tasks_done ? log.tasks_done : "",
-          log && log.tasks_remaining ? log.tasks_remaining : "",
-          todoText,
-          log && log.confirmed_by_boss ? "済" : "未確認",
-        ]);
-      });
-      rows.push(["合計", "", "", Number(totalHours.toFixed(2)), "", "", "", ""]);
+      const { rows, hasData } = await fetchWorkLogRows(userName, from, to);
+      if (!hasData) { showToast("この期間の記録がありません", "warning"); return; }
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws["!cols"] = [
-        { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 10 },
-        { wch: 32 }, { wch: 32 }, { wch: 32 }, { wch: 10 },
-      ];
-      // ヘッダー行の太字・To Do列(改行を含みうる)の折り返しは、xlsx.full.min.jsの
-      // 簡易スタイリングで対応できる範囲でベストエフォート適用する(未対応ビューアでは
-      // 無視されるだけで、データ自体には影響しない)
-      for (let c = 0; c < header.length; c++) {
-        const ref = XLSX.utils.encode_cell({ r: 0, c });
-        if (ws[ref]) ws[ref].s = { font: { bold: true } };
-      }
-      for (let r = 1; r < rows.length; r++) {
-        const ref = XLSX.utils.encode_cell({ r, c: 6 }); // To Do列
-        if (ws[ref] && ws[ref].v) ws[ref].s = { alignment: { wrapText: true, vertical: "top" } };
-      }
-      const totalRef = XLSX.utils.encode_cell({ r: rows.length - 1, c: 0 });
-      if (ws[totalRef]) ws[totalRef].s = { font: { bold: true } };
+      styleWorkLogSheet(ws, rows);
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "稼働記録");
       XLSX.writeFile(wb, `稼働記録_${userName}_${fileLabel}.xlsx`, { cellStyles: true });
+      showToast("Excelファイルをダウンロードしました", "success");
+    } catch (err) {
+      showToast("Excel出力に失敗しました: " + esc(err.message), "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
+    }
+  }
+
+  // ===== カレンダー表示 =====
+  // 「全員」選択時は固定メンバー(FIXED_MEMBERS)3人分をまとめて取得・集計する。work-logs/
+  // work-sessions APIには「複数ユーザーの期間指定」を一括取得するエンドポイントが無いため、
+  // ユーザーごとに並列リクエストしてクライアント側でマージする
+  let wlCalYear, wlCalMonth;
+  let wlCalSelectedDate = null;
+  let wlCalSessionsByUser = {}; // { userName: sessions[] }
+  let wlCalLogsByUser = {};     // { userName: logs[] }
+
+  function initWlCalDefaults() {
+    const [y, m] = todayStr().split("-").map(Number);
+    wlCalYear = y;
+    wlCalMonth = m;
+  }
+
+  function onCalUserSelectChange() {
+    const isOther = document.getElementById("wlCalUserSelect").value === "__other__";
+    document.getElementById("wlCalUserOtherGroup").hidden = !isOther;
+    wlCalSelectedDate = null;
+    document.getElementById("wlCalDayPanel").style.display = "none";
+    loadCalendarHours();
+  }
+
+  function getCalUserNames() {
+    const sel = document.getElementById("wlCalUserSelect").value;
+    if (sel === "__all__") return FIXED_MEMBERS.slice();
+    if (sel === "__other__") {
+      const name = document.getElementById("wlCalUserOther").value.trim();
+      return name ? [name] : [];
+    }
+    return [sel];
+  }
+
+  function getWlCalMonthRange() {
+    const pad = n => String(n).padStart(2, "0");
+    const from = `${wlCalYear}-${pad(wlCalMonth)}-01`;
+    const lastDay = new Date(wlCalYear, wlCalMonth, 0).getDate();
+    const to = `${wlCalYear}-${pad(wlCalMonth)}-${pad(lastDay)}`;
+    return { from, to };
+  }
+
+  function changeWlCalMonth(delta) {
+    wlCalMonth += delta;
+    if (wlCalMonth < 1) { wlCalMonth = 12; wlCalYear -= 1; }
+    if (wlCalMonth > 12) { wlCalMonth = 1; wlCalYear += 1; }
+    wlCalSelectedDate = null;
+    document.getElementById("wlCalDayPanel").style.display = "none";
+    loadCalendarHours();
+  }
+
+  async function loadCalendarHours() {
+    const names = getCalUserNames();
+    const grid = document.getElementById("wlCalGrid");
+    document.getElementById("wlCalMonthLabel").textContent = `${wlCalYear}年${wlCalMonth}月`;
+    if (names.length === 0) {
+      grid.innerHTML = '<p style="font-size:13px; color:var(--gray-400); grid-column:1/-1;">氏名を入力してください</p>';
+      return;
+    }
+    const { from, to } = getWlCalMonthRange();
+    grid.innerHTML = '<p style="font-size:13px; color:var(--gray-400); grid-column:1/-1;">読み込み中...</p>';
+    try {
+      const results = await Promise.all(names.map(name => Promise.all([
+        fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(name)}&from=${from}&to=${to}`).then(r => r.json()),
+        fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(name)}&from=${from}&to=${to}`).then(r => r.json()),
+      ])));
+      wlCalSessionsByUser = {};
+      wlCalLogsByUser = {};
+      names.forEach((name, i) => {
+        wlCalSessionsByUser[name] = Array.isArray(results[i][0].sessions) ? results[i][0].sessions : [];
+        wlCalLogsByUser[name] = Array.isArray(results[i][1].logs) ? results[i][1].logs : [];
+      });
+    } catch (err) {
+      grid.innerHTML = `<p style="font-size:13px; color:#dc2626; grid-column:1/-1;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+      return;
+    }
+    renderWlCalendar();
+    if (wlCalSelectedDate) renderWlCalDayPanel(wlCalSelectedDate);
+  }
+
+  function wlCalHoursForDate(dateKey) {
+    let total = 0;
+    Object.values(wlCalSessionsByUser).forEach(sessions => {
+      sessions.forEach(s => {
+        if (String(s.date).slice(0, 10) === dateKey && s.work_hours != null) total += Number(s.work_hours);
+      });
+    });
+    return total;
+  }
+
+  // ヒートマップ的な背景の濃さ: 8時間を基準の濃さの目安にし、それ以上は上限で頭打ちにする
+  function wlCalHeatmapStyle(hours) {
+    if (hours <= 0) return "";
+    const intensity = Math.min(hours / 8, 1);
+    const alpha = (0.08 + intensity * 0.35).toFixed(2);
+    return ` style="background-color: rgba(var(--green-500-rgb), ${alpha});"`;
+  }
+
+  function renderWlCalendar() {
+    const pad = n => String(n).padStart(2, "0");
+    const startWeekday = new Date(wlCalYear, wlCalMonth - 1, 1).getDay(); // 0=日
+    const daysInMonth = new Date(wlCalYear, wlCalMonth, 0).getDate();
+    const daysInPrevMonth = new Date(wlCalYear, wlCalMonth - 1, 0).getDate();
+    const today = todayStr();
+    const cells = [];
+
+    for (let i = startWeekday - 1; i >= 0; i--) {
+      cells.push({ day: daysInPrevMonth - i, otherMonth: true, dateKey: null });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ day: d, otherMonth: false, dateKey: `${wlCalYear}-${pad(wlCalMonth)}-${pad(d)}` });
+    }
+    let nextDay = 1;
+    while (cells.length % 7 !== 0) {
+      cells.push({ day: nextDay++, otherMonth: true, dateKey: null });
+    }
+
+    const grid = document.getElementById("wlCalGrid");
+    grid.innerHTML = cells.map(c => {
+      if (c.otherMonth) {
+        return `<div class="wl-cal-cell other-month"><span class="wl-cal-date-num">${c.day}</span></div>`;
+      }
+      const hours = wlCalHoursForDate(c.dateKey);
+      const classes = ["wl-cal-cell"];
+      if (c.dateKey === today) classes.push("today");
+      if (c.dateKey === wlCalSelectedDate) classes.push("selected");
+      return `<div class="${classes.join(" ")}"${wlCalHeatmapStyle(hours)} onclick="selectWlCalDate('${c.dateKey}')">
+        <span class="wl-cal-date-num">${c.day}</span>
+        ${hours > 0 ? `<span class="wl-cal-hours">${hours.toFixed(1)}h</span>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  function selectWlCalDate(dateKey) {
+    wlCalSelectedDate = dateKey;
+    renderWlCalendar();
+    renderWlCalDayPanel(dateKey);
+  }
+
+  function renderWlCalDayPanel(dateKey) {
+    const panel = document.getElementById("wlCalDayPanel");
+    const body = document.getElementById("wlCalDayPanelBody");
+    document.getElementById("wlCalDayPanelTitle").textContent = dateKey;
+
+    const names = Object.keys(wlCalSessionsByUser);
+    const multi = names.length > 1;
+    const blocks = names.map(name => {
+      const sessions = (wlCalSessionsByUser[name] || []).filter(s => String(s.date).slice(0, 10) === dateKey);
+      const log = (wlCalLogsByUser[name] || []).find(l => String(l.date).slice(0, 10) === dateKey);
+      if (sessions.length === 0 && !log) {
+        return multi
+          ? `<div style="margin-bottom:14px;"><strong>${esc(name)}</strong><div class="wl-team-empty">この日の記録はありません</div></div>`
+          : '<p class="wl-team-empty">この日の記録はありません</p>';
+      }
+      const sessionsHtml = sessions.length > 0
+        ? sessions.map(s => `<div>${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}${s.work_hours != null ? `（${Number(s.work_hours).toFixed(2)}h）` : ""}</div>`).join("")
+        : '<div class="wl-team-empty">出退勤未記録</div>';
+      const todoItems = log && Array.isArray(log.todo_items) ? log.todo_items : [];
+      const todoHtml = todoItems.length > 0
+        ? `<ul class="wl-todo-list" style="margin-top:8px;">${todoItems.map(t => `
+            <li class="wl-todo-item ${t.done ? "done" : ""}"><span class="wl-todo-text">${esc(t.text)}</span></li>`).join("")}</ul>`
+        : "";
+      const confirmBadge = log && log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓山田さん確認済み</span>' : "";
+      return `<div style="${multi ? "margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--gray-200);" : ""}">
+        <strong>${esc(name)}${confirmBadge}</strong>
+        <div class="wl-team-sessions" style="margin-top:4px;">${sessionsHtml}</div>
+        ${log && log.tasks_done ? `<p class="wl-team-tasks" style="margin-top:8px;">✅ ${esc(log.tasks_done)}</p>` : ""}
+        ${log && log.tasks_remaining ? `<p class="wl-team-tasks">📌 ${esc(log.tasks_remaining)}</p>` : ""}
+        ${todoHtml}
+      </div>`;
+    });
+    body.innerHTML = blocks.join("");
+    panel.style.display = "block";
+  }
+
+  // カレンダーに現在表示中の月・現在選択中のユーザー(複数の場合は氏名ごとに別シート)を
+  // そのままExcel出力する。行データの組み立て・スタイルはexportSummaryToExcel()と共通の
+  // fetchWorkLogRows()/styleWorkLogSheet()を再利用する
+  async function exportCalendarMonthToExcel() {
+    const names = getCalUserNames();
+    if (names.length === 0) { showToast("氏名を選択または入力してください", "error"); return; }
+    if (typeof XLSX === "undefined") { showToast("Excel出力ライブラリの読み込みに失敗しました", "error"); return; }
+
+    const btn = document.getElementById("wlCalExportBtn");
+    const originalLabel = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "生成中..."; }
+    try {
+      const { from, to } = getWlCalMonthRange();
+      const fileLabel = `${wlCalYear}-${String(wlCalMonth).padStart(2, "0")}`;
+
+      const wb = XLSX.utils.book_new();
+      let anyData = false;
+      for (const name of names) {
+        const { rows, hasData } = await fetchWorkLogRows(name, from, to);
+        if (!hasData) continue;
+        anyData = true;
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        styleWorkLogSheet(ws, rows);
+        XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31)); // シート名は31文字まで
+      }
+      if (!anyData) { showToast("この月の記録がありません", "warning"); return; }
+
+      const userLabel = names.length > 1 ? "全員" : names[0];
+      XLSX.writeFile(wb, `稼働記録_${userLabel}_${fileLabel}.xlsx`, { cellStyles: true });
       showToast("Excelファイルをダウンロードしました", "success");
     } catch (err) {
       showToast("Excel出力に失敗しました: " + esc(err.message), "error");
@@ -1787,6 +2130,8 @@
   document.getElementById("wlConfirmDate").value = todayStr();
   loadConfirmTarget();
   loadAllTodosSummary();
+  initWlCalDefaults();
+  loadCalendarHours();
   initScrollReveal();
   initNavMenu("work-logs");
 </script>
