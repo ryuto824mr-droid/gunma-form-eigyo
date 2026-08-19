@@ -1614,13 +1614,15 @@
     const total = companies.length;
     const automatable = companies.filter(c => c.research_result?.automatable === true).length;
     const sentCount = companies.filter(c => c.has_sent).length;
+    const errorCount = companies.filter(c => c.status === "error").length;
     if (total === 0) { el.hidden = true; return; }
     el.hidden = false;
     el.innerHTML = `
       <div class="summary-item"><strong>${total}</strong><span>登録企業数</span></div>
       <div class="summary-item"><strong>${automatable}</strong><span>自動化可能</span></div>
       <div class="summary-item"><strong>${sentCount}</strong><span>送信済み企業数</span></div>
-      <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span></div>`;
+      <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span></div>
+      <div class="summary-item"><strong>${errorCount}</strong><span>エラー</span></div>`;
   }
 
   function needsManualAction(c) {

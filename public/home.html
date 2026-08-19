@@ -552,6 +552,12 @@
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
     </div>
+    <div class="summary-card">
+      <div class="card-label">エラー企業数</div>
+      <div class="card-value" id="statErrors">
+        <span style="font-size:20px;color:var(--gray-300)">…</span>
+      </div>
+    </div>
   </div>
 
   <section class="followup-section" id="staleFollowupSection">
@@ -832,6 +838,7 @@
       const sentCount = Array.isArray(logs)
         ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
         : 0;
+      const errorCount = companies.filter(c => c.status === "error").length;
 
       const stats      = analytics.variants_stats || [];
       const totalSends = stats.reduce((s, r) => s + Number(r.send_count), 0);
@@ -841,12 +848,15 @@
       const cEl = document.getElementById("statCompanies");
       const sEl = document.getElementById("statSent");
       const rEl = document.getElementById("statRate");
+      const eEl = document.getElementById("statErrors");
 
       cEl.innerHTML = `<span id="cNum">0</span><span class="card-unit">社</span>`;
       sEl.innerHTML = `<span id="sNum">0</span><span class="card-unit">件</span>`;
+      eEl.innerHTML = `<span id="eNum">0</span><span class="card-unit">社</span>`;
 
       animateCount(document.getElementById("cNum"), totalCompanies);
       animateCount(document.getElementById("sNum"), sentCount);
+      animateCount(document.getElementById("eNum"), errorCount);
 
       if (rateValue !== null) {
         rEl.innerHTML = `<span id="rNum">0</span><span class="card-unit">%</span>`;
@@ -858,7 +868,7 @@
       renderFollowups(companies);
       renderTasksSummary(tasks);
     } catch {
-      ["statCompanies","statSent","statRate","statFollowUp","statOverdueTasks"].forEach(id => {
+      ["statCompanies","statSent","statRate","statFollowUp","statOverdueTasks","statErrors"].forEach(id => {
         document.getElementById(id).innerHTML =
           '<span style="font-size:14px;color:var(--gray-400)">取得失敗</span>';
       });
