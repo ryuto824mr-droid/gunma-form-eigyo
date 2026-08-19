@@ -124,6 +124,9 @@
   .select-group select:focus {
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
+  .select-group select:disabled { background: var(--gray-50); color: var(--gray-500); cursor: not-allowed; }
+  .sender-locked-note { font-size: 11px; color: var(--gray-400); margin: 2px 0 0; }
+  .sender-locked-note.sender-note-warning { color: #dc2626; font-weight: 600; }
   .btn-generate {
     padding: 8px 16px;
     background: linear-gradient(135deg, var(--green-500), var(--green-700));
@@ -822,11 +825,12 @@
       </div>
       <div class="select-group">
         <label for="variantSelect">バリアント</label>
-        <select id="variantSelect"><option value="">読み込み中...</option></select>
+        <select id="variantSelect" onchange="onVariantSelectChange()"><option value="">読み込み中...</option></select>
       </div>
       <div class="select-group">
         <label for="senderSelect">送信者</label>
         <select id="senderSelect"><option value="">デフォルト（環境変数）</option></select>
+        <p class="sender-locked-note" id="senderLockedNote" hidden>このバリアントには送信者が固定されています</p>
       </div>
       <button class="btn-generate" onclick="generateDraft()">
         <i data-lucide="file-text"></i>下書き生成
@@ -1257,6 +1261,7 @@
   let variants  = [];
   let attachments = [];
   let senderAccounts = [];
+  let allSenderAccounts = [];
   let logs      = [];
   let scheduledSends = [];
   let autoSendSettings = {};
@@ -1308,7 +1313,8 @@
       scheduledSends = sRes.ok ? await sRes.json() : [];
       attachments    = aRes.ok ? await aRes.json() : [];
       const rawSenderAccounts = senderRes.ok ? await senderRes.json() : [];
-      senderAccounts = Array.isArray(rawSenderAccounts) ? rawSenderAccounts.filter(a => a.is_active) : [];
+      allSenderAccounts = Array.isArray(rawSenderAccounts) ? rawSenderAccounts : [];
+      senderAccounts = allSenderAccounts.filter(a => a.is_active);
       autoSendSettings = settingsRes.ok ? await settingsRes.json() : {};
 
       companies.sort((a, b) => {
@@ -1389,7 +1395,42 @@
     return v ? parseInt(v, 10) : "";
   }
 
+  // バリアントにsender_account_idが設定されていれば、送信者を自動でそのアカウントに固定し
+  // 手動選択できないようにする(バリアント側の指定を優先する)。設定が無ければ通常通り選べる
+  function onVariantSelectChange() {
+    const variantId = parseInt(document.getElementById("variantSelect").value);
+    const variant = variants.find(v => v.id === variantId);
+    const senderEl = document.getElementById("senderSelect");
+    const noteEl   = document.getElementById("senderLockedNote");
+
+    noteEl.classList.remove("sender-note-warning");
+
+    if (variant && variant.sender_account_id) {
+      const hasOption = !!senderEl.querySelector(`option[value="${variant.sender_account_id}"]`);
+      if (hasOption) {
+        senderEl.value = variant.sender_account_id;
+        senderEl.disabled = true;
+        noteEl.textContent = "このバリアントには送信者が固定されています";
+        noteEl.hidden = false;
+        return;
+      }
+      // sender_account_idは設定されているが、選択肢に無い(無効化された、または削除された)
+      // = 「未設定」とは明確に区別し、目立つ形で警告する
+      const staleAccount = allSenderAccounts.find(a => a.id === variant.sender_account_id);
+      const staleLabel = staleAccount ? staleAccount.display_name : "不明なアカウント";
+      senderEl.disabled = false;
+      noteEl.textContent = `設定されていた送信者(${staleLabel})は現在利用できません。送信者を選び直してください`;
+      noteEl.classList.add("sender-note-warning");
+      noteEl.hidden = false;
+      showToast(`設定されていた送信者(${esc(staleLabel)})は現在利用できません。送信者を選び直してください`, "warning");
+      return;
+    }
+    senderEl.disabled = false;
+    noteEl.hidden = true;
+  }
+
   function generateDraft() {
+    onVariantSelectChange();
     const companyId = parseInt(document.getElementById("companySelect").value);
     const variantId = parseInt(document.getElementById("variantSelect").value);
     if (!companyId || !variantId) {

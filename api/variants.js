@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
       return res.status(201).json(copied);
     }
 
-    const { name, channel, subject_template, body_template, tags, attachment_id } = req.body || {};
+    const { name, channel, subject_template, body_template, tags, attachment_id, sender_account_id } = req.body || {};
 
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "nameは必須です" });
@@ -59,9 +59,10 @@ module.exports = async function handler(req, res) {
 
     const tagsJson = (tags && typeof tags === "object") ? JSON.stringify(tags) : "{}";
     const attachmentId = attachment_id ? parseInt(attachment_id, 10) || null : null;
+    const senderAccountId = sender_account_id ? parseInt(sender_account_id, 10) || null : null;
 
     const [created] = await sql`
-      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, attachment_id, project, created_at)
+      INSERT INTO message_variants (name, channel, subject_template, body_template, tags, attachment_id, sender_account_id, project, created_at)
       VALUES (
         ${name.trim()},
         ${channel},
@@ -69,6 +70,7 @@ module.exports = async function handler(req, res) {
         ${body_template.trim()},
         ${tagsJson},
         ${attachmentId},
+        ${senderAccountId},
         ${projectToSet},
         NOW()
       )

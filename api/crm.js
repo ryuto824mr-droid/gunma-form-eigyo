@@ -419,6 +419,8 @@ async function handleDbSetup(req, res) {
       ON send_queue (company_id, variant_id)
       WHERE status = 'pending'
     `);
+    // message_variants.sender_account_id: バリアントに送信者を紐付け、送信時に優先的に使う機能用
+    await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS sender_account_id INTEGER REFERENCES sender_accounts(id)");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });

@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
       return res.status(404).json({ error: "バリアントが見つかりません" });
     }
 
-    const { name, channel, subject_template, body_template, tags, attachment_id } = req.body || {};
+    const { name, channel, subject_template, body_template, tags, attachment_id, sender_account_id } = req.body || {};
 
     if (name !== undefined && (typeof name !== "string" || !name.trim())) {
       return res.status(400).json({ error: "nameは空にできません" });
@@ -60,6 +60,9 @@ module.exports = async function handler(req, res) {
     const newAttachmentId    = attachment_id !== undefined
       ? (attachment_id ? parseInt(attachment_id, 10) || null : null)
       : existing.attachment_id;
+    const newSenderAccountId = sender_account_id !== undefined
+      ? (sender_account_id ? parseInt(sender_account_id, 10) || null : null)
+      : existing.sender_account_id;
 
     const [updated] = await sql`
       UPDATE message_variants
@@ -68,7 +71,8 @@ module.exports = async function handler(req, res) {
           subject_template = ${newSubjectTemplate},
           body_template = ${newBodyTemplate},
           tags = ${newTags},
-          attachment_id = ${newAttachmentId}
+          attachment_id = ${newAttachmentId},
+          sender_account_id = ${newSenderAccountId}
       WHERE id = ${id}
       RETURNING *
     `;

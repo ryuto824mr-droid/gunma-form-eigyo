@@ -244,6 +244,8 @@
     white-space: pre-wrap; word-break: break-word;
     border-top: 1px solid var(--gray-100); padding-top: 10px; margin: 0;
   }
+  .card-sender { font-size: 11px; color: var(--gray-400); margin: 0; }
+  .card-sender-inactive { color: #dc2626; font-weight: 600; }
   .list-empty { font-size: 13px; color: var(--gray-400); padding: 20px 0; margin: 0; }
   .list-count { font-size: 12px; color: var(--gray-400); font-weight: 400; margin-left: 8px; }
   .btn-preview {
@@ -568,6 +570,14 @@
       </div>
 
       <div class="form-group full">
+        <label for="inputSender">送信者（任意）</label>
+        <select id="inputSender">
+          <option value="">未指定（送信時に選択）</option>
+        </select>
+        <p class="form-hint">指定すると、このバリアントで送信する際に送信者が自動で固定されます</p>
+      </div>
+
+      <div class="form-group full">
         <label>タグ（key: value 形式で任意追加）</label>
         <div class="tag-rows" id="tagRows"></div>
         <button type="button" class="btn-tag-add" onclick="addTagRow()">＋ タグを追加</button>
@@ -651,6 +661,13 @@
         </select>
       </div>
       <div class="form-group">
+        <label for="editSender">送信者（任意）</label>
+        <select id="editSender">
+          <option value="">未指定（送信時に選択）</option>
+        </select>
+        <p class="form-hint">指定すると、このバリアントで送信する際に送信者が自動で固定されます</p>
+      </div>
+      <div class="form-group">
         <label>タグ（key: value 形式で任意追加）</label>
         <div class="tag-rows" id="editTagRows"></div>
         <button type="button" class="btn-tag-add" onclick="addEditTagRow()">＋ タグを追加</button>
@@ -671,6 +688,8 @@
 <script>
   let variants = [];
   let attachments = [];
+  let senderAccounts = [];
+  let allSenderAccounts = [];
 
   const BASE_TITLE = document.title;
 
@@ -708,6 +727,26 @@
       if (editSel) editSel.innerHTML = '<option value="">添付なし</option>' + options;
     } catch (err) {
       // 添付ファイル一覧の取得失敗はバリアント作成自体には影響させない
+    }
+  }
+
+  async function loadSenderAccountsForSelect() {
+    const sel     = document.getElementById("inputSender");
+    const editSel = document.getElementById("editSender");
+    if (!sel && !editSel) return;
+    try {
+      const res = await fetch("/api/crm?action=sender-accounts");
+      if (!res.ok) throw new Error("取得失敗");
+      const raw = await res.json();
+      allSenderAccounts = Array.isArray(raw) ? raw : [];
+      senderAccounts = allSenderAccounts.filter(a => a.is_active);
+      const options = senderAccounts
+        .map(a => `<option value="${a.id}">${esc(a.display_name)}（${esc(a.email)}）</option>`)
+        .join("");
+      if (sel)     sel.innerHTML     = '<option value="">未指定（送信時に選択）</option>' + options;
+      if (editSel) editSel.innerHTML = '<option value="">未指定（送信時に選択）</option>' + options;
+    } catch (err) {
+      // 送信者一覧の取得失敗はバリアント作成自体には影響させない
     }
   }
 
@@ -820,6 +859,17 @@
       : `<button class="btn-edit" onclick="openEditModal(${v.id})">
            <i data-lucide="pencil"></i>編集
          </button>`;
+    const senderAccount = v.sender_account_id ? senderAccounts.find(a => a.id === v.sender_account_id) : null;
+    let senderHtml = "";
+    if (senderAccount) {
+      senderHtml = `<p class="card-sender">送信者: ${esc(senderAccount.display_name)}</p>`;
+    } else if (v.sender_account_id) {
+      // activeなsenderAccountsには無いが、sender_account_id自体は設定されている
+      // = 無効化された(またはallSenderAccountsにも見当たらない=削除済みの)アカウント
+      const inactiveAccount = allSenderAccounts.find(a => a.id === v.sender_account_id);
+      const label = inactiveAccount ? esc(inactiveAccount.display_name) : "削除済みのアカウント";
+      senderHtml = `<p class="card-sender card-sender-inactive">送信者: ${label}（無効化されたアカウント）</p>`;
+    }
 
     return `
       <div class="variant-card" id="card-${v.id}">
@@ -840,6 +890,7 @@
           </button>
         </div>
         ${tagsHtml}
+        ${senderHtml}
         <p class="card-body-preview">${esc(preview)}</p>
       </div>`;
   }
@@ -850,6 +901,7 @@
     const subject_template = document.getElementById("inputSubject").value.trim();
     const body_template    = document.getElementById("inputBody").value.trim();
     const attachment_id    = document.getElementById("inputAttachment").value || null;
+    const sender_account_id = document.getElementById("inputSender").value || null;
     const btn              = document.getElementById("createBtn");
 
     if (!name)          { showMsg("名前を入力してください", "error"); return; }
@@ -863,7 +915,7 @@
       const res = await fetch("/api/variants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id, project: getCurrentProject() }),
+        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id, sender_account_id, project: getCurrentProject() }),
       });
       const data = await res.json();
       if (!res.ok) { showMsg(data.error || "作成エラー", "error"); showToast(esc(data.error || "作成エラー"), "error"); return; }
@@ -875,6 +927,7 @@
       document.getElementById("inputSubject").value    = "";
       document.getElementById("inputBody").value       = "";
       document.getElementById("inputAttachment").value = "";
+      document.getElementById("inputSender").value     = "";
       document.getElementById("tagRows").innerHTML     = "";
       showMsg("作成しました", "ok");
       showToast("バリアントを作成しました", "success");
@@ -959,6 +1012,7 @@
     document.getElementById("editSubject").value     = variant.subject_template || "";
     document.getElementById("editBody").value        = variant.body_template || "";
     document.getElementById("editAttachment").value  = variant.attachment_id || "";
+    document.getElementById("editSender").value      = variant.sender_account_id || "";
     const tags = (variant.tags && typeof variant.tags === "object") ? variant.tags : {};
     const rowsEl = document.getElementById("editTagRows");
     rowsEl.innerHTML = "";
@@ -1005,6 +1059,7 @@
     const subject_template  = document.getElementById("editSubject").value.trim();
     const body_template     = document.getElementById("editBody").value.trim();
     const attachment_id     = document.getElementById("editAttachment").value || null;
+    const sender_account_id = document.getElementById("editSender").value || null;
     const tags              = getEditTags();
     const btn               = document.getElementById("editSaveBtn");
     const msgEl              = document.getElementById("editMsg");
@@ -1020,7 +1075,7 @@
       const res = await fetch(`/api/variants/${editingVariantId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id }),
+        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id, sender_account_id }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1239,6 +1294,7 @@
   loadVariants();
   loadAttachmentsForSelect();
   loadCompaniesForAiSelect();
+  loadSenderAccountsForSelect().then(renderVariants);
   startTour([
     { targetSelector: ".create-section", title: "バリアントを作成する", description: "名前・チャネル・件名・本文を入力して作成します。本文に{{company_name}}と書くと送信時に企業名が自動で入ります。", position: "bottom" },
     { targetSelector: "#tagRows",        title: "タグで分類する",       description: "「トーン:カジュアル」「長さ:短文」など自由にタグを付けられます。分析ページでタグ別の反応率を比較できます。",        position: "top" },
