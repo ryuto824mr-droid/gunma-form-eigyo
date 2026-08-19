@@ -3087,22 +3087,35 @@ async function handleMeetingNotes(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, summary, todos, title } = req.body || {};
+    const { id, summary, todos, title, meeting_type, raw_text, meeting_date } = req.body || {};
     const noteId = parseInt(id, 10);
     if (!noteId || isNaN(noteId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    if (title !== undefined && (typeof title !== "string" || !title.trim())) {
+      return res.status(400).json({ error: "titleは空にできません" });
+    }
+    if (raw_text !== undefined && (typeof raw_text !== "string" || !raw_text.trim())) {
+      return res.status(400).json({ error: "raw_textは空にできません" });
+    }
+    if (meeting_type !== undefined && !MEETING_TYPES.includes(meeting_type)) {
+      return res.status(400).json({ error: "meeting_typeが不正です" });
     }
     try {
       const [current] = await sql`SELECT * FROM meeting_notes WHERE id = ${noteId}`;
       if (!current) return res.status(404).json({ error: "議事録が見つかりません" });
 
-      const newTitle   = title   !== undefined ? title   : current.title;
-      const newSummary = summary !== undefined ? summary : current.summary;
-      const newTodos   = todos   !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
+      const newTitle       = title        !== undefined ? title.trim()      : current.title;
+      const newSummary     = summary      !== undefined ? summary           : current.summary;
+      const newTodos       = todos        !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
+      const newMeetingType = meeting_type !== undefined ? meeting_type      : current.meeting_type;
+      const newRawText     = raw_text     !== undefined ? raw_text.trim()   : current.raw_text;
+      const newMeetingDate = meeting_date !== undefined ? meeting_date      : toDateKey(current.meeting_date);
 
       const [updated] = await sql`
         UPDATE meeting_notes
-        SET title = ${newTitle}, summary = ${newSummary}, todos = ${newTodos}
+        SET title = ${newTitle}, summary = ${newSummary}, todos = ${newTodos},
+            meeting_type = ${newMeetingType}, raw_text = ${newRawText}, meeting_date = ${newMeetingDate}
         WHERE id = ${noteId}
         RETURNING *
       `;

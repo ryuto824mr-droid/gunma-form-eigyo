@@ -100,6 +100,14 @@
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
   .mn-raw-textarea { min-height: 200px; resize: vertical; line-height: 1.7; }
+  .mn-edit-todo-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .mn-edit-todo-row input[type="text"] { flex: 1; }
+  .mn-edit-todo-row .btn-tag-remove {
+    padding: 4px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white);
+    cursor: pointer; color: var(--gray-400); flex-shrink: 0; transition: all 150ms;
+  }
+  .mn-edit-todo-row .btn-tag-remove:hover { background: #fff5f5; border-color: #fca5a5; color: #dc2626; }
 
   .mn-textarea-row { display: flex; gap: 8px; align-items: flex-start; }
   .mn-textarea-row .mn-raw-textarea { flex: 1; }
@@ -466,27 +474,66 @@
       <button class="modal-close" onclick="closeDetailModal()">&#x2715;</button>
     </div>
     <div class="modal-body">
-      <div class="mn-detail-meta">
-        <span class="mn-type-badge" id="mnDetailTypeBadge"></span>
-        <span class="mn-detail-date" id="mnDetailDate"></span>
+      <div id="mnDetailViewMode">
+        <div class="mn-detail-meta">
+          <span class="mn-type-badge" id="mnDetailTypeBadge"></span>
+          <span class="mn-detail-date" id="mnDetailDate"></span>
+        </div>
+
+        <p class="mn-detail-speakers" id="mnDetailSpeakers" hidden></p>
+
+        <p class="mn-detail-section-label">要約</p>
+        <div class="mn-detail-summary" id="mnDetailSummary"></div>
+
+        <p class="mn-detail-section-label">Todo</p>
+        <ul class="mn-detail-todos" id="mnDetailTodos"></ul>
+
+        <details class="mn-detail-raw">
+          <summary id="mnDetailRawTextLabel">元の議事録本文</summary>
+          <pre class="mn-detail-raw-text" id="mnDetailRawText"></pre>
+        </details>
       </div>
 
-      <p class="mn-detail-speakers" id="mnDetailSpeakers" hidden></p>
-
-      <p class="mn-detail-section-label">要約</p>
-      <div class="mn-detail-summary" id="mnDetailSummary"></div>
-
-      <p class="mn-detail-section-label">Todo</p>
-      <ul class="mn-detail-todos" id="mnDetailTodos"></ul>
-
-      <details class="mn-detail-raw">
-        <summary id="mnDetailRawTextLabel">元の議事録本文</summary>
-        <pre class="mn-detail-raw-text" id="mnDetailRawText"></pre>
-      </details>
+      <div id="mnDetailEditMode" hidden>
+        <div class="mn-form-group">
+          <label for="mnEditTitle">タイトル</label>
+          <input type="text" id="mnEditTitle">
+        </div>
+        <div class="mn-form-group">
+          <label for="mnEditType">種別</label>
+          <select id="mnEditType">
+            <option value="1on1">1on1</option>
+            <option value="全体定例">全体定例</option>
+            <option value="other">その他</option>
+          </select>
+        </div>
+        <div class="mn-form-group">
+          <label for="mnEditDate">開催日</label>
+          <input type="date" id="mnEditDate">
+        </div>
+        <div class="mn-form-group">
+          <label for="mnEditSummary">要約</label>
+          <textarea id="mnEditSummary" rows="4"></textarea>
+        </div>
+        <div class="mn-form-group">
+          <label>Todo</label>
+          <div id="mnEditTodoRows"></div>
+          <button type="button" class="btn-secondary" onclick="addEditTodoRow()">＋ Todoを追加</button>
+        </div>
+        <div class="mn-form-group">
+          <label for="mnEditRawText">本文</label>
+          <textarea id="mnEditRawText" class="mn-raw-textarea"></textarea>
+        </div>
+      </div>
     </div>
-    <div class="modal-footer">
-      <button class="mn-delete-btn" onclick="deleteCurrentNote()">削除</button>
+    <div class="modal-footer" id="mnDetailFooterView">
+      <button class="mn-delete-btn" onclick="deleteCurrentNote()">🗑️削除</button>
+      <button class="btn-modal-close" onclick="enterEditMode()">✏️編集</button>
       <button class="btn-modal-close" onclick="closeDetailModal()">閉じる</button>
+    </div>
+    <div class="modal-footer" id="mnDetailFooterEdit" hidden>
+      <button class="btn-modal-close" onclick="cancelEditMode()">キャンセル</button>
+      <button class="btn-primary" id="mnEditSaveBtn" onclick="saveNoteEdits()">保存</button>
     </div>
   </div>
 </div>
@@ -891,6 +938,7 @@
 
   function closeDetailModal() {
     document.getElementById("mnDetailModal").classList.remove("open");
+    exitEditMode();
     currentDetailNote = null;
   }
 
@@ -908,8 +956,108 @@
       showToast("削除しました", "info");
       closeDetailModal();
       await loadNotes();
+      await loadCalendar();
     } catch (err) {
       showToast("削除に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  // ===== 議事録の編集 =====
+  function exitEditMode() {
+    document.getElementById("mnDetailViewMode").hidden = false;
+    document.getElementById("mnDetailEditMode").hidden = true;
+    document.getElementById("mnDetailFooterView").hidden = false;
+    document.getElementById("mnDetailFooterEdit").hidden = true;
+  }
+
+  function enterEditMode() {
+    if (!currentDetailNote) return;
+    const note = currentDetailNote;
+    document.getElementById("mnEditTitle").value    = note.title;
+    document.getElementById("mnEditType").value     = note.meeting_type;
+    document.getElementById("mnEditDate").value     = note.meeting_date;
+    document.getElementById("mnEditSummary").value  = note.summary || "";
+    document.getElementById("mnEditRawText").value  = note.raw_text;
+
+    const rowsEl = document.getElementById("mnEditTodoRows");
+    rowsEl.innerHTML = "";
+    const todos = Array.isArray(note.todos) ? note.todos : [];
+    todos.forEach(t => addEditTodoRow(t.text, t.done, t.due_date));
+
+    document.getElementById("mnDetailViewMode").hidden = true;
+    document.getElementById("mnDetailEditMode").hidden = false;
+    document.getElementById("mnDetailFooterView").hidden = true;
+    document.getElementById("mnDetailFooterEdit").hidden = false;
+  }
+
+  function cancelEditMode() {
+    exitEditMode();
+  }
+
+  function addEditTodoRow(text, done, dueDate) {
+    const container = document.getElementById("mnEditTodoRows");
+    const row = document.createElement("div");
+    row.className = "mn-edit-todo-row";
+    row.innerHTML = `
+      <input type="checkbox" ${done ? "checked" : ""} class="mn-edit-todo-done">
+      <input type="text" class="mn-edit-todo-text" placeholder="Todo内容" value="${esc(text || "")}">
+      <input type="date" class="mn-edit-todo-due" value="${dueDate || ""}" title="期日">
+      <button type="button" class="btn-tag-remove" onclick="this.parentElement.remove()">✕</button>`;
+    container.appendChild(row);
+  }
+
+  function getEditTodos() {
+    const rows = document.querySelectorAll("#mnEditTodoRows .mn-edit-todo-row");
+    const todos = [];
+    rows.forEach(row => {
+      const text = row.querySelector(".mn-edit-todo-text").value.trim();
+      if (!text) return;
+      todos.push({
+        text,
+        done: row.querySelector(".mn-edit-todo-done").checked,
+        due_date: row.querySelector(".mn-edit-todo-due").value || null,
+      });
+    });
+    return todos;
+  }
+
+  async function saveNoteEdits() {
+    if (!currentDetailNote) return;
+    const title      = document.getElementById("mnEditTitle").value.trim();
+    if (!title) { showToast("タイトルを入力してください", "error"); return; }
+    const rawText    = document.getElementById("mnEditRawText").value.trim();
+    if (!rawText) { showToast("本文を入力してください", "error"); return; }
+    const meetingType = document.getElementById("mnEditType").value;
+    const meetingDate = document.getElementById("mnEditDate").value;
+    const summary      = document.getElementById("mnEditSummary").value.trim() || null;
+    const todos         = getEditTodos();
+
+    const btn = document.getElementById("mnEditSaveBtn");
+    btn.disabled = true;
+    try {
+      const res = await fetch("/api/crm?action=meeting-notes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: currentDetailNote.id,
+          title, meeting_type: meetingType, raw_text: rawText, meeting_date: meetingDate,
+          summary, todos,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新に失敗しました");
+      currentDetailNote = data;
+      const idx = allNotes.findIndex(n => n.id === data.id);
+      if (idx >= 0) allNotes[idx] = data;
+      exitEditMode();
+      openDetailModal(data.id);
+      renderList();
+      await loadCalendar();
+      showToast("✓ 更新しました", "success");
+    } catch (err) {
+      showToast("更新に失敗しました: " + esc(err.message), "error");
+    } finally {
+      btn.disabled = false;
     }
   }
 
