@@ -31,23 +31,30 @@ module.exports = async function handler(req, res) {
     const project = req.query.project;
     const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 
+    // response_countは「反応した企業のユニーク数」でカウントする(反応レコードの件数ではない)。
+    // LEFT JOINで反応が無いsend_logsもr.id=NULLとして残るため、CASE式でNULLを除外してから
+    // company_idをDISTINCTカウントする(単純にCOUNT(DISTINCT r.id)にすると反応レコード自体の
+    // 件数になり、同じ企業に複数回反応記録が付いた場合に反応率が実態を超えてしまう)。
+    // send_countの分母もstatus='sent'の送信のみに限定する(失敗/不明な送信を含めると
+    // 実際に届いた送信の成果という実態と乖離するため)
     const variants_stats = hasProjectFilter
       ? await sql`
           SELECT
             mv.id                                                             AS variant_id,
             mv.name                                                           AS variant_name,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             COUNT(DISTINCT CASE WHEN r.classification = 'interested'
               THEN r.id END)::int                                             AS interested_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
           LEFT JOIN send_logs sl ON sl.variant_id = mv.id
             AND sl.company_id IN (SELECT id FROM companies WHERE project = ${project})
+            AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           WHERE mv.project = ${project}
           GROUP BY mv.id, mv.name
@@ -58,44 +65,73 @@ module.exports = async function handler(req, res) {
             mv.id                                                             AS variant_id,
             mv.name                                                           AS variant_name,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             COUNT(DISTINCT CASE WHEN r.classification = 'interested'
               THEN r.id END)::int                                             AS interested_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
-          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
+          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           GROUP BY mv.id, mv.name
           ORDER BY send_count DESC, mv.name
         `;
 
-    const channelRows = await sql`
-      SELECT
-        sl.channel                                                        AS channel,
-        COUNT(DISTINCT sl.id)::int                                        AS send_count,
-        COUNT(DISTINCT r.id)::int                                         AS response_count,
-        CASE
-          WHEN COUNT(DISTINCT sl.id) > 0
-          THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
-          ELSE 0
-        END                                                               AS response_rate
-      FROM send_logs sl
-      LEFT JOIN responses r ON r.send_log_id = sl.id
-      GROUP BY sl.channel
-    `;
+    // チャネル別内訳。hasProjectFilterを無視して常に全プロジェクト集計になっていたため、
+    // 他の集計(variants_stats/tags_stats)と同様にproject絞り込みを追加した
+    const channelRows = hasProjectFilter
+      ? await sql`
+          SELECT
+            sl.channel                                                        AS channel,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
+            CASE
+              WHEN COUNT(DISTINCT sl.id) > 0
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              ELSE 0
+            END                                                               AS response_rate
+          FROM send_logs sl
+          JOIN companies c ON c.id = sl.company_id
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE c.project = ${project} AND sl.status = 'sent'
+          GROUP BY sl.channel
+        `
+      : await sql`
+          SELECT
+            sl.channel                                                        AS channel,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
+            CASE
+              WHEN COUNT(DISTINCT sl.id) > 0
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              ELSE 0
+            END                                                               AS response_rate
+          FROM send_logs sl
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.status = 'sent'
+          GROUP BY sl.channel
+        `;
 
     // 平均返信日数はメールチャネルのみ算出する(フォーム経由の反応は相手が別途メールで
-    // 返信してきたものであり、フォーム送信〜返信の「経過日数」に分析上の意味がないため)
-    const [{ avg_days: emailAvgResponseDays }] = await sql`
-      SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
-      FROM send_logs sl
-      JOIN responses r ON r.send_log_id = sl.id
-      WHERE sl.channel = 'email'
-    `;
+    // 返信してきたものであり、フォーム送信〜返信の「経過日数」に分析上の意味がないため)。
+    // 他の集計と同様にproject絞り込み・status='sent'限定を適用する
+    const [{ avg_days: emailAvgResponseDays }] = hasProjectFilter
+      ? await sql`
+          SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+          FROM send_logs sl
+          JOIN responses r ON r.send_log_id = sl.id
+          JOIN companies c ON c.id = sl.company_id
+          WHERE sl.channel = 'email' AND sl.status = 'sent' AND c.project = ${project}
+        `
+      : await sql`
+          SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
+          FROM send_logs sl
+          JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.channel = 'email' AND sl.status = 'sent'
+        `;
     const emailAvgResponseDaysRounded = emailAvgResponseDays != null
       ? Math.round(Number(emailAvgResponseDays) * 10) / 10
       : null;
@@ -120,16 +156,17 @@ module.exports = async function handler(req, res) {
             kv.key                                                            AS tag_key,
             kv.value                                                          AS tag_value,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
           CROSS JOIN LATERAL jsonb_each_text(COALESCE(mv.tags, '{}'::jsonb)) kv
           LEFT JOIN send_logs sl ON sl.variant_id = mv.id
             AND sl.company_id IN (SELECT id FROM companies WHERE project = ${project})
+            AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           WHERE mv.project = ${project}
           GROUP BY kv.key, kv.value
@@ -140,15 +177,15 @@ module.exports = async function handler(req, res) {
             kv.key                                                            AS tag_key,
             kv.value                                                          AS tag_value,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
           CROSS JOIN LATERAL jsonb_each_text(COALESCE(mv.tags, '{}'::jsonb)) kv
-          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
+          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           GROUP BY kv.key, kv.value
           ORDER BY send_count DESC, kv.key, kv.value
