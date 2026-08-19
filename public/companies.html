@@ -2517,42 +2517,56 @@
     resultList.innerHTML = "";
     summaryEl.hidden = true;
 
-    let success = 0, failure = 0;
+    let success = 0, failure = 0, completed = 0;
     const total = pending.length;
-    for (let i = 0; i < pending.length; i++) {
-      const company = pending[i];
-      document.getElementById("bulkProgress").textContent = `${i+1}/${total}件 処理中...(${company.name})`;
-      const idx = companies.findIndex(c => c.id === company.id);
-      if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
+    const BATCH_SIZE = 3;
+    const batches = [];
+    for (let i = 0; i < pending.length; i += BATCH_SIZE) batches.push(pending.slice(i, i + BATCH_SIZE));
+
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      batch.forEach(company => {
+        const idx = companies.findIndex(c => c.id === company.id);
+        if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
+      });
       renderTable();
 
-      let resultClass, resultIcon, resultText;
-      try {
-        const { ok, data: updated } = await callResearchAPI(company.id);
-        updateCompany(updated);
-        const succeeded = ok && updated.status !== "error";
-        if (succeeded) success++; else failure++;
+      // バッチ内の企業は並列にリサーチ実行(allSettledなので1社の失敗が他社の結果を止めない)
+      const results = await Promise.allSettled(batch.map(company => callResearchAPI(company.id)));
 
-        if (updated.status === "captcha_blocked") {
-          resultClass = "captcha"; resultIcon = "🔒"; resultText = "CAPTCHA検出";
-        } else if (succeeded) {
-          resultClass = "success"; resultIcon = "✓";
-          resultText = updated.research_result?.automatable ? "完了（自動化OK）" : "完了";
+      results.forEach((result, i) => {
+        const company = batch[i];
+        let resultClass, resultIcon, resultText;
+        if (result.status === "fulfilled") {
+          const { ok, data: updated } = result.value;
+          updateCompany(updated);
+          const succeeded = ok && updated.status !== "error";
+          if (succeeded) success++; else failure++;
+
+          if (updated.status === "captcha_blocked") {
+            resultClass = "captcha"; resultIcon = "🔒"; resultText = "CAPTCHA検出";
+          } else if (succeeded) {
+            resultClass = "success"; resultIcon = "✓";
+            resultText = updated.research_result?.automatable ? "完了（自動化OK）" : "完了";
+          } else {
+            resultClass = "error"; resultIcon = "✕"; resultText = "エラー";
+          }
         } else {
+          const idx2 = companies.findIndex(c => c.id === company.id);
+          if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error", research_result: { error: result.reason?.message || "不明なエラー" } };
+          failure++;
           resultClass = "error"; resultIcon = "✕"; resultText = "エラー";
         }
-      } catch (err) {
-        const idx2 = companies.findIndex(c => c.id === company.id);
-        if (idx2 !== -1) companies[idx2] = { ...companies[idx2], status: "error", research_result: { error: err.message } };
-        renderTable();
-        failure++;
-        resultClass = "error"; resultIcon = "✕"; resultText = "エラー";
-      }
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item ${resultClass}">${resultIcon} ${esc(company.name)} → ${resultText}</li>`);
+      });
 
-      resultList.insertAdjacentHTML("beforeend",
-        `<li class="bulk-result-item ${resultClass}">${resultIcon} ${esc(company.name)} → ${resultText}</li>`);
+      completed += batch.length;
       resultList.scrollTop = resultList.scrollHeight;
-      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+      barFill.style.width = `${Math.round((completed / total) * 100)}%`;
+      renderTable();
+      document.getElementById("bulkProgress").textContent =
+        `バッチ${b + 1}/${batches.length}処理中(${completed}/${total}社完了)`;
     }
 
     isBulkResearching = false;
@@ -2789,19 +2803,27 @@
     const total = targets.length;
     const channelSetting = document.getElementById("bulkSendChannel").value;
 
-    for (let i = 0; i < targets.length; i++) {
-      const { company, channel } = targets[i];
+    // バッチ間の待機に使う送信間隔設定(相手サイトへの配慮・スパム判定回避のため)。
+    // 取得に失敗した場合は待機なしで進める(既存の24時間重複チェック・送信上限は
+    // 各APIエンドポイント側でこれまで通り適用される)
+    let intervalSeconds = 0;
+    try {
+      const settingsRes = await fetch("/api/crm?action=settings");
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        intervalSeconds = Number(settingsData.send_interval_seconds) || 0;
+      }
+    } catch {}
+
+    // 1社分の送信処理(スキップ/フォーム+メール両方/単一チャネル)をまとめた関数。
+    // Promise.allSettledでバッチ内並列実行するため、成功/失敗は例外ではなく戻り値で返す
+    async function sendOneTarget(target) {
+      const { company, channel } = target;
       if (channel === null) {
-        skipped++;
-        skippedCompanyIds.push(company.id);
         const skipReason = channelSetting === "both"
           ? "自動化OKかつメアド設定済みではないため両方送信不可"
           : "送信手段なし（フォーム・メアドともに未検出）";
-        resultList.insertAdjacentHTML("beforeend",
-          `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → ${skipReason}</li>`);
-        resultList.scrollTop = resultList.scrollHeight;
-        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
-        continue;
+        return { type: "skip", company, html: `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → ${esc(skipReason)}</li>` };
       }
       if (channel === "both") {
         let formOk = false, formErr = null;
@@ -2831,18 +2853,10 @@
           emailErr = err.message;
         }
         if (formOk && emailOk) {
-          success++;
-          resultList.insertAdjacentHTML("beforeend",
-            `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（フォーム+メール）</li>`);
-        } else {
-          failure++;
-          const detail = `フォーム: ${formOk ? "成功" : `失敗(${formErr})`} / メール: ${emailOk ? "成功" : `失敗(${emailErr})`}`;
-          resultList.insertAdjacentHTML("beforeend",
-            `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(detail)}</li>`);
+          return { type: "success", company, html: `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（フォーム+メール）</li>` };
         }
-        resultList.scrollTop = resultList.scrollHeight;
-        barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
-        continue;
+        const detail = `フォーム: ${formOk ? "成功" : `失敗(${formErr})`} / メール: ${emailOk ? "成功" : `失敗(${emailErr})`}`;
+        return { type: "failure", company, html: `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(detail)}</li>` };
       }
       const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
       try {
@@ -2853,16 +2867,46 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "送信エラー");
-        success++;
-        resultList.insertAdjacentHTML("beforeend",
-          `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（${channel === "email" ? "メール" : "フォーム"}）</li>`);
+        return { type: "success", company, html: `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（${channel === "email" ? "メール" : "フォーム"}）</li>` };
       } catch (err) {
-        failure++;
-        resultList.insertAdjacentHTML("beforeend",
-          `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>`);
+        return { type: "failure", company, html: `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>` };
       }
+    }
+
+    const BATCH_SIZE = 3;
+    const batches = [];
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) batches.push(targets.slice(i, i + BATCH_SIZE));
+    let completed = 0;
+
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b];
+      // バッチ内は並列実行(allSettledなので1社の失敗が他社の結果を止めない)。
+      // バッチ間の間隔は別途下で待機するため、ここでは間隔を入れない
+      const results = await Promise.allSettled(batch.map(target => sendOneTarget(target)));
+
+      results.forEach((result, i) => {
+        const target = batch[i];
+        if (result.status === "fulfilled") {
+          const r = result.value;
+          if (r.type === "skip") { skipped++; skippedCompanyIds.push(r.company.id); }
+          else if (r.type === "success") success++;
+          else failure++;
+          resultList.insertAdjacentHTML("beforeend", r.html);
+        } else {
+          failure++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item error">✕ ${esc(target.company.name)} → ${esc(result.reason?.message || "不明なエラー")}</li>`);
+        }
+      });
+
+      completed += batch.length;
       resultList.scrollTop = resultList.scrollHeight;
-      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+      barFill.style.width = `${Math.round((completed / total) * 100)}%`;
+
+      // バッチ間の待機(最後のバッチの後は待たない)
+      if (intervalSeconds > 0 && b < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, intervalSeconds * 1000));
+      }
     }
 
     isBulkSending = false;
