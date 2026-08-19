@@ -5,8 +5,14 @@ module.exports = async function handler(req, res) {
     const project = req.query.project;
     const hasProjectFilter = project === "locle" || project === "ozukanzukan";
     const variants = hasProjectFilter
-      ? await sql`SELECT * FROM message_variants WHERE project = ${project} ORDER BY created_at DESC`
-      : await sql`SELECT * FROM message_variants ORDER BY created_at DESC`;
+      ? await sql`
+          SELECT v.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.variant_id = v.id) AS has_logs
+          FROM message_variants v WHERE v.project = ${project} ORDER BY v.created_at DESC
+        `
+      : await sql`
+          SELECT v.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.variant_id = v.id) AS has_logs
+          FROM message_variants v ORDER BY v.created_at DESC
+        `;
     return res.status(200).json(variants);
   }
 

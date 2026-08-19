@@ -222,6 +222,17 @@
   }
   .btn-delete:hover { background: #fff5f5; }
   .btn-delete svg { width: 11px; height: 11px; }
+  .btn-edit {
+    padding: 3px 8px; font-size: 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    cursor: pointer; flex-shrink: 0; transition: all 150ms;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .btn-edit:hover { background: var(--green-50); border-color: var(--green-500); color: var(--green-700); }
+  .btn-edit svg { width: 11px; height: 11px; }
+  .card-edit-locked {
+    font-size: 11px; color: var(--gray-400); flex-shrink: 0; white-space: nowrap;
+  }
   .card-tags { display: flex; flex-wrap: wrap; gap: 5px; }
   .tag-badge {
     display: inline-block; padding: 2px 10px; border-radius: 999px;
@@ -605,6 +616,56 @@
   </div>
 </div>
 
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>バリアントを編集</h3>
+      <button class="modal-close" onclick="closeEditModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="editName">名前 <span style="color:#dc2626">*</span></label>
+        <input type="text" id="editName" />
+      </div>
+      <div class="form-group">
+        <label for="editChannel">チャネル <span style="color:#dc2626">*</span></label>
+        <select id="editChannel">
+          <option value="email">📧 メール</option>
+          <option value="form">📝 フォーム</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="editSubject">件名テンプレート（メールの場合・任意）</label>
+        <input type="text" id="editSubject" placeholder="例: {{company_name}} 様へのご提案" />
+      </div>
+      <div class="form-group">
+        <label for="editBody">本文テンプレート <span style="color:#dc2626">*</span></label>
+        <textarea id="editBody" placeholder="例: {{company_name}} ご担当者様&#10;&#10;はじめてご連絡させていただきます..."></textarea>
+        <p class="form-hint">{{company_name}} のように書くと、送信時に企業名が自動で差し込まれます</p>
+      </div>
+      <div class="form-group">
+        <label for="editAttachment">添付ファイル（メールの場合・任意）</label>
+        <select id="editAttachment">
+          <option value="">添付なし</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>タグ（key: value 形式で任意追加）</label>
+        <div class="tag-rows" id="editTagRows"></div>
+        <button type="button" class="btn-tag-add" onclick="addEditTagRow()">＋ タグを追加</button>
+      </div>
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:12px;">
+        <span class="form-msg" id="editMsg"></span>
+        <button class="btn-modal-close" onclick="closeEditModal()">キャンセル</button>
+        <button class="btn-create" id="editSaveBtn" onclick="saveEditVariant()">
+          <i data-lucide="check"></i>保存
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <button class="btn-help-float" id="helpFloatBtn">？ 使い方</button>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
@@ -633,8 +694,9 @@
   }
 
   async function loadAttachmentsForSelect() {
-    const sel = document.getElementById("inputAttachment");
-    if (!sel) return;
+    const sel     = document.getElementById("inputAttachment");
+    const editSel = document.getElementById("editAttachment");
+    if (!sel && !editSel) return;
     try {
       const res = await fetch("/api/crm?action=attachments");
       if (!res.ok) throw new Error("取得失敗");
@@ -642,7 +704,8 @@
       const options = attachments
         .map(a => `<option value="${a.id}">${esc(a.filename)}（${formatFileSize(a.size_bytes)}）</option>`)
         .join("");
-      sel.innerHTML = '<option value="">添付なし</option>' + options;
+      if (sel)     sel.innerHTML     = '<option value="">添付なし</option>' + options;
+      if (editSel) editSel.innerHTML = '<option value="">添付なし</option>' + options;
     } catch (err) {
       // 添付ファイル一覧の取得失敗はバリアント作成自体には影響させない
     }
@@ -752,6 +815,11 @@
       : "";
     const bodyText = v.body_template || "";
     const preview  = bodyText.slice(0, 100) + (bodyText.length > 100 ? "…" : "");
+    const editControl = v.has_logs
+      ? '<span class="card-edit-locked">(送信済みのため編集不可、コピーしてご利用ください)</span>'
+      : `<button class="btn-edit" onclick="openEditModal(${v.id})">
+           <i data-lucide="pencil"></i>編集
+         </button>`;
 
     return `
       <div class="variant-card" id="card-${v.id}">
@@ -763,6 +831,7 @@
           <button class="btn-preview" onclick="openPreview(${v.id})">
             <i data-lucide="eye"></i>プレビュー
           </button>
+          ${editControl}
           <button class="btn-copy-variant" onclick="copyVariant(${v.id})">
             <i data-lucide="copy"></i>コピー
           </button>
@@ -872,6 +941,109 @@
       showToast("バリアントを削除しました", "info");
     } catch (err) {
       showToast(esc(err.message), "error");
+    }
+  }
+
+  let editingVariantId = null;
+
+  function openEditModal(id) {
+    const variant = variants.find(v => v.id === id);
+    if (!variant) return;
+    if (variant.has_logs) {
+      showToast("送信履歴があるため編集できません。コピー機能をご利用ください", "error");
+      return;
+    }
+    editingVariantId = id;
+    document.getElementById("editName").value       = variant.name || "";
+    document.getElementById("editChannel").value     = variant.channel || "email";
+    document.getElementById("editSubject").value     = variant.subject_template || "";
+    document.getElementById("editBody").value        = variant.body_template || "";
+    document.getElementById("editAttachment").value  = variant.attachment_id || "";
+    const tags = (variant.tags && typeof variant.tags === "object") ? variant.tags : {};
+    const rowsEl = document.getElementById("editTagRows");
+    rowsEl.innerHTML = "";
+    Object.keys(tags).forEach(k => addEditTagRow(k, tags[k]));
+    const msgEl = document.getElementById("editMsg");
+    msgEl.textContent = "";
+    msgEl.className = "form-msg";
+    document.getElementById("editModal").classList.add("open");
+    lucide.createIcons();
+  }
+
+  function closeEditModal() {
+    document.getElementById("editModal").classList.remove("open");
+    editingVariantId = null;
+  }
+
+  function addEditTagRow(key, val) {
+    const container = document.getElementById("editTagRows");
+    const row = document.createElement("div");
+    row.className = "tag-row";
+    row.innerHTML = `
+      <input type="text" class="tag-key" placeholder="キー（例: industry）" value="${esc(key || "")}" />
+      <span class="tag-sep">:</span>
+      <input type="text" class="tag-val" placeholder="値（例: IT）" value="${esc(val || "")}" />
+      <button type="button" class="btn-tag-remove" onclick="this.parentElement.remove()">✕</button>`;
+    container.appendChild(row);
+  }
+
+  function getEditTags() {
+    const rows = document.querySelectorAll("#editTagRows .tag-row");
+    const tags = {};
+    rows.forEach(row => {
+      const key = row.querySelector(".tag-key").value.trim();
+      const val = row.querySelector(".tag-val").value.trim();
+      if (key) tags[key] = val;
+    });
+    return tags;
+  }
+
+  async function saveEditVariant() {
+    if (!editingVariantId) return;
+    const name             = document.getElementById("editName").value.trim();
+    const channel           = document.getElementById("editChannel").value;
+    const subject_template  = document.getElementById("editSubject").value.trim();
+    const body_template     = document.getElementById("editBody").value.trim();
+    const attachment_id     = document.getElementById("editAttachment").value || null;
+    const tags              = getEditTags();
+    const btn               = document.getElementById("editSaveBtn");
+    const msgEl              = document.getElementById("editMsg");
+
+    if (!name)          { msgEl.textContent = "名前を入力してください"; msgEl.className = "form-msg error"; return; }
+    if (!body_template) { msgEl.textContent = "本文テンプレートを入力してください"; msgEl.className = "form-msg error"; return; }
+
+    btn.disabled = true;
+    msgEl.textContent = "保存中...";
+    msgEl.className = "form-msg";
+
+    try {
+      const res = await fetch(`/api/variants/${editingVariantId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, channel, subject_template: subject_template || null, body_template, tags, attachment_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.type === "has_logs") {
+          showToast("送信履歴があるため編集できません。コピー機能をご利用ください", "error");
+        } else {
+          msgEl.textContent = data.error || "更新エラー";
+          msgEl.className = "form-msg error";
+        }
+        return;
+      }
+      const idx = variants.findIndex(v => v.id === editingVariantId);
+      if (idx !== -1) variants[idx] = { ...variants[idx], ...data };
+      renderVariants();
+      showToast("更新しました", "success");
+      closeEditModal();
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = "form-msg error";
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="check"></i>保存';
+      lucide.createIcons();
     }
   }
 
