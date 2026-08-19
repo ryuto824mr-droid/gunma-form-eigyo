@@ -1033,11 +1033,14 @@ async function handleReports(req, res) {
           WHERE c.archived = FALSE AND sl.status = 'sent'
         `;
 
-    // 反応数も、紐づく送信ログがstatus='sent'のものだけをカウントする
-    // (failed/uncertainな送信に手動で反応記録が付いていても集計に含めない)
+    // 反応数は「反応した企業のユニーク数」でカウントする(反応レコードの件数ではない)。
+    // 同じ企業が同一送信に対して複数回反応記録される場合があり、行数をそのまま数えると
+    // 反応率が100%を大きく超える等、実態と乖離した数字になってしまうため
+    // (紐づく送信ログがstatus='sent'のものだけをカウントする点は変更なし)
     const responseRows = hasProjectFilter
       ? await sql`
-          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
+                 COUNT(DISTINCT sl.company_id)::int AS count
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
           JOIN companies c  ON c.id  = sl.company_id
@@ -1045,7 +1048,8 @@ async function handleReports(req, res) {
           GROUP BY 1
         `
       : await sql`
-          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
+                 COUNT(DISTINCT sl.company_id)::int AS count
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
           WHERE r.received_at >= ${sinceDate}::date AND sl.status = 'sent'
@@ -1055,27 +1059,33 @@ async function handleReports(req, res) {
     responseRows.forEach(r => { responseMap[r.month] = r.count; });
     const monthly_responses = months.map(month => ({ month, count: responseMap[month] || 0 }));
 
+    // チャネル別内訳も成功した送信のみを対象にする(失敗/不明な送信を含めると
+    // 「実際にどのチャネルで送れているか」という成果の実態と乖離するため)
     const channelRows = hasProjectFilter
       ? await sql`
           SELECT sl.channel, COUNT(*)::int AS count
           FROM send_logs sl JOIN companies c ON c.id = sl.company_id
-          WHERE c.project = ${project}
+          WHERE c.project = ${project} AND sl.status = 'sent'
           GROUP BY sl.channel
         `
-      : await sql`SELECT channel, COUNT(*)::int AS count FROM send_logs GROUP BY channel`;
+      : await sql`SELECT channel, COUNT(*)::int AS count FROM send_logs WHERE status = 'sent' GROUP BY channel`;
     const channel_stats = { form: 0, email: 0 };
     channelRows.forEach(r => { channel_stats[r.channel] = r.count; });
 
+    // response_countも「反応した企業のユニーク数」でカウントする(反応レコードの件数ではない)。
+    // LEFT JOINで反応が無いsend_logsもr.id=NULLとして残るため、CASE式でNULLを除外してから
+    // company_idをDISTINCTカウントする(単純にCOUNT(DISTINCT r.id)にすると反応レコード自体の
+    // 件数になり、同じ企業に複数回反応記録が付いた場合に反応率が実態を超えてしまう)
     const variant_performance = hasProjectFilter
       ? await sql`
           SELECT
             mv.id                                                             AS variant_id,
             mv.name                                                           AS variant_name,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
@@ -1093,10 +1103,10 @@ async function handleReports(req, res) {
             mv.id                                                             AS variant_id,
             mv.name                                                           AS variant_name,
             COUNT(DISTINCT sl.id)::int                                        AS send_count,
-            COUNT(DISTINCT r.id)::int                                         AS response_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count,
             CASE
               WHEN COUNT(DISTINCT sl.id) > 0
-              THEN ROUND(COUNT(DISTINCT r.id)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
+              THEN ROUND(COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::numeric / COUNT(DISTINCT sl.id) * 100, 1)
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
@@ -1147,20 +1157,24 @@ async function handleReports(req, res) {
       lost: trendMap[month]?.lost || 0,
     }));
 
-    // 分類別内訳
+    // 分類別内訳。運用上は「反応を記録」機能自体がstatus='sent'でないログに対しては
+    // 使えないよう既にガードされているが、ガード導入より前の過去データが残っている
+    // 可能性もあるため、念のためここでもstatus='sent'に限定する
     const classificationRows = hasProjectFilter
       ? await sql`
           SELECT r.classification, COUNT(*)::int AS count
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
           JOIN companies c  ON c.id  = sl.company_id
-          WHERE c.project = ${project}
+          WHERE c.project = ${project} AND sl.status = 'sent'
           GROUP BY r.classification
         `
       : await sql`
-          SELECT classification, COUNT(*)::int AS count
-          FROM responses
-          GROUP BY classification
+          SELECT r.classification, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          WHERE sl.status = 'sent'
+          GROUP BY r.classification
         `;
     const classification_breakdown = { interested: 0, question: 0, declined: 0, other: 0 };
     classificationRows.forEach(r => {
@@ -1168,29 +1182,31 @@ async function handleReports(req, res) {
       classification_breakdown[key] += r.count;
     });
 
-    // 送信〜返信までの平均日数
+    // 送信〜返信までの平均日数(失敗した送信は相手に届いていないため、その日数を含めると
+    // 実態と関係ない数字が混ざってしまう。status='sent'のみを対象にする)
     const [{ avg_days }] = hasProjectFilter
       ? await sql`
           SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
           JOIN companies c  ON c.id  = sl.company_id
-          WHERE c.project = ${project}
+          WHERE c.project = ${project} AND sl.status = 'sent'
         `
       : await sql`
           SELECT AVG(EXTRACT(EPOCH FROM (r.received_at - sl.sent_at)) / 86400.0) AS avg_days
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
+          WHERE sl.status = 'sent'
         `;
     const response_time_avg_days = avg_days != null ? Math.round(Number(avg_days) * 10) / 10 : 0;
 
-    // 曜日別反応率(送信日時基準、日本時間)
+    // 曜日別反応率(送信日時基準、日本時間)。response_countは反応した企業のユニーク数
     const weekdayRows = hasProjectFilter
       ? await sql`
           SELECT
             EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
             COUNT(DISTINCT sl.id)::int                                    AS send_count,
-            COUNT(DISTINCT r.id)::int                                     AS response_count
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
           FROM send_logs sl
           JOIN companies c ON c.id = sl.company_id
           LEFT JOIN responses r ON r.send_log_id = sl.id
@@ -1201,7 +1217,7 @@ async function handleReports(req, res) {
           SELECT
             EXTRACT(DOW FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS dow,
             COUNT(DISTINCT sl.id)::int                                    AS send_count,
-            COUNT(DISTINCT r.id)::int                                     AS response_count
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
           FROM send_logs sl
           LEFT JOIN responses r ON r.send_log_id = sl.id
           WHERE sl.status = 'sent'
@@ -1218,13 +1234,13 @@ async function handleReports(req, res) {
       return { weekday: label, send_count, response_count, rate };
     });
 
-    // 時間帯別反応率(送信日時基準、日本時間)
+    // 時間帯別反応率(送信日時基準、日本時間)。response_countは反応した企業のユニーク数
     const hourRows = hasProjectFilter
       ? await sql`
           SELECT
             EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
             COUNT(DISTINCT sl.id)::int                                     AS send_count,
-            COUNT(DISTINCT r.id)::int                                      AS response_count
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
           FROM send_logs sl
           JOIN companies c ON c.id = sl.company_id
           LEFT JOIN responses r ON r.send_log_id = sl.id
@@ -1235,7 +1251,7 @@ async function handleReports(req, res) {
           SELECT
             EXTRACT(HOUR FROM (sl.sent_at AT TIME ZONE 'Asia/Tokyo'))::int AS hour,
             COUNT(DISTINCT sl.id)::int                                     AS send_count,
-            COUNT(DISTINCT r.id)::int                                      AS response_count
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
           FROM send_logs sl
           LEFT JOIN responses r ON r.send_log_id = sl.id
           WHERE sl.status = 'sent'
