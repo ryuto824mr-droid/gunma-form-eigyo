@@ -117,6 +117,7 @@
   .mini-stat-label { font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
   .mini-stat-value { font-size: 22px; font-weight: 700; color: var(--gray-900); margin-top: 4px; letter-spacing: -0.02em; }
   .mini-stat-value.accent { color: var(--green-700); }
+  .mini-stat-note { font-size: 10.5px; color: var(--gray-400); margin-top: 3px; line-height: 1.4; }
 
   .donut-legend { display: flex; flex-direction: column; gap: 10px; }
   .donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--gray-700); }
@@ -325,6 +326,7 @@
         <div class="mini-stat">
           <div class="mini-stat-label">合計送信数</div>
           <div class="mini-stat-value" id="statTotalSends">—</div>
+          <div class="mini-stat-note">送信試行回数（成功/失敗/不明を含む、直近6ヶ月）</div>
         </div>
         <div class="mini-stat">
           <div class="mini-stat-label">合計反応数</div>
@@ -333,6 +335,11 @@
         <div class="mini-stat">
           <div class="mini-stat-label">平均反応率</div>
           <div class="mini-stat-value accent" id="statAvgRate">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">送信済み企業数（累計）</div>
+          <div class="mini-stat-value" id="statTotalSentCompanies">—</div>
+          <div class="mini-stat-note">status=sentのユニーク企業数、期間制限なし</div>
         </div>
       </div>
     </div>
@@ -506,7 +513,7 @@
   }
 
   function renderAll(data) {
-    renderSendsSection(data.monthly_sends, data.monthly_responses);
+    renderSendsSection(data.monthly_sends, data.monthly_responses, data.total_sent_companies);
     renderChannelSection(data.channel_stats);
     renderVariantSection(data.variant_performance);
     renderPipelineSection(data.pipeline_value);
@@ -518,7 +525,7 @@
   }
 
   // ===== セクション1: 送信パフォーマンス =====
-  function renderSendsSection(monthlySends, monthlyResponses) {
+  function renderSendsSection(monthlySends, monthlyResponses, totalSentCompanies) {
     const totalSends = (monthlySends || []).reduce((s, r) => s + r.count, 0);
     const totalResponses = (monthlyResponses || []).reduce((s, r) => s + r.count, 0);
     const avgRate = totalSends > 0 ? (totalResponses / totalSends * 100).toFixed(1) : "0.0";
@@ -526,6 +533,7 @@
     document.getElementById("statTotalSends").textContent = `${totalSends}件`;
     document.getElementById("statTotalResponses").textContent = `${totalResponses}件`;
     document.getElementById("statAvgRate").textContent = `${avgRate}%`;
+    document.getElementById("statTotalSentCompanies").textContent = `${totalSentCompanies || 0}社`;
 
     const canvas = document.getElementById("sendsChart");
     if (sendsChartInstance) { sendsChartInstance.destroy(); sendsChartInstance = null; }

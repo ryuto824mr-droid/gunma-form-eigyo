@@ -1003,6 +1003,22 @@ async function handleReports(req, res) {
     sendRows.forEach(r => { sendMap[r.month] = r.count; });
     const monthly_sends = months.map(month => ({ month, count: sendMap[month] || 0 }));
 
+    // 送信済み企業数(累計): status='sent'のユニーク企業数、期間制限なし。
+    // companies.html の has_sent(非アーカイブ企業のみ)と同じ基準で揃える
+    const [{ count: total_sent_companies }] = hasProjectFilter
+      ? await sql`
+          SELECT COUNT(DISTINCT c.id)::int AS count
+          FROM companies c
+          JOIN send_logs sl ON sl.company_id = c.id
+          WHERE c.project = ${project} AND c.archived = FALSE AND sl.status = 'sent'
+        `
+      : await sql`
+          SELECT COUNT(DISTINCT c.id)::int AS count
+          FROM companies c
+          JOIN send_logs sl ON sl.company_id = c.id
+          WHERE c.archived = FALSE AND sl.status = 'sent'
+        `;
+
     const responseRows = hasProjectFilter
       ? await sql`
           SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
@@ -1220,6 +1236,7 @@ async function handleReports(req, res) {
     return res.status(200).json({
       monthly_sends,
       monthly_responses,
+      total_sent_companies,
       channel_stats,
       variant_performance,
       pipeline_value,
