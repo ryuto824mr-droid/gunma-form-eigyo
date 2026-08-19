@@ -150,6 +150,44 @@
   .link-to-analytics:hover { text-decoration: underline; }
   .link-to-analytics svg { width: 14px; height: 14px; }
 
+  /* メインサマリー(今月の反応率を大きく表示) */
+  .main-summary {
+    background: var(--white); border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg); padding: 28px;
+    margin-bottom: 20px; box-shadow: var(--shadow-sm);
+  }
+  .main-summary-grid { display: flex; gap: 32px; flex-wrap: wrap; align-items: center; }
+  .main-summary-primary { flex: 1 1 220px; }
+  .main-summary-label { font-size: 12px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .main-summary-value {
+    font-size: 44px; font-weight: 700; color: var(--green-700);
+    letter-spacing: -0.03em; line-height: 1.15; margin-top: 6px;
+  }
+  .main-summary-compare { font-size: 13px; font-weight: 600; margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+  .main-summary-compare.up { color: var(--green-700); }
+  .main-summary-compare.down { color: #dc2626; }
+  .main-summary-compare.neutral { color: var(--gray-400); font-weight: 500; }
+  .main-summary-secondary { display: flex; gap: 24px; flex-wrap: wrap; flex: 1 1 240px; }
+  .main-summary-stat-label { font-size: 11px; color: var(--gray-500); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .main-summary-stat-value { font-size: 26px; font-weight: 700; color: var(--gray-900); margin-top: 4px; letter-spacing: -0.02em; }
+
+  /* 「詳細を見る」折りたたみ */
+  .details-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--gray-100); border: 1px solid var(--gray-200); color: var(--gray-500);
+    font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: var(--radius-md);
+    cursor: pointer; font-family: inherit; margin: 0 0 16px;
+    transition: background 150ms ease, color 150ms ease;
+  }
+  .details-toggle:hover { background: var(--gray-200); color: var(--gray-700); }
+  .details-toggle-icon { width: 14px; height: 14px; transition: transform 200ms ease; }
+  .details-toggle[aria-expanded="true"] .details-toggle-icon { transform: rotate(180deg); }
+  .details-wrap {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 200ms ease, opacity 200ms ease;
+  }
+  .details-wrap.open { max-height: 8000px; opacity: 1; }
+
   /* Spotlight Tour */
   .tour-overlay {
     position: fixed;
@@ -228,6 +266,10 @@
     .container { padding: 16px 8px; }
     .report-summary-col { flex-direction: row; flex-wrap: wrap; }
     .mini-stat { flex: 1 1 120px; }
+    .main-summary { padding: 20px; }
+    .main-summary-value { font-size: 36px; }
+    .main-summary-grid { gap: 20px; }
+    .main-summary-secondary { gap: 16px; }
   }
 
   /* Toast notifications */
@@ -277,6 +319,8 @@
     table thead { background: #1e293b; }
     .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
     .mini-stat { background: #0f172a; border-color: #1e293b; }
+    .details-toggle { background: #1e293b; border-color: #334155; }
+    .details-toggle:hover { background: #334155; }
     .tour-bubble { background: #1e293b; color: #f1f5f9; }
   }
   html.dark {
@@ -292,6 +336,8 @@
   html.dark table thead { background: #1e293b; }
   html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
   html.dark .mini-stat { background: #0f172a; border-color: #1e293b; }
+  html.dark .details-toggle { background: #1e293b; border-color: #334155; }
+  html.dark .details-toggle:hover { background: #334155; }
   html.dark .tour-bubble { background: #1e293b; color: #f1f5f9; }
 </style>
 </head>
@@ -314,7 +360,28 @@
     <p>送信パフォーマンス・パイプライン価値・トレンドをまとめて確認できます</p>
   </div>
 
-  <!-- セクション1: 送信パフォーマンス -->
+  <!-- メインサマリー: 今月の反応率を最優先で表示 -->
+  <section class="main-summary reveal-on-scroll" id="section-main-summary">
+    <div class="main-summary-grid">
+      <div class="main-summary-primary">
+        <div class="main-summary-label">今月の反応率</div>
+        <div class="main-summary-value" id="mainRate">—</div>
+        <div class="main-summary-compare" id="mainRateCompare"></div>
+      </div>
+      <div class="main-summary-secondary">
+        <div class="main-summary-stat">
+          <div class="main-summary-stat-label">今月の送信数</div>
+          <div class="main-summary-stat-value" id="mainSends">—</div>
+        </div>
+        <div class="main-summary-stat">
+          <div class="main-summary-stat-label">今月の反応数</div>
+          <div class="main-summary-stat-value" id="mainResponses">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- セクション1: 送信パフォーマンス(月別推移グラフ) -->
   <section class="stat-section reveal-on-scroll" id="section-sends">
     <h2>送信パフォーマンス</h2>
     <p class="section-sub">過去6ヶ月の月別送信数・反応数</p>
@@ -335,106 +402,119 @@
           <div class="mini-stat-label">平均反応率</div>
           <div class="mini-stat-value accent" id="statAvgRate">—</div>
         </div>
-        <div class="mini-stat">
-          <div class="mini-stat-label">送信済み企業数（累計）</div>
-          <div class="mini-stat-value" id="statTotalSentCompanies">—</div>
-          <div class="mini-stat-note">status=sentのユニーク企業数、期間制限なし</div>
-        </div>
       </div>
     </div>
   </section>
 
-  <!-- セクション2: チャネル別内訳 -->
-  <section class="stat-section reveal-on-scroll">
-    <h2>チャネル別内訳</h2>
-    <p class="section-sub">フォーム送信とメール送信の比率</p>
-    <div class="report-row">
-      <div class="report-chart-col" style="flex: 1 1 220px;">
-        <div class="chart-wrap donut"><canvas id="channelChart"></canvas></div>
-      </div>
-      <div class="report-summary-col" id="channelLegend"></div>
-    </div>
-  </section>
+  <!-- 詳細を見る(折りたたみ) -->
+  <button type="button" class="details-toggle" id="detailsToggleBtn" aria-expanded="false" aria-controls="detailsContent">
+    <i data-lucide="chevron-down" class="details-toggle-icon"></i>
+    <span id="detailsToggleLabel">詳細を見る</span>
+  </button>
+  <div class="details-wrap" id="detailsWrap">
+    <div class="details-inner" id="detailsContent">
 
-  <!-- セクション3: バリアント別パフォーマンス -->
-  <section class="stat-section reveal-on-scroll">
-    <h2>バリアント別パフォーマンス</h2>
-    <p class="section-sub">反応率の高い上位5件</p>
-    <div class="chart-wrap"><canvas id="variantChart"></canvas></div>
-    <div class="table-wrap" id="variantTableWrap"></div>
-  </section>
-
-  <!-- セクション4: パイプライン価値 -->
-  <section class="stat-section reveal-on-scroll" id="section-pipeline">
-    <h2>パイプライン価値</h2>
-    <p class="section-sub">ステージ別の商談金額合計</p>
-    <div class="report-row">
-      <div class="report-chart-col">
-        <div class="chart-wrap"><canvas id="pipelineChart"></canvas></div>
-      </div>
-      <div class="report-summary-col">
-        <div class="mini-stat">
-          <div class="mini-stat-label">合計パイプライン金額</div>
-          <div class="mini-stat-value accent" id="statTotalPipelineValue">—</div>
+      <!-- チャネル別内訳 -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>チャネル別内訳</h2>
+        <p class="section-sub">フォーム送信とメール送信の比率</p>
+        <div class="report-row">
+          <div class="report-chart-col" style="flex: 1 1 220px;">
+            <div class="chart-wrap donut"><canvas id="channelChart"></canvas></div>
+          </div>
+          <div class="report-summary-col" id="channelLegend"></div>
         </div>
-        <div class="mini-stat">
-          <div class="mini-stat-label">期待成約額（提案中+交渉中）</div>
-          <div class="mini-stat-value" id="statExpectedValue">—</div>
+      </section>
+
+      <!-- バリアント別パフォーマンス -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>バリアント別パフォーマンス</h2>
+        <p class="section-sub">反応率の高い上位5件</p>
+        <div class="chart-wrap"><canvas id="variantChart"></canvas></div>
+        <div class="table-wrap" id="variantTableWrap"></div>
+      </section>
+
+      <!-- 送信済み企業数(累計) -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>送信済み企業数（累計）</h2>
+        <p class="section-sub">status=sentのユニーク企業数、期間制限なし</p>
+        <div class="mini-stat-value accent" id="statTotalSentCompanies" style="font-size:28px;">—</div>
+      </section>
+
+      <!-- パイプライン価値 -->
+      <section class="stat-section reveal-on-scroll" id="section-pipeline">
+        <h2>パイプライン価値</h2>
+        <p class="section-sub">ステージ別の商談金額合計</p>
+        <div class="report-row">
+          <div class="report-chart-col">
+            <div class="chart-wrap"><canvas id="pipelineChart"></canvas></div>
+          </div>
+          <div class="report-summary-col">
+            <div class="mini-stat">
+              <div class="mini-stat-label">合計パイプライン金額</div>
+              <div class="mini-stat-value accent" id="statTotalPipelineValue">—</div>
+            </div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">期待成約額（提案中+交渉中）</div>
+              <div class="mini-stat-value" id="statExpectedValue">—</div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- セクション5: 月次トレンド -->
-  <section class="stat-section reveal-on-scroll">
-    <h2>月次トレンド</h2>
-    <p class="section-sub">過去6ヶ月の成約・失注の推移</p>
-    <div class="report-row">
-      <div class="report-chart-col">
-        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
-      </div>
-      <div class="report-summary-col">
-        <div class="mini-stat">
-          <div class="mini-stat-label">累計成約金額</div>
-          <div class="mini-stat-value accent" id="statWonTotal">—</div>
+      <!-- 月次トレンド -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>月次トレンド</h2>
+        <p class="section-sub">過去6ヶ月の成約・失注の推移</p>
+        <div class="report-row">
+          <div class="report-chart-col">
+            <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+          </div>
+          <div class="report-summary-col">
+            <div class="mini-stat">
+              <div class="mini-stat-label">累計成約金額</div>
+              <div class="mini-stat-value accent" id="statWonTotal">—</div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- セクション6: 反応の詳細分析 -->
-  <section class="stat-section reveal-on-scroll" id="section-response-detail">
-    <h2>反応の詳細分析</h2>
-    <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向</p>
+      <!-- 反応の詳細分析 -->
+      <section class="stat-section reveal-on-scroll" id="section-response-detail">
+        <h2>反応の詳細分析</h2>
+        <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向</p>
 
-    <div class="report-row">
-      <div class="report-chart-col" style="flex: 1 1 220px;">
-        <div class="chart-wrap donut">
-          <canvas id="classificationChart"></canvas>
-          <p class="empty" id="classificationEmpty" hidden>まだデータが不足しています</p>
+        <div class="report-row">
+          <div class="report-chart-col" style="flex: 1 1 220px;">
+            <div class="chart-wrap donut">
+              <canvas id="classificationChart"></canvas>
+              <p class="empty" id="classificationEmpty" hidden>まだデータが不足しています</p>
+            </div>
+          </div>
+          <div class="report-summary-col">
+            <div id="classificationLegend"></div>
+            <div class="mini-stat">
+              <div class="mini-stat-label">平均返信日数</div>
+              <div class="mini-stat-value accent" id="statAvgResponseDays">—</div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="report-summary-col">
-        <div id="classificationLegend"></div>
-        <div class="mini-stat">
-          <div class="mini-stat-label">平均返信日数</div>
-          <div class="mini-stat-value accent" id="statAvgResponseDays">—</div>
+
+        <h3 class="subsection-title">曜日別の反応率</h3>
+        <div class="chart-wrap">
+          <canvas id="weekdayChart"></canvas>
+          <p class="empty" id="weekdayEmpty" hidden>まだデータが不足しています</p>
         </div>
-      </div>
-    </div>
 
-    <h3 class="subsection-title">曜日別の反応率</h3>
-    <div class="chart-wrap">
-      <canvas id="weekdayChart"></canvas>
-      <p class="empty" id="weekdayEmpty" hidden>まだデータが不足しています</p>
-    </div>
+        <h3 class="subsection-title">時間帯別の反応率</h3>
+        <div class="chart-wrap">
+          <canvas id="hourChart"></canvas>
+          <p class="empty" id="hourEmpty" hidden>まだデータが不足しています</p>
+        </div>
+      </section>
 
-    <h3 class="subsection-title">時間帯別の反応率</h3>
-    <div class="chart-wrap">
-      <canvas id="hourChart"></canvas>
-      <p class="empty" id="hourEmpty" hidden>まだデータが不足しています</p>
     </div>
-  </section>
+  </div>
 
 </div>
 
@@ -512,6 +592,7 @@
   }
 
   function renderAll(data) {
+    renderMainSummary(data.monthly_sends, data.monthly_responses);
     renderSendsSection(data.monthly_sends, data.monthly_responses, data.total_sent_companies);
     renderChannelSection(data.channel_stats);
     renderVariantSection(data.variant_performance);
@@ -521,6 +602,52 @@
     renderWeekdaySection(data.weekday_response_rate);
     renderHourSection(data.hour_response_rate);
     lucide.createIcons();
+  }
+
+  // ===== メインサマリー: 今月の反応率 =====
+  function renderMainSummary(monthlySends, monthlyResponses) {
+    const sends = monthlySends || [];
+    const responses = monthlyResponses || [];
+
+    const now = new Date();
+    const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+
+    const findCount = (arr, month) => {
+      const r = arr.find(x => x.month === month);
+      return r ? r.count : 0;
+    };
+
+    const thisSends = findCount(sends, thisMonth);
+    const thisResponses = findCount(responses, thisMonth);
+    const thisRate = thisSends > 0 ? (thisResponses / thisSends * 100) : 0;
+
+    const prevSends = findCount(sends, prevMonth);
+    const prevResponses = findCount(responses, prevMonth);
+    const prevRate = prevSends > 0 ? (prevResponses / prevSends * 100) : 0;
+
+    document.getElementById("mainRate").textContent = `${thisRate.toFixed(1)}%`;
+    document.getElementById("mainSends").textContent = `${thisSends}件`;
+    document.getElementById("mainResponses").textContent = `${thisResponses}件`;
+
+    const compareEl = document.getElementById("mainRateCompare");
+    if (prevSends === 0) {
+      compareEl.textContent = "先月のデータがありません";
+      compareEl.className = "main-summary-compare neutral";
+      return;
+    }
+    const diff = Math.round((thisRate - prevRate) * 10) / 10;
+    if (diff > 0) {
+      compareEl.textContent = `▲ 先月比 +${diff}pt`;
+      compareEl.className = "main-summary-compare up";
+    } else if (diff < 0) {
+      compareEl.textContent = `▼ 先月比 ${diff}pt`;
+      compareEl.className = "main-summary-compare down";
+    } else {
+      compareEl.textContent = `→ 先月比 ±0pt`;
+      compareEl.className = "main-summary-compare neutral";
+    }
   }
 
   // ===== セクション1: 送信パフォーマンス =====
@@ -886,6 +1013,28 @@
     if (duration > 0) setTimeout(() => toast.remove(), duration);
   }
 
+  // ===== 詳細を見る(折りたたみ) =====
+  const DETAILS_STORAGE_KEY = "locle_reports_details_open";
+
+  function setDetailsOpen(open, persist) {
+    const wrap = document.getElementById("detailsWrap");
+    const btn = document.getElementById("detailsToggleBtn");
+    const label = document.getElementById("detailsToggleLabel");
+    wrap.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    label.textContent = open ? "詳細を閉じる" : "詳細を見る";
+    if (persist) localStorage.setItem(DETAILS_STORAGE_KEY, open ? "1" : "0");
+  }
+
+  function initDetailsToggle() {
+    const btn = document.getElementById("detailsToggleBtn");
+    setDetailsOpen(localStorage.getItem(DETAILS_STORAGE_KEY) === "1", false);
+    btn.addEventListener("click", () => {
+      const wrap = document.getElementById("detailsWrap");
+      setDetailsOpen(!wrap.classList.contains("open"), true);
+    });
+  }
+
   // ===== Dark mode toggle =====
   function toggleTheme() {
     document.documentElement.classList.toggle("dark");
@@ -927,6 +1076,7 @@
     function _showStep(idx) {
       _clearHighlight();
       var s = _steps[idx];
+      if (typeof s.onShow === "function") s.onShow();
       var total = _steps.length;
       var isLast = idx === total - 1;
       var target = _resolveEl(s.targetSelector);
@@ -1016,12 +1166,14 @@
   lucide.createIcons();
   initScrollReveal();
   initNavMenu("reports");
+  initDetailsToggle();
   updateProjectDisplay();
   loadReports();
   startTour([
     { targetSelector: ".reports-header", title: "レポートページへようこそ", description: "営業活動の成果を数値・グラフで確認するページです。月次推移・チャネル別内訳・パイプライン価値を一覧できます。", position: "bottom" },
+    { targetSelector: "#section-main-summary", title: "今月の反応率をひと目で確認", description: "今月の反応率・送信数・反応数と、先月との比較を最優先で表示します。", position: "bottom" },
     { targetSelector: "#section-sends",  title: "送信パフォーマンスを確認", description: "月別の送信数・反応数の推移を折れ線グラフで確認できます。反応率が低い月は文面や送信先を見直しましょう。", position: "top" },
-    { targetSelector: "#section-pipeline", title: "パイプライン価値を把握", description: "CRMに登録した商談の金額をステージ別に集計します。提案中・交渉中の合計が期待売上の目安になります。", position: "top" }
+    { targetSelector: "#section-pipeline", title: "パイプライン価値を把握", description: "CRMに登録した商談の金額をステージ別に集計します。提案中・交渉中の合計が期待売上の目安になります。「詳細を見る」を開くと確認できます。", position: "top", onShow: function() { setDetailsOpen(true, false); } }
   ], "locle_tour_reports");
 </script>
 </body>
