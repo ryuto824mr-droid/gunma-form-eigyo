@@ -431,7 +431,7 @@
         <label class="mn-participant-check"><input type="checkbox" value="りゅうと"> りゅうと</label>
         <label class="mn-participant-check"><input type="checkbox" value="宮田"> 宮田</label>
         <label class="mn-participant-check"><input type="checkbox" value="岡田"> 岡田</label>
-        <label class="mn-participant-check"><input type="checkbox" value="社長"> 社長</label>
+        <label class="mn-participant-check"><input type="checkbox" value="山田さん"> 山田さん</label>
       </div>
       <div class="mn-participant-add-row">
         <input type="text" id="mnParticipantInput" placeholder="その他の参加者名" onkeydown="if(event.key==='Enter'){event.preventDefault();addParticipantTag('mn');}">
@@ -551,7 +551,7 @@
             <label class="mn-participant-check"><input type="checkbox" value="りゅうと"> りゅうと</label>
             <label class="mn-participant-check"><input type="checkbox" value="宮田"> 宮田</label>
             <label class="mn-participant-check"><input type="checkbox" value="岡田"> 岡田</label>
-            <label class="mn-participant-check"><input type="checkbox" value="社長"> 社長</label>
+            <label class="mn-participant-check"><input type="checkbox" value="山田さん"> 山田さん</label>
           </div>
           <div class="mn-participant-add-row">
             <input type="text" id="mnEditParticipantInput" placeholder="その他の参加者名" onkeydown="if(event.key==='Enter'){event.preventDefault();addParticipantTag('mnEdit');}">
@@ -700,7 +700,7 @@
   }
 
   // ===== 参加者(作成フォーム/編集モード共通。prefix="mn"=作成フォーム, "mnEdit"=編集モード) =====
-  const PARTICIPANT_PRESETS = ["りゅうと", "宮田", "岡田", "社長"];
+  const PARTICIPANT_PRESETS = ["りゅうと", "宮田", "岡田", "山田さん"];
   const participantExtras = { mn: [], mnEdit: [] };
 
   function renderParticipantTags(prefix) {
