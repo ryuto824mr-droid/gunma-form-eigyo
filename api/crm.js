@@ -986,17 +986,20 @@ async function handleReports(req, res) {
     const project = req.query.project;
     const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 
+    // 合計送信数は「成功した送信」のみを分母にする(status='sent'限定)。
+    // failed/uncertainは送信試行であって実際には相手に届いていないため、
+    // 反応率の分母に含めると実態より低く出てしまう
     const sendRows = hasProjectFilter
       ? await sql`
           SELECT to_char(date_trunc('month', sl.sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
           FROM send_logs sl JOIN companies c ON c.id = sl.company_id
-          WHERE sl.sent_at >= ${sinceDate}::date AND c.project = ${project}
+          WHERE sl.sent_at >= ${sinceDate}::date AND c.project = ${project} AND sl.status = 'sent'
           GROUP BY 1
         `
       : await sql`
           SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
           FROM send_logs
-          WHERE sent_at >= ${sinceDate}::date
+          WHERE sent_at >= ${sinceDate}::date AND status = 'sent'
           GROUP BY 1
         `;
     const sendMap = {};
@@ -1019,19 +1022,22 @@ async function handleReports(req, res) {
           WHERE c.archived = FALSE AND sl.status = 'sent'
         `;
 
+    // 反応数も、紐づく送信ログがstatus='sent'のものだけをカウントする
+    // (failed/uncertainな送信に手動で反応記録が付いていても集計に含めない)
     const responseRows = hasProjectFilter
       ? await sql`
           SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
           FROM responses r
           JOIN send_logs sl ON sl.id = r.send_log_id
           JOIN companies c  ON c.id  = sl.company_id
-          WHERE r.received_at >= ${sinceDate}::date AND c.project = ${project}
+          WHERE r.received_at >= ${sinceDate}::date AND c.project = ${project} AND sl.status = 'sent'
           GROUP BY 1
         `
       : await sql`
-          SELECT to_char(date_trunc('month', received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
-          FROM responses
-          WHERE received_at >= ${sinceDate}::date
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          WHERE r.received_at >= ${sinceDate}::date AND sl.status = 'sent'
           GROUP BY 1
         `;
     const responseMap = {};
@@ -1064,6 +1070,7 @@ async function handleReports(req, res) {
           FROM message_variants mv
           LEFT JOIN send_logs sl ON sl.variant_id = mv.id
             AND sl.company_id IN (SELECT id FROM companies WHERE project = ${project})
+            AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           WHERE mv.project = ${project}
           GROUP BY mv.id, mv.name
@@ -1082,7 +1089,7 @@ async function handleReports(req, res) {
               ELSE 0
             END                                                               AS response_rate
           FROM message_variants mv
-          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id
+          LEFT JOIN send_logs sl ON sl.variant_id  = mv.id AND sl.status = 'sent'
           LEFT JOIN responses  r  ON r.send_log_id = sl.id
           GROUP BY mv.id, mv.name
           ORDER BY send_count DESC, response_rate DESC
@@ -1176,7 +1183,7 @@ async function handleReports(req, res) {
           FROM send_logs sl
           JOIN companies c ON c.id = sl.company_id
           LEFT JOIN responses r ON r.send_log_id = sl.id
-          WHERE c.project = ${project}
+          WHERE c.project = ${project} AND sl.status = 'sent'
           GROUP BY 1
         `
       : await sql`
@@ -1186,6 +1193,7 @@ async function handleReports(req, res) {
             COUNT(DISTINCT r.id)::int                                     AS response_count
           FROM send_logs sl
           LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.status = 'sent'
           GROUP BY 1
         `;
     const weekdayMap = {};
@@ -1209,7 +1217,7 @@ async function handleReports(req, res) {
           FROM send_logs sl
           JOIN companies c ON c.id = sl.company_id
           LEFT JOIN responses r ON r.send_log_id = sl.id
-          WHERE c.project = ${project}
+          WHERE c.project = ${project} AND sl.status = 'sent'
           GROUP BY 1
         `
       : await sql`
@@ -1219,6 +1227,7 @@ async function handleReports(req, res) {
             COUNT(DISTINCT r.id)::int                                      AS response_count
           FROM send_logs sl
           LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.status = 'sent'
           GROUP BY 1
         `;
     const hour_response_rate = HOUR_BUCKETS.map(b => {

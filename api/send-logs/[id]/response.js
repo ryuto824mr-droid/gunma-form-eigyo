@@ -34,9 +34,16 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const [log] = await sql`SELECT id FROM send_logs WHERE id = ${id}`;
+    const [log] = await sql`SELECT id, status FROM send_logs WHERE id = ${id}`;
     if (!log) {
       return res.status(404).json({ error: "送信ログが見つかりません" });
+    }
+    // 送信が成功していない(failed/uncertain)ログは相手に届いていないため、反応があり得ない。
+    // UI側でもボタンを無効化しているが、APIを直接叩かれた場合の保険として二重にガードする
+    if (log.status !== "sent") {
+      return res.status(400).json({
+        error: `送信が成功していない送信ログ(status: ${log.status})には反応を記録できません`,
+      });
     }
 
     const [created] = await sql`

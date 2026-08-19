@@ -563,7 +563,8 @@
     border: 1px solid var(--gray-200); background: var(--white);
     cursor: pointer; color: var(--gray-500); font-family: inherit; transition: all 150ms;
   }
-  .btn-resp:hover { background: var(--green-50); border-color: var(--green-500); color: var(--green-700); }
+  .btn-resp:hover:not(:disabled) { background: var(--green-50); border-color: var(--green-500); color: var(--green-700); }
+  .btn-resp:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .resp-form-row td { padding: 12px 16px; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
   .resp-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -2324,6 +2325,13 @@
       ? `<span class="classif ${esc(log.latest_response)}">${CLASSIF_LABELS[log.latest_response] || log.latest_response}</span>`
       : '<span style="color:var(--gray-300)">-</span>';
 
+    // 送信が成功していない(failed/uncertain)ログには、そもそも相手に届いていない
+    // ため反応があり得ない。ボタンを無効化して誤って記録が付くのを防ぐ
+    const canRecordResponse = log.status === "sent";
+    const respBtnHtml = canRecordResponse
+      ? `<button class="btn-resp" onclick="toggleRespForm(${log.id})">反応を記録</button>`
+      : `<button class="btn-resp" disabled title="送信が成功していない送信ログには反応を記録できません">反応を記録</button>`;
+
     const dataRow = `
       <tr id="lr-${log.id}">
         <td style="font-weight:500;color:var(--gray-900)">${esc(log.company_name)}</td>
@@ -2331,7 +2339,7 @@
         <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${sentAt}</td>
         <td style="font-size:12px;color:var(--gray-400)">${esc(log.status || "-")}</td>
         <td id="rb-${log.id}">${respHtml}</td>
-        <td><button class="btn-resp" onclick="toggleRespForm(${log.id})">反応を記録</button></td>
+        <td>${respBtnHtml}</td>
       </tr>`;
 
     const formRow = `
