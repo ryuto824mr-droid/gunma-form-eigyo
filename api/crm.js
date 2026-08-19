@@ -421,6 +421,13 @@ async function handleDbSetup(req, res) {
       ON send_queue (company_id, variant_id)
       WHERE status = 'pending'
     `);
+    // send_queue.updated_at追加(送信中ロック機能用。status='sending'に更新した時刻を記録し、
+    // 一定時間経過してもsendingのままのレコードを「強制終了で中断された」とみなして復旧するために使う)
+    await dbSql.query("ALTER TABLE send_queue ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()");
+    // send_queue.error_message追加(failedになった理由を記録。通常の送信失敗時はAPIのエラー内容、
+    // 強制終了からの復旧時は「実際に送信できたかは不明」である旨の専用文言を入れ、
+    // send.htmlの「失敗」タブで二重送信リスクの有無を区別して警告表示するために使う)
+    await dbSql.query("ALTER TABLE send_queue ADD COLUMN IF NOT EXISTS error_message TEXT");
     // message_variants.sender_account_id: バリアントに送信者を紐付け、送信時に優先的に使う機能用
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS sender_account_id INTEGER REFERENCES sender_accounts(id)");
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
@@ -1753,7 +1760,7 @@ function computeWeekendHolidaySkipReason(settings) {
   return null;
 }
 
-async function runScheduledSendsBatch(settings, skipReason) {
+async function runScheduledSendsBatch(settings, skipReason, deadline) {
   if (skipReason) {
     return { processed: 0, success: 0, failed: 0, skipped: true, reason: skipReason };
   }
@@ -1781,8 +1788,13 @@ async function runScheduledSendsBatch(settings, skipReason) {
 
     let success = 0;
     let failed = 0;
+    let processed = 0;
 
     for (const item of due) {
+      // 残り時間予算が尽きた場合、このアイテムはpendingのまま残し次回の実行に持ち越す
+      // (process-send-queueと同じ時間予算パターン)
+      if (Date.now() > deadline) break;
+      processed++;
       try {
         let result;
         if (item.channel === "email") {
@@ -1813,26 +1825,141 @@ async function runScheduledSendsBatch(settings, skipReason) {
       }
     }
 
-    return { processed: due.length, success, failed };
+    return { processed, success, failed, remaining: due.length - processed };
+  } catch (err) {
+    return { error: `実行エラー: ${err.message}` };
+  }
+}
+
+// send_queue(companies.htmlの一括「キューに登録」・自動パイプラインの両方が積む送信待ちキュー)を
+// 1回のcron実行につき最大SEND_QUEUE_BATCH_MAX_ITEMS件まで処理する。1日の実送信数の上限は
+// ここでは持たず、submit-form.js/send-email.js側のsettings.daily_send_limit
+// (trigger_source: "auto_pipeline"に対して適用される、既存の仕組み)にそのまま乗る
+const SEND_QUEUE_BATCH_MAX_ITEMS = 20;
+
+// 送信を試みる直前にstatus='sending'でロックしてから実際の送信処理を行うことで、
+// 「相手への送信自体は成功したのに、DBのstatus更新前に関数がタイムアウトで強制終了され、
+// pendingのまま残って翌日再送されてしまう」二重送信を防ぐ。
+// ただし'sending'のまま更新されずに止まってしまったレコード(強制終了で本当に中断された場合)を
+// 放置すると永久にpendingにもsentにもならず詰まってしまうため、一定時間(この分数)経過しても
+// sendingのままのレコードは「中断された」とみなし、次回の実行開始時にfailedへ復旧する。
+// pendingへ自動的に戻さない(=自動リトライしない)のは、実際には送信が成功していた可能性を
+// 否定できないため、安全側に倒して「エラーとして人が確認する」扱いにするため
+const SEND_QUEUE_STUCK_SENDING_MINUTES = 10;
+
+// 強制終了からの復旧でfailedにする際の専用メッセージ。send.htmlはこの文言と完全一致する
+// error_messageを持つ項目を「実際には送信済みかもしれない」項目として特別に警告表示する
+const SEND_QUEUE_RECOVERY_ERROR_MESSAGE = "送信中に強制終了され、実際に送信できたかは不明です";
+
+async function recoverStuckSendingQueueItems() {
+  const cutoff = new Date(Date.now() - SEND_QUEUE_STUCK_SENDING_MINUTES * 60 * 1000);
+  const recovered = await sql`
+    UPDATE send_queue SET status = 'failed', updated_at = NOW(), error_message = ${SEND_QUEUE_RECOVERY_ERROR_MESSAGE}
+    WHERE status = 'sending' AND updated_at < ${cutoff}
+    RETURNING id
+  `;
+  return { recovered: recovered.length };
+}
+
+async function processSendQueueBatch(deadline, skipReason) {
+  // 詰まったsendingレコードの復旧は、土日祝日のスキップに関わらずhandleRunScheduledSends側で
+  // 既に実行済み(このスキップ判定より前に走らせる必要があるため)。ここでは実際の送信処理のみ行う
+  if (skipReason) {
+    return { processed: 0, success: 0, failed: 0, skipped: true, reason: skipReason };
+  }
+  try {
+    const pending = await sql`
+      SELECT * FROM send_queue WHERE status = 'pending'
+      ORDER BY created_at ASC LIMIT ${SEND_QUEUE_BATCH_MAX_ITEMS}
+    `;
+
+    let success = 0;
+    let failed = 0;
+    let processed = 0;
+
+    for (const item of pending) {
+      // 残り時間が尽きた場合、このアイテムはpendingのまま残し次回の実行に持ち越す
+      if (Date.now() > deadline) break;
+      processed++;
+
+      // 実際の送信を試みる前にロックする。これ以降に関数が強制終了されても、
+      // このレコードはpendingには戻らず(=自動で再送信されず)、上記の復旧ロジックで
+      // 一定時間後にfailedとして扱われる
+      await sql`UPDATE send_queue SET status = 'sending', updated_at = NOW() WHERE id = ${item.id}`;
+
+      try {
+        let result;
+        if (item.channel === "email") {
+          const [variant] = await sql`SELECT attachment_id FROM message_variants WHERE id = ${item.variant_id}`;
+          result = await invokeHandlerInternally(sendEmailHandler, {
+            company_id: item.company_id,
+            variant_id: item.variant_id,
+            attachment_id: variant?.attachment_id || null,
+            trigger_source: "auto_pipeline",
+          });
+        } else {
+          result = await invokeHandlerInternally(submitFormHandler, {
+            company_id: item.company_id,
+            variant_id: item.variant_id,
+            trigger_source: "auto_pipeline",
+          });
+        }
+
+        if (result.ok) {
+          await sql`UPDATE send_queue SET status = 'sent', updated_at = NOW(), error_message = NULL WHERE id = ${item.id}`;
+          success++;
+        } else {
+          const errorMessage = result.body?.error || `HTTPステータス${result.status}`;
+          await sql`UPDATE send_queue SET status = 'failed', updated_at = NOW(), error_message = ${errorMessage} WHERE id = ${item.id}`;
+          failed++;
+        }
+      } catch (err) {
+        await sql`UPDATE send_queue SET status = 'failed', updated_at = NOW(), error_message = ${err.message} WHERE id = ${item.id}`;
+        failed++;
+      }
+    }
+
+    return { processed, success, failed, remaining: pending.length - processed };
   } catch (err) {
     return { error: `実行エラー: ${err.message}` };
   }
 }
 
 // Vercel Hobbyプランは1プロジェクトあたりCron Jobsが最大2つまでのため、新しくcronを増やさず、
-// 既存の「run-scheduled-sends」cron(毎日9時)の末尾で完全自動パイプラインも続けて実行する。
-// 両者は同じ関数呼び出し・同じmaxDuration(60秒)の中で動くため、自動パイプライン側の時間予算は
-// スケジュール送信の処理時間も差し引かれる形で共有される
+// 既存の「run-scheduled-sends」cron(毎日9時)の末尾で完全自動パイプライン・send_queueの自動処理も
+// 続けて実行する。3つとも同じ関数呼び出し・同じmaxDuration(300秒。api/crm.js全体に適用されるため
+// run-scheduled-sends・send-queue処理どちらにも及ぶ)の中で動くため、時間予算を3段階に分配する:
+//   1. スケジュール送信: 最大SCHEDULED_SENDS_TIME_BUDGET_MS(自身の開始時刻からの相対時間)
+//   2. 自動パイプライン: 最大AUTO_PIPELINE_TIME_BUDGET_MS(既存のまま、自身の開始時刻からの相対時間)
+//   3. send_queue処理: 関数全体の目安上限(RUN_SCHEDULED_SENDS_TOTAL_BUDGET_MS、関数開始からの
+//      絶対時間)から、1・2で実際に使った時間を差し引いた残り全部
+// 3つの合計が上限を超えないよう、1+2の目安(130+48=178秒)に対して余裕を持たせている
+const RUN_SCHEDULED_SENDS_TOTAL_BUDGET_MS = 290000; // maxDuration=300秒に対して10秒の余裕を残す
+const SCHEDULED_SENDS_TIME_BUDGET_MS = 130000; // スケジュール送信に割り当てる目安時間(130秒)
+const SEND_QUEUE_MIN_TIME_MS = 5000; // これを下回る残り時間ならsend_queue処理自体を今回はスキップ
+
 async function handleRunScheduledSends(req, res) {
+  const requestStart = Date.now();
+
+  // 詰まったsendingレコードの復旧は、外部への送信を一切伴わない内部処理のため、
+  // 土日祝日のスキップ判定や後続処理の時間切れに関わらず、cronが呼ばれるたびに毎回必ず実行する
+  let recoveryResult;
+  try {
+    recoveryResult = await recoverStuckSendingQueueItems();
+  } catch (err) {
+    recoveryResult = { error: `送信中レコードの復旧エラー: ${err.message}` };
+  }
+
   let settings;
   try {
     settings = await getSettings();
   } catch (err) {
-    return res.status(500).json({ error: `実行エラー: ${err.message}` });
+    return res.status(500).json({ error: `実行エラー: ${err.message}`, send_queue_recovery: recoveryResult });
   }
 
   const skipReason = computeWeekendHolidaySkipReason(settings);
-  const scheduledSendsResult = await runScheduledSendsBatch(settings, skipReason);
+  const scheduledSendsDeadline = Date.now() + SCHEDULED_SENDS_TIME_BUDGET_MS;
+  const scheduledSendsResult = await runScheduledSendsBatch(settings, skipReason, scheduledSendsDeadline);
 
   let autoPipelineResult;
   try {
@@ -1842,9 +1969,26 @@ async function handleRunScheduledSends(req, res) {
     autoPipelineResult = { error: `自動パイプライン実行エラー: ${err.message}` };
   }
 
+  let sendQueueResult;
+  try {
+    const remainingMs = RUN_SCHEDULED_SENDS_TOTAL_BUDGET_MS - (Date.now() - requestStart);
+    if (remainingMs < SEND_QUEUE_MIN_TIME_MS) {
+      sendQueueResult = {
+        processed: 0, success: 0, failed: 0, skipped: true,
+        reason: "他の処理で実行時間を使い切ったため、send_queueの処理は今回スキップしました",
+      };
+    } else {
+      sendQueueResult = await processSendQueueBatch(Date.now() + remainingMs, skipReason);
+    }
+  } catch (err) {
+    sendQueueResult = { error: `send_queue処理エラー: ${err.message}` };
+  }
+
   return res.status(200).json({
+    send_queue_recovery: recoveryResult,
     scheduled_sends: scheduledSendsResult,
     auto_pipeline: autoPipelineResult,
+    send_queue: sendQueueResult,
   });
 }
 
@@ -1852,10 +1996,11 @@ async function handleRunScheduledSends(req, res) {
 //
 // 完全自動営業パイプライン。有効化されたproject(locle/ozukanzukan)それぞれについて、
 // 毎日1回のcronで「企業検索→登録→リサーチ→送信」までを自動で行う。
-// Vercel Hobbyプランのmaxduration(60秒)というハード上限の中で、検索API・サイト解析・
-// フォーム自動送信という重い処理を複数社分こなす必要があるため、絶対時刻ベースの
-// 時間予算(AUTO_PIPELINE_TIME_BUDGET_MS)で処理を打ち切り、間に合わなかった分は
-// その日はそこで終了する(daily_limitはあくまで目標上限であり、時間内に収まる範囲が実質の上限)。
+// 同じ関数内でスケジュール送信・send_queue処理とも時間予算を分け合っているため(maxDuration自体は
+// 300秒だが、この処理単体に使えるのはそのうちの一部)、検索API・サイト解析・フォーム自動送信という
+// 重い処理を複数社分こなす必要があっても、絶対時刻ベースの時間予算(AUTO_PIPELINE_TIME_BUDGET_MS)で
+// 処理を打ち切り、間に合わなかった分はその日はそこで終了する(daily_limitはあくまで目標上限であり、
+// 時間内に収まる範囲が実質の上限)。
 
 const AUTO_PIPELINE_PROJECTS = ["locle", "ozukanzukan"];
 const AUTO_PIPELINE_HARD_CAP = 15;
@@ -2035,23 +2180,26 @@ async function queueCompanyForSend(company, project, variantId) {
   } else if (company?.email) {
     channel = "email";
   } else {
-    return false;
+    return { ok: false, reason: "no_channel" };
   }
   try {
+    // status='sending'(送信処理中)の行も重複チェック対象に含める。処理中に新たな
+    // キュー登録を許してしまうと、処理中の行が完了する前にもう1件同じ企業宛の行が
+    // 積まれ、後日それが実行されて二重送信になり得るため
     const [existing] = await sql`
       SELECT id FROM send_queue
-      WHERE company_id = ${company.id} AND variant_id = ${variantId} AND status = 'pending'
+      WHERE company_id = ${company.id} AND variant_id = ${variantId} AND status IN ('pending', 'sending')
       LIMIT 1
     `;
-    if (existing) return false;
+    if (existing) return { ok: false, reason: "already_queued" };
 
     await sql`
       INSERT INTO send_queue (project, company_id, variant_id, channel, status)
       VALUES (${project}, ${company.id}, ${variantId}, ${channel}, 'pending')
     `;
-    return true;
+    return { ok: true, channel };
   } catch (err) {
-    return false;
+    return { ok: false, reason: "db_error" };
   }
 }
 
@@ -2114,8 +2262,8 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
               continue;
             }
 
-            const queuedOk = await queueCompanyForSend(company, project, config.variant_id);
-            if (queuedOk) queued++; else skipped++;
+            const queueResult = await queueCompanyForSend(company, project, config.variant_id);
+            if (queueResult.ok) queued++; else skipped++;
           }
         }
       }
@@ -2159,25 +2307,62 @@ async function handleRunAutoPipeline(req, res) {
 // 自動パイプラインがqueueCompanyForSend()で登録した送信待ちキュー。
 // GET: pending状態の一覧(企業名・バリアント名をJOINして返す) / PATCH: ステータス更新 / DELETE: 削除
 
-const SEND_QUEUE_STATUSES = ["pending", "sent", "skipped", "dismissed"];
+const SEND_QUEUE_STATUSES = ["pending", "sending", "sent", "failed", "skipped", "dismissed"];
 
 async function handleSendQueue(req, res) {
+  if (req.method === "POST") {
+    // companies.htmlの一括「キューに登録」から、選択企業を1社ずつキューに追加するために呼ばれる。
+    // チャネル判定・重複防止はqueueCompanyForSend()(自動パイプラインと共通)にそのまま委譲する
+    const { company_id, project, variant_id } = req.body || {};
+    const companyId = parseInt(company_id, 10);
+    const variantId = parseInt(variant_id, 10);
+    if (!companyId || !variantId || (project !== "locle" && project !== "ozukanzukan")) {
+      return res.status(400).json({ error: "有効なcompany_id, variant_id, project（locleまたはozukanzukan）が必要です" });
+    }
+    try {
+      const [company] = await sql`SELECT * FROM companies WHERE id = ${companyId}`;
+      if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+      const result = await queueCompanyForSend(company, project, variantId);
+      return res.status(200).json({ queued: result.ok, channel: result.channel || null, reason: result.reason || null });
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
   if (req.method === "GET") {
     const project = req.query.project;
     if (project !== "locle" && project !== "ozukanzukan") {
       return res.status(400).json({ error: "有効なproject（locle または ozukanzukan）を指定してください" });
     }
+    // statusは省略時'pending'(既存の送信待ちリスト向けの挙動を維持)。send.htmlの
+    // 「失敗」タブから status=failed で呼ばれた場合は失敗済みの項目一覧を返す
+    const statusFilter = SEND_QUEUE_STATUSES.includes(req.query.status) ? req.query.status : "pending";
     try {
-      const rows = await sql`
-        SELECT sq.id, sq.project, sq.company_id, sq.variant_id, sq.channel, sq.status, sq.created_at,
-               c.name AS company_name, c.url AS company_url,
-               mv.name AS variant_name
-        FROM send_queue sq
-        JOIN companies c ON c.id = sq.company_id
-        JOIN message_variants mv ON mv.id = sq.variant_id
-        WHERE sq.project = ${project} AND sq.status = 'pending'
-        ORDER BY sq.created_at ASC
-      `;
+      // pending(送信待ち): 登録順=古い順(FIFOでの処理順が分かるように)
+      // それ以外(failed等): 更新順=新しい順(直近失敗したものが上に来るように)
+      const rows = statusFilter === "pending"
+        ? await sql`
+            SELECT sq.id, sq.project, sq.company_id, sq.variant_id, sq.channel, sq.status,
+                   sq.created_at, sq.updated_at, sq.error_message,
+                   c.name AS company_name, c.url AS company_url,
+                   mv.name AS variant_name
+            FROM send_queue sq
+            JOIN companies c ON c.id = sq.company_id
+            JOIN message_variants mv ON mv.id = sq.variant_id
+            WHERE sq.project = ${project} AND sq.status = ${statusFilter}
+            ORDER BY sq.created_at ASC
+          `
+        : await sql`
+            SELECT sq.id, sq.project, sq.company_id, sq.variant_id, sq.channel, sq.status,
+                   sq.created_at, sq.updated_at, sq.error_message,
+                   c.name AS company_name, c.url AS company_url,
+                   mv.name AS variant_name
+            FROM send_queue sq
+            JOIN companies c ON c.id = sq.company_id
+            JOIN message_variants mv ON mv.id = sq.variant_id
+            WHERE sq.project = ${project} AND sq.status = ${statusFilter}
+            ORDER BY sq.updated_at DESC
+          `;
       return res.status(200).json(rows);
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -2191,7 +2376,7 @@ async function handleSendQueue(req, res) {
       return res.status(400).json({ error: `有効なid, status(${SEND_QUEUE_STATUSES.join("/")})を指定してください` });
     }
     try {
-      const [updated] = await sql`UPDATE send_queue SET status = ${status} WHERE id = ${queueId} RETURNING *`;
+      const [updated] = await sql`UPDATE send_queue SET status = ${status}, updated_at = NOW() WHERE id = ${queueId} RETURNING *`;
       if (!updated) return res.status(404).json({ error: "キュー項目が見つかりません" });
       return res.status(200).json(updated);
     } catch (err) {
@@ -2214,7 +2399,7 @@ async function handleSendQueue(req, res) {
     }
   }
 
-  return res.status(405).json({ error: "GET, PATCH, DELETEメソッドのみ対応しています" });
+  return res.status(405).json({ error: "GET, POST, PATCH, DELETEメソッドのみ対応しています" });
 }
 
 // ==================== generate-message ====================

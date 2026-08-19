@@ -1372,10 +1372,6 @@
             <option value="both">両方（フォーム→メールの順に送信、自動化OKかつメアド設定済みの企業のみ）</option>
           </select>
         </div>
-        <label class="bulk-send-checkbox">
-          <input type="checkbox" id="bulkSendForce" onchange="updateBulkSendPreview()" />
-          強制送信（送信済み・24時間チェックをスキップ）
-        </label>
         <p class="bulk-send-preview" id="bulkSendPreviewCount"></p>
 
         <div class="bulk-progress-panel" id="bulkSendProgressPanel" hidden style="border-radius:var(--radius-md);border:1px solid var(--gray-200);">
@@ -1387,7 +1383,7 @@
         <div class="bulk-send-actions">
           <button class="btn-filter-clear" onclick="closeBulkSendModal()">閉じる</button>
           <button class="btn-tag-add-inline" id="bulkSendScheduleBtn" onclick="bulkSendAsSchedule()">予約として登録</button>
-          <button class="btn-status-update" id="bulkSendNowBtn" onclick="bulkSendNow()">今すぐ送信</button>
+          <button class="btn-status-update" id="bulkQueueBtn" onclick="bulkQueueForSend()">キューに登録</button>
         </div>
       </div>
     </div>
@@ -2655,7 +2651,6 @@
     }
     document.getElementById("bulkSendTarget").value = "automatable";
     document.getElementById("bulkSendChannel").value = "auto";
-    document.getElementById("bulkSendForce").checked = false;
     document.getElementById("bulkSendProgressPanel").hidden = true;
     document.getElementById("bulkSendResultList").innerHTML = "";
     document.getElementById("bulkSendSummary").hidden = true;
@@ -2677,7 +2672,7 @@
 
   function setBulkSendButtonsDisabled(disabled) {
     document.getElementById("bulkSendScheduleBtn").disabled = disabled;
-    document.getElementById("bulkSendNowBtn").disabled = disabled;
+    document.getElementById("bulkQueueBtn").disabled = disabled;
   }
 
   function prepareBulkSendProgress() {
@@ -2784,141 +2779,68 @@
     }
   }
 
-  async function bulkSendNow() {
+  // 対象企業をsend_queueに登録する(実際の送信はしない)。チャネル判定は
+  // サーバー側のqueueCompanyForSend()に委ねるため、bulkSendChannelの設定は使わない
+  // (それは「予約として登録」bulkSendAsSchedule()専用)
+  async function bulkQueueForSend() {
     if (isBulkSending) return;
     const variantId = parseInt(document.getElementById("bulkSendVariant").value, 10);
     if (!variantId) { showToast("バリアントを選択してください", "error"); return; }
 
-    const force = document.getElementById("bulkSendForce").checked;
-    const targets = getBulkSendTargetsWithChannel();
-    const sendableCount = targets.filter(t => t.channel !== null).length;
-    if (targets.length === 0) { showToast("送信対象の企業がありません", "warning"); return; }
-    if (sendableCount === 0) { showToast("送信対象の企業がありません（全件スキップ対象）", "warning"); return; }
-    if (!confirm(`${sendableCount}社へ今すぐ送信します。よろしいですか？`)) return;
+    const targetCompanies = getBulkSendTargets();
+    if (targetCompanies.length === 0) { showToast("対象の企業がありません", "warning"); return; }
+    if (!confirm(`${targetCompanies.length}社をキューに登録します。よろしいですか？`)) return;
 
     isBulkSending = true;
     setBulkSendButtonsDisabled(true);
     const { barFill, resultList, summaryEl } = prepareBulkSendProgress();
 
-    let success = 0, failure = 0, skipped = 0;
-    const skippedCompanyIds = [];
-    const total = targets.length;
-    const channelSetting = document.getElementById("bulkSendChannel").value;
+    let queued = 0, alreadyQueued = 0, noChannel = 0, error = 0;
+    const noChannelCompanyIds = [];
+    const total = targetCompanies.length;
+    const project = getCurrentProject();
 
-    // バッチ間の待機に使う送信間隔設定(相手サイトへの配慮・スパム判定回避のため)。
-    // 取得に失敗した場合は待機なしで進める(既存の24時間重複チェック・送信上限は
-    // 各APIエンドポイント側でこれまで通り適用される)
-    let intervalSeconds = 0;
-    try {
-      const settingsRes = await fetch("/api/crm?action=settings");
-      if (settingsRes.ok) {
-        const settingsData = await settingsRes.json();
-        intervalSeconds = Number(settingsData.send_interval_seconds) || 0;
-      }
-    } catch {}
-
-    // 1社分の送信処理(スキップ/フォーム+メール両方/単一チャネル)をまとめた関数。
-    // Promise.allSettledでバッチ内並列実行するため、成功/失敗は例外ではなく戻り値で返す
-    async function sendOneTarget(target) {
-      const { company, channel } = target;
-      if (channel === null) {
-        const skipReason = channelSetting === "both"
-          ? "自動化OKかつメアド設定済みではないため両方送信不可"
-          : "送信手段なし（フォーム・メアドともに未検出）";
-        return { type: "skip", company, html: `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → ${esc(skipReason)}</li>` };
-      }
-      if (channel === "both") {
-        let formOk = false, formErr = null;
-        let emailOk = false, emailErr = null;
-        try {
-          const res = await fetch("/api/submit-form", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "フォーム送信エラー");
-          formOk = true;
-        } catch (err) {
-          formErr = err.message;
-        }
-        try {
-          const res = await fetch("/api/send-email", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || "メール送信エラー");
-          emailOk = true;
-        } catch (err) {
-          emailErr = err.message;
-        }
-        if (formOk && emailOk) {
-          return { type: "success", company, html: `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（フォーム+メール）</li>` };
-        }
-        const detail = `フォーム: ${formOk ? "成功" : `失敗(${formErr})`} / メール: ${emailOk ? "成功" : `失敗(${emailErr})`}`;
-        return { type: "failure", company, html: `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(detail)}</li>` };
-      }
-      const endpoint = channel === "email" ? "/api/send-email" : "/api/submit-form";
+    for (let i = 0; i < targetCompanies.length; i++) {
+      const company = targetCompanies[i];
       try {
-        const res = await fetch(endpoint, {
+        const res = await fetch("/api/crm?action=send-queue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ company_id: company.id, variant_id: variantId, force, trigger_source: "manual" }),
+          body: JSON.stringify({ company_id: company.id, variant_id: variantId, project }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "送信エラー");
-        return { type: "success", company, html: `<li class="bulk-result-item success">✓ ${esc(company.name)} → 送信完了（${channel === "email" ? "メール" : "フォーム"}）</li>` };
-      } catch (err) {
-        return { type: "failure", company, html: `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>` };
-      }
-    }
-
-    const BATCH_SIZE = 3;
-    const batches = [];
-    for (let i = 0; i < targets.length; i += BATCH_SIZE) batches.push(targets.slice(i, i + BATCH_SIZE));
-    let completed = 0;
-
-    for (let b = 0; b < batches.length; b++) {
-      const batch = batches[b];
-      // バッチ内は並列実行(allSettledなので1社の失敗が他社の結果を止めない)。
-      // バッチ間の間隔は別途下で待機するため、ここでは間隔を入れない
-      const results = await Promise.allSettled(batch.map(target => sendOneTarget(target)));
-
-      results.forEach((result, i) => {
-        const target = batch[i];
-        if (result.status === "fulfilled") {
-          const r = result.value;
-          if (r.type === "skip") { skipped++; skippedCompanyIds.push(r.company.id); }
-          else if (r.type === "success") success++;
-          else failure++;
-          resultList.insertAdjacentHTML("beforeend", r.html);
-        } else {
-          failure++;
+        if (!res.ok) throw new Error(data.error || "登録エラー");
+        if (data.queued) {
+          queued++;
           resultList.insertAdjacentHTML("beforeend",
-            `<li class="bulk-result-item error">✕ ${esc(target.company.name)} → ${esc(result.reason?.message || "不明なエラー")}</li>`);
+            `<li class="bulk-result-item success">✓ ${esc(company.name)} → キューに登録しました（${data.channel === "email" ? "メール" : "フォーム"}）</li>`);
+        } else if (data.reason === "already_queued") {
+          alreadyQueued++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 既にキュー登録済みです</li>`);
+        } else {
+          noChannel++;
+          noChannelCompanyIds.push(company.id);
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 送信手段なし（フォーム・メアドともに未検出）</li>`);
         }
-      });
-
-      completed += batch.length;
-      resultList.scrollTop = resultList.scrollHeight;
-      barFill.style.width = `${Math.round((completed / total) * 100)}%`;
-
-      // バッチ間の待機(最後のバッチの後は待たない)
-      if (intervalSeconds > 0 && b < batches.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, intervalSeconds * 1000));
+      } catch (err) {
+        error++;
+        resultList.insertAdjacentHTML("beforeend",
+          `<li class="bulk-result-item error">✕ ${esc(company.name)} → ${esc(err.message)}</li>`);
       }
+      resultList.scrollTop = resultList.scrollHeight;
+      barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
     }
 
     isBulkSending = false;
     setBulkSendButtonsDisabled(false);
-    summaryEl.textContent = `全${total}社完了 / 成功${success}社 / エラー${failure}社 / スキップ${skipped}社`;
+    summaryEl.textContent = `全${total}社完了 / 登録${queued}社 / 登録済み${alreadyQueued}社 / 対象外${noChannel}社 / エラー${error}社`;
     summaryEl.hidden = false;
-    showToast(`一括送信が完了しました（成功: ${success}件 / 失敗: ${failure}件 / スキップ: ${skipped}件）`, "success");
+    showToast(`${queued}社をキューに登録しました。send.htmlの送信待ちリストから確認・実行できます`, "success");
 
-    if (skippedCompanyIds.length > 0) {
-      await markSkippedCompaniesForFollowUp(skippedCompanyIds);
+    if (noChannelCompanyIds.length > 0) {
+      await markSkippedCompaniesForFollowUp(noChannelCompanyIds);
     }
   }
 

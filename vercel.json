@@ -3,7 +3,7 @@
     "api/analyze-form.js": { "memory": 1024, "maxDuration": 30 },
     "api/companies/[id]/research.js": { "memory": 2048, "maxDuration": 60 },
     "api/submit-form.js": { "memory": 2048, "maxDuration": 60 },
-    "api/crm.js": { "memory": 1024, "maxDuration": 60 }
+    "api/crm.js": { "memory": 1024, "maxDuration": 300 }
   },
   "crons": [
     {

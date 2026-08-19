@@ -532,6 +532,26 @@
   .filter-count { font-size: 12px; color: var(--gray-400); white-space: nowrap; margin-left: auto; }
 
   /* Send queue (送信待ちリスト) */
+  .send-queue-count { font-size: 13px; font-weight: 600; color: var(--gray-700); margin: 0 0 4px; }
+  .send-queue-note { font-size: 12px; color: var(--gray-400); margin: 0 0 14px; line-height: 1.6; }
+  .send-queue-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .send-queue-tab {
+    padding: 6px 16px; font-size: 13px; font-weight: 600; font-family: inherit;
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-500);
+    border-radius: 999px; cursor: pointer; transition: all 150ms;
+  }
+  .send-queue-tab:hover { background: var(--gray-50); color: var(--gray-700); }
+  .send-queue-tab.active {
+    background: var(--green-500); border-color: var(--green-500); color: white;
+  }
+  .btn-requeue {
+    padding: 4px 12px; font-size: 12px; font-family: inherit; font-weight: 600;
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    border-radius: var(--radius-sm); cursor: pointer; transition: all 150ms;
+  }
+  .btn-requeue:hover { background: var(--green-50); }
+  .send-queue-recovery-warning { color: #dc2626; font-weight: 700; font-size: 12px; line-height: 1.6; }
+  .send-queue-error-reason { color: var(--gray-400); font-size: 12px; line-height: 1.6; }
   .send-queue-toolbar {
     display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap;
   }
@@ -1122,30 +1142,60 @@
 
   <section class="history-section send-queue-section reveal-on-scroll">
     <h2>📋 送信待ちリスト</h2>
-    <div class="send-queue-toolbar">
-      <label class="send-queue-select-all">
-        <input type="checkbox" id="sendQueueSelectAll" onchange="toggleSendQueueSelectAll()" />
-        すべて選択
-      </label>
-      <button class="btn-autosend-save" id="sendQueueSendBtn" onclick="sendSelectedQueueItems()">選択したものを送信</button>
-      <span class="send-queue-progress" id="sendQueueProgress"></span>
+    <p class="send-queue-note">キューに登録した企業は、毎日自動で少しずつ送信されます（1日最大20件）。今すぐ送りたい場合は、リストから選んで「選択したものを送信」を押してください</p>
+
+    <div class="send-queue-tabs">
+      <button type="button" class="send-queue-tab active" id="sendQueueTabBtnPending" onclick="switchSendQueueTab('pending')">送信待ち</button>
+      <button type="button" class="send-queue-tab" id="sendQueueTabBtnFailed" onclick="switchSendQueueTab('failed')">失敗</button>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th></th>
-            <th>企業名</th>
-            <th>バリアント</th>
-            <th>チャネル</th>
-            <th>登録日時</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="sendQueueBody">
-          <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">読み込み中...</td></tr>
-        </tbody>
-      </table>
+
+    <div id="sendQueuePendingPanel">
+      <p class="send-queue-count" id="sendQueueCount"></p>
+      <div class="send-queue-toolbar">
+        <label class="send-queue-select-all">
+          <input type="checkbox" id="sendQueueSelectAll" onchange="toggleSendQueueSelectAll()" />
+          すべて選択
+        </label>
+        <button class="btn-autosend-save" id="sendQueueSendBtn" onclick="sendSelectedQueueItems()">選択したものを送信</button>
+        <span class="send-queue-progress" id="sendQueueProgress"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>企業名</th>
+              <th>バリアント</th>
+              <th>チャネル</th>
+              <th>登録日時</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="sendQueueBody">
+            <tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="sendQueueFailedPanel" hidden>
+      <p class="send-queue-count" id="sendQueueFailedCount"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>企業名</th>
+              <th>バリアント</th>
+              <th>失敗日時</th>
+              <th>理由</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="sendQueueFailedBody">
+            <tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:20px">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -2137,6 +2187,11 @@
     const selectAll = document.getElementById("sendQueueSelectAll");
     if (selectAll) selectAll.checked = false;
 
+    const countEl = document.getElementById("sendQueueCount");
+    if (countEl) {
+      countEl.textContent = sendQueueItems.length > 0 ? `${sendQueueItems.length}社が送信待ちです` : "";
+    }
+
     if (sendQueueItems.length === 0) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:20px">送信待ちの企業はありません</td></tr>';
       return;
@@ -2172,6 +2227,88 @@
       showToast("送信待ちリストから却下しました", "success");
     } catch (err) {
       showToast("却下に失敗しました: " + esc(err.message), "error");
+    }
+  }
+
+  // ==================== 送信待ちリストの「失敗」タブ ====================
+
+  let sendQueueFailedItems = [];
+
+  function switchSendQueueTab(tab) {
+    const isPending = tab === "pending";
+    document.getElementById("sendQueueTabBtnPending").classList.toggle("active", isPending);
+    document.getElementById("sendQueueTabBtnFailed").classList.toggle("active", !isPending);
+    document.getElementById("sendQueuePendingPanel").hidden = !isPending;
+    document.getElementById("sendQueueFailedPanel").hidden = isPending;
+    if (!isPending) loadSendQueueFailed();
+  }
+
+  async function loadSendQueueFailed() {
+    const tbody = document.getElementById("sendQueueFailedBody");
+    try {
+      const res = await fetch("/api/crm?action=send-queue&status=failed&project=" + encodeURIComponent(getCurrentProject()));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得エラー");
+      sendQueueFailedItems = Array.isArray(data) ? data : [];
+      renderSendQueueFailed();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="5" style="color:#dc2626;padding:16px">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  // api/crm.jsのSEND_QUEUE_RECOVERY_ERROR_MESSAGEと完全一致させる文言。
+  // 強制終了からの復旧でfailedになった項目(=実際には送信済みの可能性がある)を見分けるために使う
+  const SEND_QUEUE_RECOVERY_ERROR_MESSAGE = "送信中に強制終了され、実際に送信できたかは不明です";
+
+  function isRecoveredQueueItem(item) {
+    return item.error_message === SEND_QUEUE_RECOVERY_ERROR_MESSAGE;
+  }
+
+  function renderSendQueueFailed() {
+    const tbody = document.getElementById("sendQueueFailedBody");
+    const countEl = document.getElementById("sendQueueFailedCount");
+    if (countEl) {
+      countEl.textContent = sendQueueFailedItems.length > 0 ? `${sendQueueFailedItems.length}社が失敗しています` : "";
+    }
+    if (sendQueueFailedItems.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gray-400);padding:20px">失敗した項目はありません</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sendQueueFailedItems.map(item => {
+      const reasonHtml = isRecoveredQueueItem(item)
+        ? '<span class="send-queue-recovery-warning">⚠️ 実際には送信済みの可能性があります。再送信前にGmail送信履歴等でご確認ください</span>'
+        : `<span class="send-queue-error-reason">${esc(item.error_message || "-")}</span>`;
+      return `
+      <tr>
+        <td>${esc(item.company_name)}</td>
+        <td>${esc(item.variant_name)}</td>
+        <td>${item.updated_at ? new Date(item.updated_at).toLocaleString("ja-JP") : "-"}</td>
+        <td>${reasonHtml}</td>
+        <td><button class="btn-requeue" onclick="requeueFailedItem(${item.id})">もう一度キューに戻す</button></td>
+      </tr>`;
+    }).join("");
+  }
+
+  async function requeueFailedItem(id) {
+    const item = sendQueueFailedItems.find(i => i.id === id);
+    const confirmMessage = item && isRecoveredQueueItem(item)
+      ? `${item.company_name} は、実際には送信済みの可能性があります。もう一度キューに戻すと二重送信のおそれがあります。Gmail送信履歴等で送信状況を確認したうえで、本当に戻してよろしいですか？`
+      : "この企業をもう一度送信待ちキューに戻しますか？";
+    if (!confirm(confirmMessage)) return;
+    try {
+      const res = await fetch("/api/crm?action=send-queue", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "pending" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新エラー");
+      sendQueueFailedItems = sendQueueFailedItems.filter(item => item.id !== id);
+      renderSendQueueFailed();
+      await loadSendQueue();
+      showToast("送信待ちキューに戻しました", "success");
+    } catch (err) {
+      showToast("キューへの登録に失敗しました: " + esc(err.message), "error");
     }
   }
 
