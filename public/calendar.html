@@ -442,8 +442,10 @@
 
     let html = "";
     notes.forEach(n => {
+      const participants = Array.isArray(n.participants) ? n.participants : [];
       html += `<a class="cal-day-item link" href="/meeting-notes.html?project=${projKey}&note=${n.id}">
         📝 ${esc(n.title)}
+        ${participants.length > 0 ? `<div class="cal-day-item-sub">${participants.map(p => `👤${esc(p)}`).join(" ")}</div>` : ""}
         ${n.summary ? `<div class="cal-day-item-sub">${esc(n.summary)}</div>` : ""}
       </a>`;
     });

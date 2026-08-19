@@ -369,6 +369,8 @@ async function handleDbSetup(req, res) {
     // meeting_notes.labeled_text/speakers_detected追加（話者分離機能用）
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS labeled_text TEXT");
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS speakers_detected JSONB DEFAULT '[]'");
+    // meeting_notes.participants追加（参加者記録機能用。例: ["りゅうと", "社長", "宮田さん"]）
+    await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS participants JSONB DEFAULT '[]'");
     // auto_pipeline_config / auto_pipeline_logsテーブル追加（完全自動営業パイプライン機能用）
     await dbSql.query(`
       CREATE TABLE IF NOT EXISTS auto_pipeline_config (
@@ -3036,7 +3038,7 @@ async function handleMeetingNotes(req, res) {
   }
 
   if (req.method === "POST") {
-    const { project, title, meeting_type, raw_text, meeting_date, summary: preSummary, todos: preTodos } = req.body || {};
+    const { project, title, meeting_type, raw_text, meeting_date, summary: preSummary, todos: preTodos, participants } = req.body || {};
     if (project !== "locle" && project !== "ozukanzukan") {
       return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
     }
@@ -3048,6 +3050,9 @@ async function handleMeetingNotes(req, res) {
     }
     const type = MEETING_TYPES.includes(meeting_type) ? meeting_type : "other";
     const date = meeting_date || todayJst();
+    const participantsList = Array.isArray(participants)
+      ? participants.filter(p => typeof p === "string" && p.trim()).map(p => p.trim())
+      : [];
 
     // 事前にプレビュー(?action=summarize-meeting)で生成済みのsummary/todosがあればそれをそのまま使い、
     // 無ければここで要約する(AI未設定/失敗時はsummary=null, todos=[]のまま保存し、後からPATCHで手動編集できるようにする)。
@@ -3076,8 +3081,8 @@ async function handleMeetingNotes(req, res) {
 
     try {
       const [created] = await sql`
-        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date, labeled_text, speakers_detected)
-        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date}, ${labeledText}, ${JSON.stringify(speakersDetected)})
+        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date, labeled_text, speakers_detected, participants)
+        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date}, ${labeledText}, ${JSON.stringify(speakersDetected)}, ${JSON.stringify(participantsList)})
         RETURNING *
       `;
       return res.status(201).json({ ...created, meeting_date: toDateKey(created.meeting_date) });
@@ -3087,7 +3092,7 @@ async function handleMeetingNotes(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, summary, todos, title, meeting_type, raw_text, meeting_date } = req.body || {};
+    const { id, summary, todos, title, meeting_type, raw_text, meeting_date, participants } = req.body || {};
     const noteId = parseInt(id, 10);
     if (!noteId || isNaN(noteId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -3105,17 +3110,21 @@ async function handleMeetingNotes(req, res) {
       const [current] = await sql`SELECT * FROM meeting_notes WHERE id = ${noteId}`;
       if (!current) return res.status(404).json({ error: "議事録が見つかりません" });
 
-      const newTitle       = title        !== undefined ? title.trim()      : current.title;
-      const newSummary     = summary      !== undefined ? summary           : current.summary;
-      const newTodos       = todos        !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
-      const newMeetingType = meeting_type !== undefined ? meeting_type      : current.meeting_type;
-      const newRawText     = raw_text     !== undefined ? raw_text.trim()   : current.raw_text;
-      const newMeetingDate = meeting_date !== undefined ? meeting_date      : toDateKey(current.meeting_date);
+      const newTitle        = title        !== undefined ? title.trim()      : current.title;
+      const newSummary      = summary      !== undefined ? summary           : current.summary;
+      const newTodos        = todos        !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
+      const newMeetingType  = meeting_type !== undefined ? meeting_type      : current.meeting_type;
+      const newRawText      = raw_text     !== undefined ? raw_text.trim()   : current.raw_text;
+      const newMeetingDate  = meeting_date !== undefined ? meeting_date      : toDateKey(current.meeting_date);
+      const newParticipants = participants !== undefined
+        ? JSON.stringify(Array.isArray(participants) ? participants.filter(p => typeof p === "string" && p.trim()).map(p => p.trim()) : [])
+        : JSON.stringify(current.participants || []);
 
       const [updated] = await sql`
         UPDATE meeting_notes
         SET title = ${newTitle}, summary = ${newSummary}, todos = ${newTodos},
-            meeting_type = ${newMeetingType}, raw_text = ${newRawText}, meeting_date = ${newMeetingDate}
+            meeting_type = ${newMeetingType}, raw_text = ${newRawText}, meeting_date = ${newMeetingDate},
+            participants = ${newParticipants}
         WHERE id = ${noteId}
         RETURNING *
       `;
@@ -3150,7 +3159,7 @@ async function handleMeetingNotes(req, res) {
 // JS側で「開催日が対象月」「Todo期日が対象月」をそれぞれ別軸で振り分ける。
 async function aggregateMeetingCalendar(project, from, to) {
   const notes = await sql`
-    SELECT id, title, meeting_type, meeting_date, summary, todos
+    SELECT id, title, meeting_type, meeting_date, summary, todos, participants
     FROM meeting_notes WHERE project = ${project}
   `;
 
@@ -3163,6 +3172,7 @@ async function aggregateMeetingCalendar(project, from, to) {
       if (!notesByDate[dateKey]) notesByDate[dateKey] = [];
       notesByDate[dateKey].push({
         id: n.id, title: n.title, meeting_type: n.meeting_type, summary: n.summary,
+        participants: Array.isArray(n.participants) ? n.participants : [],
       });
     }
 
