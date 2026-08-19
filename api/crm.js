@@ -51,12 +51,13 @@ module.exports = async function handler(req, res) {
     case "work-sessions":    return handleWorkSessions(req, res);
     case "work-session-edits": return handleWorkSessionEdits(req, res);
     case "work-logs-todos-summary": return handleWorkLogsTodosSummary(req, res);
+    case "work-logs-unconfirmed": return handleWorkLogsUnconfirmed(req, res);
     case "parse-work-log":  return handleParseWorkLog(req, res);
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
   }
 };
 
@@ -3150,6 +3151,32 @@ async function handleWorkLogsTodosSummary(req, res) {
       });
     });
     return res.status(200).json(results);
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== work-logs-unconfirmed (未確認の記録一覧) ====================
+
+async function handleWorkLogsUnconfirmed(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    // confirmed_by_boss=falseのうち、やったこと/残タスク/Todoのいずれかが入っている
+    // (=何らかの記録がある)日のみを対象にする。空のまま放置された日は含めない
+    const logs = await sql`
+      SELECT id, user_name, date, tasks_done, tasks_remaining, todo_items
+      FROM work_logs
+      WHERE confirmed_by_boss = FALSE
+        AND (
+          (tasks_done IS NOT NULL AND tasks_done <> '') OR
+          (tasks_remaining IS NOT NULL AND tasks_remaining <> '') OR
+          jsonb_array_length(COALESCE(todo_items, '[]'::jsonb)) > 0
+        )
+      ORDER BY date DESC
+    `;
+    return res.status(200).json(logs);
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }

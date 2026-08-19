@@ -188,6 +188,30 @@
     padding: 2px 8px; margin-left: 6px; vertical-align: middle;
   }
 
+  /* 未確認の記録一覧 */
+  .wl-subsection-title { font-size: 13px; font-weight: 600; color: var(--gray-700); margin: 20px 0 10px; }
+  .wl-unconfirmed-list { display: flex; flex-direction: column; gap: 8px; }
+  .wl-unconfirmed-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    background: #fff7ed; border: 1px solid #fed7aa; border-left: 3px solid #f97316;
+    border-radius: var(--radius-sm);
+  }
+  .wl-unconfirmed-date { font-size: 12px; font-weight: 700; color: var(--gray-900); white-space: nowrap; flex-shrink: 0; }
+  .wl-unconfirmed-user { font-size: 12px; font-weight: 600; color: var(--green-700); white-space: nowrap; flex-shrink: 0; }
+  .wl-unconfirmed-summary { flex: 1; min-width: 0; font-size: 13px; color: var(--gray-700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wl-unconfirmed-btn {
+    flex-shrink: 0; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 999px;
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .wl-unconfirmed-btn:hover { background: var(--green-50); }
+  .wl-unconfirmed-empty { font-size: 13px; color: var(--green-700); font-weight: 600; padding: 6px 0; }
+
+  /* カレンダー表示の確認状態マーク */
+  .wl-cal-cell.has-unconfirmed { border-color: #f97316; border-width: 2px; }
+  .wl-cal-mark { position: absolute; top: 2px; right: 4px; font-size: 11px; }
+  .wl-cal-mark.confirmed { color: var(--green-600); font-weight: 700; }
+
   /* モーダル共通(退勤時の3項目入力・編集履歴) */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
@@ -298,7 +322,7 @@
   .wl-cal-weekdays span { text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-400); padding: 4px 0; }
   .wl-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
   .wl-cal-cell {
-    min-height: 64px; border: 1px solid var(--gray-100); border-radius: var(--radius-sm);
+    position: relative; min-height: 64px; border: 1px solid var(--gray-100); border-radius: var(--radius-sm);
     padding: 4px 6px; font-size: 12px; color: var(--gray-700); cursor: pointer;
     display: flex; flex-direction: column; gap: 2px; transition: all 150ms;
   }
@@ -560,6 +584,13 @@
 
   <div class="wl-section reveal-on-scroll" id="wlConfirmDateSection">
     <p class="wl-section-title">✅ 確認</p>
+
+    <p class="wl-subsection-title" style="margin-top:0;">未確認の記録一覧</p>
+    <div class="wl-unconfirmed-list" id="wlUnconfirmedList">
+      <p style="font-size:13px; color:var(--gray-400);">読み込み中...</p>
+    </div>
+
+    <p class="wl-subsection-title">日付・氏名を指定して確認</p>
     <div class="wl-form-grid">
       <div class="wl-form-group">
         <label for="wlConfirmDate">日付</label>
@@ -1499,9 +1530,72 @@
       showToast(newValue ? "確認済みにしました" : "確認を取り消しました", "success");
       await loadConfirmTarget();
       if (date === todayStr()) await loadTodayData(); // 今日の分なら、他の表示にも反映する
+      loadUnconfirmedLogs();
+      loadCalendarHours();
     } catch (err) {
       showToast("保存に失敗しました: " + esc(err.message), "error");
       checkbox.checked = !newValue;
+    }
+  }
+
+  // ===== 未確認の記録一覧 =====
+  let unconfirmedLogs = [];
+
+  async function loadUnconfirmedLogs() {
+    const container = document.getElementById("wlUnconfirmedList");
+    try {
+      const res = await fetch("/api/crm?action=work-logs-unconfirmed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      unconfirmedLogs = Array.isArray(data) ? data : [];
+      renderUnconfirmedLogs();
+    } catch (err) {
+      container.innerHTML = `<p style="font-size:13px; color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
+    }
+  }
+
+  // やったこと→残っているタスク→Todo件数、の優先順で最初に見つかったものを30文字に要約する
+  function unconfirmedSummaryText(log) {
+    if (log.tasks_done && log.tasks_done.trim()) return truncate(log.tasks_done.trim(), 30);
+    if (log.tasks_remaining && log.tasks_remaining.trim()) return truncate(log.tasks_remaining.trim(), 30);
+    if (Array.isArray(log.todo_items) && log.todo_items.length > 0) return `Todo ${log.todo_items.length}件`;
+    return "";
+  }
+
+  function renderUnconfirmedLogs() {
+    const container = document.getElementById("wlUnconfirmedList");
+    if (unconfirmedLogs.length === 0) {
+      container.innerHTML = '<p class="wl-unconfirmed-empty">未確認の記録はありません ✓</p>';
+      return;
+    }
+    container.innerHTML = unconfirmedLogs.map(log => `
+      <div class="wl-unconfirmed-row" data-log-id="${log.id}">
+        <span class="wl-unconfirmed-date">${esc(String(log.date).slice(0, 10))}</span>
+        <span class="wl-unconfirmed-user">${esc(log.user_name)}</span>
+        <span class="wl-unconfirmed-summary">${esc(unconfirmedSummaryText(log))}</span>
+        <button type="button" class="wl-unconfirmed-btn" onclick="confirmUnconfirmedLog(${log.id})">確認する</button>
+      </div>`).join("");
+  }
+
+  // 一覧から直接「確認する」: confirmed_by_bossをtrueにし、一覧・カレンダー・(該当すれば)
+  // 日付/氏名ピッカーと今日のチーム状況にも反映する
+  async function confirmUnconfirmedLog(logId) {
+    try {
+      const res = await fetch("/api/crm?action=work-logs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: logId, confirmed_by_boss: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新に失敗しました");
+      unconfirmedLogs = unconfirmedLogs.filter(l => l.id !== logId);
+      renderUnconfirmedLogs();
+      showToast("確認済みにしました", "success");
+      if (confirmTargetLog && confirmTargetLog.id === logId) loadConfirmTarget();
+      if (String(data.date).slice(0, 10) === todayStr()) loadTodayData();
+      loadCalendarHours();
+    } catch (err) {
+      showToast("更新に失敗しました: " + esc(err.message), "error");
     }
   }
 
@@ -1908,6 +2002,30 @@
     return total;
   }
 
+  function wlLogHasContent(log) {
+    return !!(
+      (log.tasks_done && log.tasks_done.trim()) ||
+      (log.tasks_remaining && log.tasks_remaining.trim()) ||
+      (Array.isArray(log.todo_items) && log.todo_items.length > 0)
+    );
+  }
+
+  // その日の確認状態: 選択中のユーザー(「全員」の場合は複数人)のうち1人でも「記録があるのに
+  // 未確認」なら"unconfirmed"を優先して返す。全員確認済みなら"confirmed"、記録自体が無ければnull
+  function wlCalConfirmStateForDate(dateKey) {
+    let anyUnconfirmed = false;
+    let anyConfirmed = false;
+    Object.values(wlCalLogsByUser).forEach(logs => {
+      const log = logs.find(l => String(l.date).slice(0, 10) === dateKey);
+      if (!log) return;
+      if (!log.confirmed_by_boss && wlLogHasContent(log)) anyUnconfirmed = true;
+      if (log.confirmed_by_boss) anyConfirmed = true;
+    });
+    if (anyUnconfirmed) return "unconfirmed";
+    if (anyConfirmed) return "confirmed";
+    return null;
+  }
+
   // ヒートマップ的な背景の濃さ: 8時間を基準の濃さの目安にし、それ以上は上限で頭打ちにする
   function wlCalHeatmapStyle(hours) {
     if (hours <= 0) return "";
@@ -1941,10 +2059,15 @@
         return `<div class="wl-cal-cell other-month"><span class="wl-cal-date-num">${c.day}</span></div>`;
       }
       const hours = wlCalHoursForDate(c.dateKey);
+      const confirmState = wlCalConfirmStateForDate(c.dateKey);
       const classes = ["wl-cal-cell"];
       if (c.dateKey === today) classes.push("today");
       if (c.dateKey === wlCalSelectedDate) classes.push("selected");
+      if (confirmState === "unconfirmed") classes.push("has-unconfirmed");
+      const mark = confirmState === "unconfirmed" ? '<span class="wl-cal-mark">⚠️</span>'
+        : confirmState === "confirmed" ? '<span class="wl-cal-mark confirmed">✓</span>' : "";
       return `<div class="${classes.join(" ")}"${wlCalHeatmapStyle(hours)} onclick="selectWlCalDate('${c.dateKey}')">
+        ${mark}
         <span class="wl-cal-date-num">${c.day}</span>
         ${hours > 0 ? `<span class="wl-cal-hours">${hours.toFixed(1)}h</span>` : ""}
       </div>`;
@@ -2130,6 +2253,7 @@
   document.getElementById("wlConfirmDate").value = todayStr();
   loadConfirmTarget();
   loadAllTodosSummary();
+  loadUnconfirmedLogs();
   initWlCalDefaults();
   loadCalendarHours();
   initScrollReveal();
