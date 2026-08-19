@@ -187,6 +187,18 @@
     background: var(--green-50); border: 1px solid var(--green-200); border-radius: 999px;
     padding: 2px 8px; margin-left: 6px; vertical-align: middle;
   }
+  .wl-confirm-badge.unconfirmed { color: #c2410c; background: #fff7ed; border-color: #fed7aa; }
+
+  /* 今日のチーム状況カード・月次サマリー表の行に共通の「確認する」インライン操作 */
+  .wl-team-confirm { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .wl-team-confirm .wl-confirm-badge { margin-left: 0; }
+  .wl-summary-confirm-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .wl-confirm-inline-btn {
+    flex-shrink: 0; padding: 3px 10px; font-size: 11px; font-weight: 600; border-radius: 999px;
+    border: 1px solid var(--green-500); background: var(--white); color: var(--green-700);
+    cursor: pointer; font-family: inherit; transition: all 150ms;
+  }
+  .wl-confirm-inline-btn:hover { background: var(--green-50); }
 
   /* 未確認の記録一覧 */
   .wl-subsection-title { font-size: 13px; font-weight: 600; color: var(--gray-700); margin: 20px 0 10px; }
@@ -1253,6 +1265,20 @@
     refreshCurrentUserState(populateDrafts);
   }
 
+  // 何らかの記録(やったこと/残タスク/Todo)がある場合のみ確認バッジ・ボタンを表示する
+  // (wlLogHasContentはカレンダー表示セクションで定義。function宣言のためhoistされ、
+  // 定義順に関わらずここから呼び出せる)
+  function wlTeamConfirmHtml(log) {
+    if (!log || !wlLogHasContent(log)) return "";
+    if (log.confirmed_by_boss) {
+      return '<div class="wl-team-confirm"><span class="wl-confirm-badge">✓確認済み</span></div>';
+    }
+    return `<div class="wl-team-confirm">
+      <span class="wl-confirm-badge unconfirmed">未確認</span>
+      <button type="button" class="wl-confirm-inline-btn" onclick="confirmWorkLog(${log.id})">確認する</button>
+    </div>`;
+  }
+
   function renderTeamStatus() {
     const grid = document.getElementById("wlTeamGrid");
     const extraNames = [...new Set(
@@ -1279,13 +1305,14 @@
       const todoHtml = todoItems.length > 0
         ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
         : "";
-      const confirmedBadge = log && log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓山田さん確認済み</span>' : "";
+      const confirmHtml = wlTeamConfirmHtml(log);
       return `<div class="wl-team-card">
-        <div class="wl-team-name">${esc(name)}${confirmedBadge}</div>
+        <div class="wl-team-name">${esc(name)}</div>
         <div class="wl-team-sessions">${sessionsHtml}</div>
         <div class="wl-team-hours">${totalHours > 0 ? totalHours.toFixed(2) + "時間" : "—"}</div>
         <div class="wl-team-tasks">${esc(truncate(log && log.tasks_done ? log.tasks_done : "未入力", 60))}</div>
         ${todoHtml}
+        ${confirmHtml}
       </div>`;
     }).join("");
   }
@@ -1529,12 +1556,43 @@
       confirmTargetLog = data;
       showToast(newValue ? "確認済みにしました" : "確認を取り消しました", "success");
       await loadConfirmTarget();
-      if (date === todayStr()) await loadTodayData(); // 今日の分なら、他の表示にも反映する
-      loadUnconfirmedLogs();
-      loadCalendarHours();
+      syncAfterConfirmChange(data);
     } catch (err) {
       showToast("保存に失敗しました: " + esc(err.message), "error");
       checkbox.checked = !newValue;
+    }
+  }
+
+  // confirmed_by_bossの変更が影響しうる他の表示箇所(今日のチーム状況・未確認の記録一覧・
+  // カレンダー表示・月次サマリー)をまとめて再読み込みする。個別にDOMを差分更新するのではなく
+  // 既存のloadXxx()を呼び直す方式にしているのは、このファイル内の他の更新処理
+  // (Todo追加・出退勤編集等)と同じ「変更後は関連データを取り直す」パターンに揃えるため
+  function syncAfterConfirmChange(updatedLog) {
+    const dateKey = String(updatedLog.date).slice(0, 10);
+    loadUnconfirmedLogs();
+    if (dateKey === todayStr()) loadTodayData();
+    loadCalendarHours();
+    if (getSummaryUserName()) loadSummary();
+  }
+
+  // 出退勤記録を確認済みにする共通の呼び出し口。今日のチーム状況カード・月次サマリー表・
+  // 未確認の記録一覧のいずれの「確認する」ボタンからもこの関数を直接呼ぶ
+  async function confirmWorkLog(logId) {
+    try {
+      const res = await fetch("/api/crm?action=work-logs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: logId, confirmed_by_boss: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "更新に失敗しました");
+      showToast("確認済みにしました", "success");
+      if (confirmTargetLog && confirmTargetLog.id === data.id) loadConfirmTarget();
+      syncAfterConfirmChange(data);
+      return data;
+    } catch (err) {
+      showToast("更新に失敗しました: " + esc(err.message), "error");
+      return null;
     }
   }
 
@@ -1573,30 +1631,8 @@
         <span class="wl-unconfirmed-date">${esc(String(log.date).slice(0, 10))}</span>
         <span class="wl-unconfirmed-user">${esc(log.user_name)}</span>
         <span class="wl-unconfirmed-summary">${esc(unconfirmedSummaryText(log))}</span>
-        <button type="button" class="wl-unconfirmed-btn" onclick="confirmUnconfirmedLog(${log.id})">確認する</button>
+        <button type="button" class="wl-unconfirmed-btn" onclick="confirmWorkLog(${log.id})">確認する</button>
       </div>`).join("");
-  }
-
-  // 一覧から直接「確認する」: confirmed_by_bossをtrueにし、一覧・カレンダー・(該当すれば)
-  // 日付/氏名ピッカーと今日のチーム状況にも反映する
-  async function confirmUnconfirmedLog(logId) {
-    try {
-      const res = await fetch("/api/crm?action=work-logs", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: logId, confirmed_by_boss: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "更新に失敗しました");
-      unconfirmedLogs = unconfirmedLogs.filter(l => l.id !== logId);
-      renderUnconfirmedLogs();
-      showToast("確認済みにしました", "success");
-      if (confirmTargetLog && confirmTargetLog.id === logId) loadConfirmTarget();
-      if (String(data.date).slice(0, 10) === todayStr()) loadTodayData();
-      loadCalendarHours();
-    } catch (err) {
-      showToast("更新に失敗しました: " + esc(err.message), "error");
-    }
   }
 
   // ===== 月次サマリー =====
@@ -1773,9 +1809,17 @@
           const editedMark = daySessions.some(s => s.is_edited)
             ? ' <span title="この日に出退勤時刻の編集があります">✏️</span>' : "";
           const confirmedAt = log && log.confirmed_at ? log.confirmed_at : "";
-          const confirmMark = log && log.confirmed_by_boss
-            ? `<span class="wl-confirm-mark done" onclick="onConfirmMarkClick('${date}','${confirmedAt}')" title="クリックで詳細">✓</span>`
-            : `<span class="wl-confirm-mark" onclick="onConfirmMarkClick('${date}','')" title="クリックで確認セクションへ">－</span>`;
+          let confirmMark;
+          if (log && log.confirmed_by_boss) {
+            confirmMark = `<span class="wl-confirm-mark done" onclick="onConfirmMarkClick('${date}','${confirmedAt}')" title="クリックで詳細">✓確認済み</span>`;
+          } else if (log && wlLogHasContent(log)) {
+            confirmMark = `<span class="wl-summary-confirm-cell">
+              <span class="wl-confirm-badge unconfirmed">未確認</span>
+              <button type="button" class="wl-confirm-inline-btn" onclick="confirmWorkLog(${log.id})">確認する</button>
+            </span>`;
+          } else {
+            confirmMark = `<span class="wl-confirm-mark" onclick="onConfirmMarkClick('${date}','')" title="クリックで確認セクションへ">－</span>`;
+          }
           return `
             <tr>
               <td>${esc(date)}${editedMark}</td>
