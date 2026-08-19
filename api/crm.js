@@ -241,7 +241,7 @@ async function handleDbSetup(req, res) {
         created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    // work_logs.todo_items/confirmed_by_boss追加（稼働記録フォームのTodoリスト・社長確認機能用）
+    // work_logs.todo_items/confirmed_by_boss追加（稼働記録フォームのTodoリスト・山田さん確認機能用）
     // todo_items: [{ text: "タスク内容", done: false }] の配列
     await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS todo_items JSONB DEFAULT '[]'");
     await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS confirmed_by_boss BOOLEAN DEFAULT FALSE");
@@ -316,7 +316,7 @@ async function handleDbSetup(req, res) {
       ALTER TABLE work_session_edits ADD CONSTRAINT work_session_edits_session_id_fkey
       FOREIGN KEY (session_id) REFERENCES work_sessions(id) ON DELETE SET NULL
     `);
-    // work_logs.confirmed_at追加（社長確認の日時記録用。月次サマリーの確認マーククリックで表示する）
+    // work_logs.confirmed_at追加（山田さん確認の日時記録用。月次サマリーの確認マーククリックで表示する）
     await dbSql.query("ALTER TABLE work_logs ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ");
     // message_variants.project追加（バリアントをLOCLE/群馬お仕事図鑑ごとに分離）
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
@@ -369,7 +369,7 @@ async function handleDbSetup(req, res) {
     // meeting_notes.labeled_text/speakers_detected追加（話者分離機能用）
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS labeled_text TEXT");
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS speakers_detected JSONB DEFAULT '[]'");
-    // meeting_notes.participants追加（参加者記録機能用。例: ["りゅうと", "社長", "宮田さん"]）
+    // meeting_notes.participants追加（参加者記録機能用。例: ["りゅうと", "山田さん", "宮田さん"]）
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS participants JSONB DEFAULT '[]'");
     // auto_pipeline_config / auto_pipeline_logsテーブル追加（完全自動営業パイプライン機能用）
     await dbSql.query(`

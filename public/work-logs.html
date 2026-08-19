@@ -548,7 +548,7 @@
     </div>
     <label class="wl-confirm-row">
       <input type="checkbox" id="wlConfirmDateCheckbox" onchange="toggleConfirmForDate()">
-      社長確認済み
+      山田さん確認済み
     </label>
     <p class="wl-todo-hint" id="wlConfirmDateStatus" style="margin-top:8px;"></p>
   </div>
@@ -748,7 +748,7 @@
     if (modalList) modalList.innerHTML = html;
   }
 
-  // Todo項目の追加/チェック/削除、社長確認チェックはいずれもこの関数経由でwork-logsに保存する。
+  // Todo項目の追加/チェック/削除、山田さん確認チェックはいずれもこの関数経由でwork-logsに保存する。
   // currentEditIdが無い(その日まだ何も記録していない)場合はPOSTで新規作成する
   async function saveTodoAndConfirmState() {
     const userName = getSelectedUserName();
@@ -1166,7 +1166,7 @@
       const todoHtml = todoItems.length > 0
         ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
         : "";
-      const confirmedBadge = log && log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓社長確認済み</span>' : "";
+      const confirmedBadge = log && log.confirmed_by_boss ? '<span class="wl-confirm-badge">✓山田さん確認済み</span>' : "";
       return `<div class="wl-team-card">
         <div class="wl-team-name">${esc(name)}${confirmedBadge}</div>
         <div class="wl-team-sessions">${sessionsHtml}</div>
@@ -1234,7 +1234,7 @@
 
   // 「編集者を選択」モーダル: 時刻編集・セッション削除を保存する直前に必ず挟む。ページ上部
   // 「本日の稼働記録」の氏名選択(wlNameSelect/getSelectedUserName())とは完全に独立しており、
-  // 社長が他人の記録を修正・削除した場合など、記録者本人ではない編集者を正しくedited_byとして
+  // 山田さんが他人の記録を修正・削除した場合など、記録者本人ではない編集者を正しくedited_byとして
   // 残せるようにするための対応。pendingSessionActionのtypeで編集/削除どちらの続きを行うか分岐する
   let pendingSessionAction = null;
 
@@ -1629,7 +1629,7 @@
         return;
       }
 
-      const header = ["日付", "出勤時刻", "退勤時刻", "稼働時間", "やったこと", "残っているタスク", "To Do", "社長確認"];
+      const header = ["日付", "出勤時刻", "退勤時刻", "稼働時間", "やったこと", "残っているタスク", "To Do", "山田さん確認"];
       const rows = [header];
       let totalHours = 0;
       allDates.forEach(date => {
