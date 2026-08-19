@@ -16,6 +16,7 @@
 <script src="/project-context.js"></script>
 <script>applyProjectTheme();</script>
 <script src="/nav-menu.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="/nav-menu.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -585,6 +586,7 @@
           <button type="button" class="wl-period-btn" id="wlPeriodLastYear" onclick="setSummaryPeriod('lastYear')">去年</button>
         </div>
       </div>
+      <button type="button" class="btn-primary" id="wlExportExcelBtn" onclick="exportSummaryToExcel()">📥 Excelでダウンロード</button>
     </div>
     <div class="wl-summary-table-wrap" id="wlSummaryDailyWrap">
       <table class="wl-summary-table">
@@ -1576,6 +1578,112 @@
     } catch (err) {
       tbody.innerHTML = `<tr class="empty-row"><td colspan="5">エラー: ${esc(err.message)}</td></tr>`;
       totalEl.textContent = "";
+    }
+  }
+
+  // 現在選択中のユーザー・期間(今月/先月/今年/去年)のwork_logs・work_sessionsを取得し、
+  // 日ごとの明細をExcel(.xlsx)としてダウンロードする。今年/去年選択時も画面上の
+  // 月別集計とは別に、1年分の日次データを取り直して日ごとの明細シートを作る
+  async function exportSummaryToExcel() {
+    const userName = getSummaryUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    if (typeof XLSX === "undefined") { showToast("Excel出力ライブラリの読み込みに失敗しました", "error"); return; }
+
+    const btn = document.getElementById("wlExportExcelBtn");
+    const originalLabel = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "生成中..."; }
+
+    try {
+      const yearly = isYearlyPeriod(summaryPeriod);
+      let from, to, fileLabel;
+      if (yearly) {
+        const r = getYearRange(summaryPeriod);
+        from = r.from; to = r.to; fileLabel = String(r.year);
+      } else {
+        const r = getMonthRange(summaryPeriod);
+        from = r.from; to = r.to; fileLabel = from.slice(0, 7);
+      }
+
+      const [sessionsRes, logsRes] = await Promise.all([
+        fetch(`/api/crm?action=work-sessions&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+        fetch(`/api/crm?action=work-logs&user_name=${encodeURIComponent(userName)}&from=${from}&to=${to}`),
+      ]);
+      const sessionsData = await sessionsRes.json();
+      const logsData = await logsRes.json();
+      if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
+      if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
+      const sessions = Array.isArray(sessionsData.sessions) ? sessionsData.sessions : [];
+      const logs = Array.isArray(logsData.logs) ? logsData.logs : [];
+
+      const sessionsByDate = {};
+      sessions.forEach(s => {
+        const key = String(s.date).slice(0, 10);
+        (sessionsByDate[key] = sessionsByDate[key] || []).push(s);
+      });
+      const logsByDate = {};
+      logs.forEach(l => { logsByDate[String(l.date).slice(0, 10)] = l; });
+
+      const allDates = [...new Set([...Object.keys(sessionsByDate), ...Object.keys(logsByDate)])].sort();
+      if (allDates.length === 0) {
+        showToast("この期間の記録がありません", "warning");
+        return;
+      }
+
+      const header = ["日付", "出勤時刻", "退勤時刻", "稼働時間", "やったこと", "残っているタスク", "To Do", "社長確認"];
+      const rows = [header];
+      let totalHours = 0;
+      allDates.forEach(date => {
+        const daySessions = (sessionsByDate[date] || [])
+          .slice()
+          .sort((a, b) => (a.clock_in || "").localeCompare(b.clock_in || ""));
+        const log = logsByDate[date];
+        const clockInText = daySessions.map(s => fmtTime(s.clock_in)).join(", ");
+        const clockOutText = daySessions.map(s => s.clock_out ? fmtTime(s.clock_out) : "勤務中").join(", ");
+        const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
+        totalHours += dayHours;
+        const todoText = log && Array.isArray(log.todo_items)
+          ? log.todo_items.filter(t => !t.done).map(t => t.text).join("\n")
+          : "";
+        rows.push([
+          date,
+          clockInText,
+          clockOutText,
+          dayHours > 0 ? Number(dayHours.toFixed(2)) : "",
+          log && log.tasks_done ? log.tasks_done : "",
+          log && log.tasks_remaining ? log.tasks_remaining : "",
+          todoText,
+          log && log.confirmed_by_boss ? "済" : "未確認",
+        ]);
+      });
+      rows.push(["合計", "", "", Number(totalHours.toFixed(2)), "", "", "", ""]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 12 }, { wch: 18 }, { wch: 18 }, { wch: 10 },
+        { wch: 32 }, { wch: 32 }, { wch: 32 }, { wch: 10 },
+      ];
+      // ヘッダー行の太字・To Do列(改行を含みうる)の折り返しは、xlsx.full.min.jsの
+      // 簡易スタイリングで対応できる範囲でベストエフォート適用する(未対応ビューアでは
+      // 無視されるだけで、データ自体には影響しない)
+      for (let c = 0; c < header.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r: 0, c });
+        if (ws[ref]) ws[ref].s = { font: { bold: true } };
+      }
+      for (let r = 1; r < rows.length; r++) {
+        const ref = XLSX.utils.encode_cell({ r, c: 6 }); // To Do列
+        if (ws[ref] && ws[ref].v) ws[ref].s = { alignment: { wrapText: true, vertical: "top" } };
+      }
+      const totalRef = XLSX.utils.encode_cell({ r: rows.length - 1, c: 0 });
+      if (ws[totalRef]) ws[totalRef].s = { font: { bold: true } };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "稼働記録");
+      XLSX.writeFile(wb, `稼働記録_${userName}_${fileLabel}.xlsx`, { cellStyles: true });
+      showToast("Excelファイルをダウンロードしました", "success");
+    } catch (err) {
+      showToast("Excel出力に失敗しました: " + esc(err.message), "error");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     }
   }
 
