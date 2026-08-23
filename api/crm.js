@@ -56,8 +56,10 @@ module.exports = async function handler(req, res) {
     case "meeting-notes":     return handleMeetingNotes(req, res);
     case "summarize-meeting": return handleSummarizeMeetingPreview(req, res);
     case "calendar-events":   return handleCalendarEvents(req, res);
+    case "production-tasks": return handleProductionTasks(req, res);
+    case "production-task-history": return handleProductionTaskHistory(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history）を指定してください" });
   }
 };
 
@@ -431,6 +433,54 @@ async function handleDbSetup(req, res) {
     await dbSql.query("ALTER TABLE send_queue ADD COLUMN IF NOT EXISTS error_message TEXT");
     // message_variants.sender_account_id: バリアントに送信者を紐付け、送信時に優先的に使う機能用
     await dbSql.query("ALTER TABLE message_variants ADD COLUMN IF NOT EXISTS sender_account_id INTEGER REFERENCES sender_accounts(id)");
+    // production_tasks / production_task_historyテーブル追加（群馬お仕事図鑑向け「制作進行管理」カンバン機能用。
+    // 商談パイプライン(deals)とは完全に独立。stage: appointment(アポ獲得) / interview(取材) /
+    // shooting(撮影) / editing(編集) / review(確認) / posted(投稿)）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS production_tasks (
+        id            SERIAL PRIMARY KEY,
+        project       TEXT NOT NULL DEFAULT 'ozukanzukan',
+        company_id    INTEGER REFERENCES companies(id),
+        title         TEXT NOT NULL,
+        stage         TEXT NOT NULL DEFAULT 'appointment',
+        assignee      TEXT,
+        due_date      DATE,
+        content       TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await dbSql.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'production_tasks_project_check'
+        ) THEN
+          ALTER TABLE production_tasks ADD CONSTRAINT production_tasks_project_check CHECK (project IN ('ozukanzukan', 'locle'));
+        END IF;
+      END $$;
+    `);
+    await dbSql.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'production_tasks_stage_check'
+        ) THEN
+          ALTER TABLE production_tasks ADD CONSTRAINT production_tasks_stage_check
+          CHECK (stage IN ('appointment', 'interview', 'shooting', 'editing', 'review', 'posted'));
+        END IF;
+      END $$;
+    `);
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS production_task_history (
+        id                SERIAL PRIMARY KEY,
+        production_task_id INTEGER NOT NULL REFERENCES production_tasks(id),
+        changed_by        TEXT NOT NULL,
+        from_stage        TEXT,
+        to_stage          TEXT NOT NULL,
+        changed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
     return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
@@ -3455,6 +3505,149 @@ async function handleCalendarEvents(req, res) {
     });
 
     return res.status(200).json({ locle, ozukanzukan, work_logs_by_date: workLogsByDate });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== production-tasks (制作進行管理カンバン。商談パイプラインdealsとは完全に独立) ====================
+
+const PRODUCTION_STAGES = ["appointment", "interview", "shooting", "editing", "review", "posted"];
+
+async function handleProductionTasks(req, res) {
+  if (req.method === "GET") {
+    try {
+      const project = req.query.project;
+      const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+      const tasks = hasProjectFilter
+        ? await sql`
+            SELECT pt.*, c.name AS company_name
+            FROM production_tasks pt LEFT JOIN companies c ON c.id = pt.company_id
+            WHERE pt.project = ${project}
+            ORDER BY pt.due_date ASC NULLS LAST, pt.created_at ASC
+          `
+        : await sql`
+            SELECT pt.*, c.name AS company_name
+            FROM production_tasks pt LEFT JOIN companies c ON c.id = pt.company_id
+            ORDER BY pt.due_date ASC NULLS LAST, pt.created_at ASC
+          `;
+      return res.status(200).json(tasks);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "POST") {
+    const { project, company_id, title, assignee, due_date, content } = req.body || {};
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return res.status(400).json({ error: "title（文字列）が必要です" });
+    }
+    const taskProject = project === "locle" || project === "ozukanzukan" ? project : "ozukanzukan";
+    const companyId = company_id ? parseInt(company_id, 10) : null;
+    try {
+      const [task] = await sql`
+        INSERT INTO production_tasks (project, company_id, title, assignee, due_date, content)
+        VALUES (${taskProject}, ${companyId}, ${title.trim()}, ${assignee || null}, ${due_date || null}, ${content || null})
+        RETURNING *
+      `;
+      const [withCompany] = await sql`
+        SELECT pt.*, c.name AS company_name FROM production_tasks pt LEFT JOIN companies c ON c.id = pt.company_id WHERE pt.id = ${task.id}
+      `;
+      return res.status(201).json(withCompany);
+    } catch (err) {
+      return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PATCH") {
+    // stageが変更される場合のみproduction_task_historyに記録する。changed_byはその場合必須
+    // (誰がこのタスクを次の工程に進めたかを残すため)。content/assignee/due_dateのみの編集では
+    // 履歴は残さない
+    // titleは仕様上のPATCH項目には無いが、詳細モーダルでのタイトル編集に対応するため
+    // 他フィールドと同様に「値が渡された場合のみ更新」の対象に含めている
+    const { id, title, stage, assignee, due_date, content, changed_by } = req.body || {};
+    const taskId = parseInt(id, 10);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    if (title !== undefined && (!title || typeof title !== "string" || !title.trim())) {
+      return res.status(400).json({ error: "title（文字列）が必要です" });
+    }
+    if (stage !== undefined && !PRODUCTION_STAGES.includes(stage)) {
+      return res.status(400).json({ error: "有効なstageを指定してください" });
+    }
+    if (stage !== undefined && (!changed_by || typeof changed_by !== "string" || !changed_by.trim())) {
+      return res.status(400).json({ error: "ステージを変更する場合はchanged_by（文字列）が必要です" });
+    }
+    try {
+      const [current] = await sql`SELECT * FROM production_tasks WHERE id = ${taskId}`;
+      if (!current) return res.status(404).json({ error: "タスクが見つかりません" });
+
+      const newTitle    = title !== undefined ? title.trim() : current.title;
+      const newStage    = stage !== undefined ? stage : current.stage;
+      const newAssignee = assignee !== undefined ? assignee : current.assignee;
+      const newDueDate  = due_date !== undefined ? (due_date || null) : current.due_date;
+      const newContent  = content !== undefined ? content : current.content;
+
+      await sql`
+        UPDATE production_tasks
+        SET title = ${newTitle}, stage = ${newStage}, assignee = ${newAssignee}, due_date = ${newDueDate}, content = ${newContent}, updated_at = NOW()
+        WHERE id = ${taskId}
+      `;
+
+      if (stage !== undefined && stage !== current.stage) {
+        await sql`
+          INSERT INTO production_task_history (production_task_id, changed_by, from_stage, to_stage)
+          VALUES (${taskId}, ${changed_by.trim()}, ${current.stage}, ${newStage})
+        `;
+      }
+
+      const [withCompany] = await sql`
+        SELECT pt.*, c.name AS company_name FROM production_tasks pt LEFT JOIN companies c ON c.id = pt.company_id WHERE pt.id = ${taskId}
+      `;
+      return res.status(200).json(withCompany);
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "DELETE") {
+    const { id } = req.body || {};
+    const taskId = parseInt(id, 10);
+    if (!taskId || isNaN(taskId)) {
+      return res.status(400).json({ error: "有効なidが必要です" });
+    }
+    try {
+      // production_task_history.production_task_idはNOT NULLの外部キーのため、
+      // 先に履歴行を削除してからタスク本体を削除する
+      await sql`DELETE FROM production_task_history WHERE production_task_id = ${taskId}`;
+      const [deleted] = await sql`DELETE FROM production_tasks WHERE id = ${taskId} RETURNING id`;
+      if (!deleted) return res.status(404).json({ error: "タスクが見つかりません" });
+      return res.status(200).json({ deleted: true, id: deleted.id });
+    } catch (err) {
+      return res.status(500).json({ error: `DB削除エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
+}
+
+// ==================== production-task-history ====================
+
+async function handleProductionTaskHistory(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  const taskId = parseInt(req.query.production_task_id, 10);
+  if (!taskId || isNaN(taskId)) {
+    return res.status(400).json({ error: "有効なproduction_task_idが必要です" });
+  }
+  try {
+    const history = await sql`
+      SELECT * FROM production_task_history WHERE production_task_id = ${taskId} ORDER BY changed_at DESC
+    `;
+    return res.status(200).json(history);
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }

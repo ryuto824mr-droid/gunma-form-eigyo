@@ -20,6 +20,7 @@ var NAV_SECONDARY_ITEMS = [
   { key: "analytics",        href: "/analytics.html",        label: "分析" },
   { key: "reports",           href: "/reports.html",          label: "レポート" },
   { key: "content-studio",  href: "/content-studio.html",  label: "コンテンツ制作", contentStudioOnly: true },
+  { key: "production",       href: "/production.html",       label: "制作進行", contentStudioOnly: true },
   { key: "work-logs",        href: "/work-logs.html",        label: "稼働管理" },
   { key: "meeting-notes",   href: "/meeting-notes.html",   label: "議事録" },
   { key: "calendar",         href: "/calendar.html",         label: "カレンダー" },
