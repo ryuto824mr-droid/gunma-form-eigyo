@@ -1390,6 +1390,37 @@ async function handleReports(req, res) {
 // 個別の送信記録を企業名・URL付きで確認したい調査用途にこちらを使う) ====================
 
 async function handleSendLogsList(req, res) {
+  if (req.method === "PATCH") {
+    // status='sent'の是正専用(2026-08時点で発覚した、フォーム自動送信の完了判定バグにより
+    // 実際には届いていない可能性がある送信をuncertainへ差し戻すため)。to_statusは
+    // 'uncertain'のみ許可し、対象もstatus='sent' AND channel='form'の行に限定する
+    const { ids, to_status } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids(配列)が必要です" });
+    }
+    if (to_status !== "uncertain") {
+      return res.status(400).json({ error: "to_statusは'uncertain'のみ対応しています(status='sent'の是正専用)" });
+    }
+    const numericIds = [...new Set(ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id)))];
+    if (numericIds.length === 0) {
+      return res.status(400).json({ error: "有効なidがありません" });
+    }
+    try {
+      const updatedIds = [];
+      for (const id of numericIds) {
+        const [row] = await sql`
+          UPDATE send_logs SET status = 'uncertain'
+          WHERE id = ${id} AND status = 'sent' AND channel = 'form'
+          RETURNING id
+        `;
+        if (row) updatedIds.push(row.id);
+      }
+      return res.status(200).json({ requested_count: numericIds.length, updated_count: updatedIds.length, updated_ids: updatedIds });
+    } catch (err) {
+      return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
+    }
+  }
+
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETのみ対応しています" });
   }
