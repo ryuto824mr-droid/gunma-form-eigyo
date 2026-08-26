@@ -151,7 +151,8 @@ async function handleDbSetup(req, res) {
         ('send_interval_seconds', '30'),
         ('skip_rejection_sites', 'true'),
         ('auto_send_hour', '9'),
-        ('skip_weekends_holidays', 'true')
+        ('skip_weekends_holidays', 'true'),
+        ('discovered_urls_retention_days', '7')
       ON CONFLICT (key) DO NOTHING
     `);
     // ab_testsテーブル追加（A/Bテスト機能用）
@@ -183,6 +184,21 @@ async function handleDbSetup(req, res) {
         discovered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // discovered_urls.project追加（プロジェクトごとに独立して重複除外するため）。
+    // 既存のurl_hostname単体UNIQUE制約はproject単位の複合UNIQUEに置き換える
+    await dbSql.query("ALTER TABLE discovered_urls ADD COLUMN IF NOT EXISTS project TEXT NOT NULL DEFAULT 'locle'");
+    await dbSql.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'discovered_urls_project_check'
+        ) THEN
+          ALTER TABLE discovered_urls ADD CONSTRAINT discovered_urls_project_check CHECK (project IN ('ozukanzukan', 'locle'));
+        END IF;
+      END $$;
+    `);
+    await dbSql.query("ALTER TABLE discovered_urls DROP CONSTRAINT IF EXISTS discovered_urls_url_hostname_key");
+    await dbSql.query("CREATE UNIQUE INDEX IF NOT EXISTS discovered_urls_project_hostname_uidx ON discovered_urls (project, url_hostname)");
     // attachmentsテーブル追加（メール添付ファイル用）
     // file_dataはBase64エンコードされたファイル内容
     await dbSql.query(`
@@ -2385,6 +2401,7 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
           project,
           ...searchParams,
           result_count: 20,
+          source: "auto_pipeline",
         });
 
         if (!discoverResult.ok) {

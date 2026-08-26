@@ -1,6 +1,6 @@
 const { filterResultsWithAI } = require("../lib/discover-ai-filter");
 const { searchPlacesAPI } = require("../lib/places-search");
-const { sql } = require("../lib/db");
+const { sql, getSettings } = require("../lib/db");
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 
@@ -96,6 +96,10 @@ module.exports = async function handler(req, res) {
 
   const body = req.body || {};
   const project = body.project === "ozukanzukan" ? "ozukanzukan" : "locle";
+  // 自動パイプライン(api/crm.jsのrunAutoPipelineForProject)からの呼び出しのみsource:"auto_pipeline"
+  // が渡される。手動検索(companies.html)では毎回フルの結果を見たいという運用上の要求があるため、
+  // discovered_urlsによる「直近で見つけたが登録しなかった候補」の除外は自動パイプラインのみに適用する
+  const source = body.source === "auto_pipeline" ? "auto_pipeline" : "manual";
 
   // 検索フォームはLOCLE/お仕事図鑑で共通の9軸(業種/都道府県/市区町村/キーワード/
   // 従業員規模/上場区分/設立年数/売上規模/採用状況)。訴求ポイント(body.appeal)は
@@ -156,11 +160,29 @@ module.exports = async function handler(req, res) {
 
     // 5. 既に登録済みの企業(companies)を除外
     const knownHostnames = await getKnownHostnames(project);
-    const beforeDuplicateFilterCount = merged.length;
+    const beforeKnownFilterCount = merged.length;
     merged = merged.filter(r => !knownHostnames.has(getHostname(r.url)));
-    const excludedDuplicateCount = beforeDuplicateFilterCount - merged.length;
+    const excludedKnownCount = beforeKnownFilterCount - merged.length;
 
-    const payload = { configured: true, results: merged, excluded_duplicate_count: excludedDuplicateCount };
+    // 6. 自動パイプラインのみ、直近(設定可能な日数、既定7日)に発見済みの候補も除外する。
+    // 手動検索で同じ条件を検索したときに毎回同じ結果しか出ないという不便を避けるため、
+    // この除外は自動パイプライン経由の呼び出し(source==="auto_pipeline")限定で適用する
+    let excludedRecentCount = 0;
+    if (source === "auto_pipeline") {
+      const settings = await getSettings();
+      const retentionDays = parseInt(settings.discovered_urls_retention_days, 10) || 7;
+      const recentHostnames = await getRecentlyDiscoveredHostnames(project, retentionDays);
+      const beforeRecentFilterCount = merged.length;
+      merged = merged.filter(r => !recentHostnames.has(getHostname(r.url)));
+      excludedRecentCount = beforeRecentFilterCount - merged.length;
+    }
+
+    // 7. 今回実際に候補として返す結果を記録する(手動・自動どちらの呼び出しでも記録する。
+    // 人が手動検索で見つけて登録しなかった候補も、自動パイプラインが翌日以降に
+    // 重複して検索・処理しないようにするため)。記録の失敗は検索処理自体に影響させない
+    await recordDiscoveredUrls(project, merged);
+
+    const payload = { configured: true, results: merged, excluded_duplicate_count: excludedKnownCount + excludedRecentCount };
     if (debugAuthorized) {
       payload.debug = {
         raw_count: braveStats.raw_count,
@@ -172,6 +194,9 @@ module.exports = async function handler(req, res) {
         query: braveStats.query,
         places_debug: placesResults.debug,
         result_count_requested: resultCount,
+        source,
+        excluded_known_count: excludedKnownCount,
+        excluded_recent_count: excludedRecentCount,
       };
     }
     return res.status(200).json(payload);
@@ -198,6 +223,34 @@ async function getKnownHostnames(project) {
     if (host) known.add(host);
   });
   return known;
+}
+
+// 指定プロジェクトで、直近retentionDays日以内にdiscovered_urlsへ記録されたホスト名一覧を返す
+// (自動パイプラインの重複検索防止用)
+async function getRecentlyDiscoveredHostnames(project, retentionDays) {
+  const rows = await sql`
+    SELECT url_hostname FROM discovered_urls
+    WHERE project = ${project} AND discovered_at >= NOW() - (${retentionDays} * INTERVAL '1 day')
+  `;
+  return new Set(rows.map(r => r.url_hostname));
+}
+
+// 今回候補として返す結果のホスト名をdiscovered_urlsに記録する(既存なら発見日時を更新し、
+// そこから改めてretentionDays日のカウントが始まるようにする)。1件の記録失敗が検索処理
+// 全体を失敗させないよう、個別にcatchする
+async function recordDiscoveredUrls(project, results) {
+  const hostnames = [...new Set(results.map(r => getHostname(r.url)).filter(Boolean))];
+  for (const hostname of hostnames) {
+    try {
+      await sql`
+        INSERT INTO discovered_urls (project, url_hostname, discovered_at)
+        VALUES (${project}, ${hostname}, NOW())
+        ON CONFLICT (project, url_hostname) DO UPDATE SET discovered_at = NOW()
+      `;
+    } catch {
+      // 記録失敗は検索処理自体には影響させない
+    }
+  }
 }
 
 async function logApiUsage(provider, endpoint) {
