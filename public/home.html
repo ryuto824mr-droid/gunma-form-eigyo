@@ -1221,7 +1221,7 @@
       if (!res.ok) throw new Error(variant.error || "バリアントの保存に失敗しました");
 
       const url = addProjectParamToUrl(
-        `/send.html?company_id=${currentFollowUp.companyId}&variant_id=${variant.id}`,
+        `/send.html?company_id=${currentFollowUp.companyId}&variant_id=${variant.id}&is_followup=1`,
         getCurrentProject()
       );
       window.location.href = url;

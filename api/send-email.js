@@ -8,7 +8,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
 
-  const { company_id, variant_id, force, tags, attachment_id, sender_id, trigger_source } = req.body || {};
+  const { company_id, variant_id, force, tags, attachment_id, sender_id, trigger_source, is_followup } = req.body || {};
   const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   if (!company_id || !variant_id) {
     return res.status(400).json({ error: "company_id, variant_idは必須です" });
@@ -36,34 +36,20 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // 再送信ガード
-  if (!force) {
+  // 再送信ガード: 同一チャネル(このAPIではemail固定)への status='sent' の送信が
+  // 期間を問わず過去に1件でもあれば拒否する(以前は24時間以内のみのチェックだった)。
+  // フォローアップメール機能からの意図的な再送信(is_followup: true)と、強制送信(force: true)は
+  // このチェックをスキップする
+  if (!force && !is_followup) {
     const [sentLog] = await sql`
       SELECT id FROM send_logs
-      WHERE company_id = ${company_id} AND status = 'sent'
+      WHERE company_id = ${company_id} AND channel = 'email' AND status = 'sent'
       LIMIT 1
     `;
     if (sentLog) {
       return res.status(400).json({
-        error: `この企業にはすでに送信済みです(send_log_id: ${sentLog.id})。再送信する場合はsend.htmlで強制送信フラグを使ってください`,
+        error: "このチャネル(フォーム/メール)には既に送信済みです。フォローアップとして送りたい場合は、送信管理の「未返信フォローアップ」機能をご利用いただくか、強制送信をオンにしてください",
       });
-    }
-  }
-
-  // 送信間隔制限(24時間)
-  if (!force) {
-    const [lastLog] = await sql`
-      SELECT id, sent_at FROM send_logs
-      WHERE company_id = ${company_id}
-      ORDER BY sent_at DESC LIMIT 1
-    `;
-    if (lastLog) {
-      const hoursSince = (Date.now() - new Date(lastLog.sent_at).getTime()) / 3600000;
-      if (hoursSince < 24) {
-        return res.status(429).json({
-          error: `最後の送信から24時間経過していません(最終送信: ${Math.floor(hoursSince)}時間前)`,
-        });
-      }
     }
   }
 

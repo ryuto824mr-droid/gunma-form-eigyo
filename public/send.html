@@ -1316,6 +1316,10 @@
   let scheduledSends = [];
   let autoSendSettings = {};
   let currentDraft = null;
+  // home.htmlの未返信フォローアップ候補から?is_followup=1付きで遷移してきた場合にtrueになる。
+  // メール送信(送信管理の通常送信は対象外)時のみ、送信済みチャネルへの再送信ガードを
+  // スキップするためのフラグとしてapi/send-email.jsに渡す
+  let isFollowupSend = false;
   let logFilters = { company: "", status: "all", date: "all", channel: "all" };
 
   const CLASSIF_LABELS = {
@@ -1394,6 +1398,7 @@
       const params = new URLSearchParams(window.location.search);
       const companyId = params.get("company_id");
       const variantId = params.get("variant_id");
+      isFollowupSend = params.get("is_followup") === "1";
       const cEl = document.getElementById("companySelect");
       const vEl = document.getElementById("variantSelect");
       if (companyId && cEl.querySelector(`option[value="${companyId}"]`)) cEl.value = companyId;
@@ -1741,6 +1746,7 @@
           attachment_id: variant?.attachment_id || null,
           sender_id: getSelectedSenderId(),
           trigger_source: "manual",
+          is_followup: isFollowupSend,
         }),
       });
       const data = await res.json();
@@ -1836,6 +1842,7 @@
           attachment_id: variant?.attachment_id || null,
           sender_id: getSelectedSenderId(),
           trigger_source: "manual",
+          is_followup: isFollowupSend,
         }),
       });
       const data = await res.json();
