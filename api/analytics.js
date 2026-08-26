@@ -1,5 +1,5 @@
 const { sql }          = require("../lib/db");
-const { fetchReplies, testGmailAuth } = require("../lib/gmail-receiver");
+const { fetchReplies, testGmailAuth, checkFormConfirmationEmails } = require("../lib/gmail-receiver");
 
 module.exports = async function handler(req, res) {
   // --- 送信スケジュール（GET/POST/DELETE） ---
@@ -19,6 +19,12 @@ module.exports = async function handler(req, res) {
   // --- 返信チェック ---
   if (req.query.action === "check-replies") {
     return handleCheckReplies(req, res);
+  }
+
+  // --- フォーム送信確認チェック(status=uncertainのフォーム送信を、お礼メール・自動返信の
+  // 受信をもってsentへ是正する) ---
+  if (req.query.action === "check-form-confirmations") {
+    return handleCheckFormConfirmations(req, res);
   }
 
   // --- Gmail認証デバッグ ---
@@ -442,6 +448,25 @@ async function handleCheckReplies(req, res) {
     return res.status(200).json(payload);
   } catch (err) {
     return res.status(500).json({ error: `返信チェックエラー: ${err.message}` });
+  }
+}
+
+async function handleCheckFormConfirmations(req, res) {
+  const debugAuthorized =
+    !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
+
+  try {
+    const result = await checkFormConfirmationEmails();
+    const payload = { checked: result.checked, confirmed: result.confirmed };
+    if (debugAuthorized) {
+      payload.debug = {
+        uncertain_count: result.uncertain_count,
+        matches: result.matches,
+      };
+    }
+    return res.status(200).json(payload);
+  } catch (err) {
+    return res.status(500).json({ error: `フォーム送信確認チェックエラー: ${err.message}` });
   }
 }
 

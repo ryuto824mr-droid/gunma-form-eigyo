@@ -626,6 +626,12 @@
     transition: opacity 150ms; z-index: 100; pointer-events: none;
   }
   .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+  .tooltip-text.tooltip-text-wide { white-space: normal; width: 200px; text-align: left; }
+  .uncertain-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; border-radius: 50%; background: #fcd34d; color: #78350f;
+    font-size: 10px; font-weight: 700; cursor: help; margin-left: 4px; vertical-align: middle;
+  }
 
   /* Spotlight Tour */
   .tour-overlay {
@@ -2506,6 +2512,9 @@
 
   function renderLogRows(log) {
     const sentAt   = log.sent_at ? new Date(log.sent_at).toLocaleString("ja-JP") : "-";
+    const statusHtml = log.status === "uncertain"
+      ? `${esc(log.status)}<span class="tooltip-wrap"><span class="uncertain-mark">?</span><span class="tooltip-text tooltip-text-wide">送信できたか未確認です。分析ページの確認チェックをお試しください</span></span>`
+      : esc(log.status || "-");
     const respHtml = log.latest_response
       ? `<span class="classif ${esc(log.latest_response)}">${CLASSIF_LABELS[log.latest_response] || log.latest_response}</span>`
       : '<span style="color:var(--gray-300)">-</span>';
@@ -2522,7 +2531,7 @@
         <td style="font-weight:500;color:var(--gray-900)">${esc(log.company_name)}</td>
         <td style="color:var(--gray-500)">${esc(log.variant_name)}</td>
         <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${sentAt}</td>
-        <td style="font-size:12px;color:var(--gray-400)">${esc(log.status || "-")}</td>
+        <td style="font-size:12px;color:var(--gray-400)">${statusHtml}</td>
         <td id="rb-${log.id}">${respHtml}</td>
         <td>${respBtnHtml}</td>
       </tr>`;

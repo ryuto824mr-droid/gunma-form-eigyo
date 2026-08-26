@@ -438,6 +438,12 @@
       </button>
       <span class="tooltip-text">Gmailの未読メールを確認して返信を自動記録</span>
     </span>
+    <span class="tooltip-wrap">
+      <button class="btn-check" id="checkFormConfirmationsBtn" onclick="checkFormConfirmations()">
+        <i data-lucide="mail-check"></i>📧 フォーム送信確認チェック
+      </button>
+      <span class="tooltip-text">status=uncertainのフォーム送信について、送信先ドメインからのお礼メール・自動返信を確認し、見つかれば送信済みに更新</span>
+    </span>
     <button class="btn-refresh" onclick="loadAnalytics()">
       <i data-lucide="refresh-cw"></i>更新
     </button>
@@ -955,6 +961,27 @@
     } finally {
       btn.disabled = false;
       btn.innerHTML = '<i data-lucide="mail-check"></i>返信チェック';
+      lucide.createIcons();
+    }
+  }
+
+  async function checkFormConfirmations() {
+    const btn   = document.getElementById("checkFormConfirmationsBtn");
+    const msgEl = document.getElementById("checkMsg");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>チェック中...';
+    msgEl.textContent = "";
+    try {
+      const res  = await fetch("/api/analytics?action=check-form-confirmations");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "失敗");
+      msgEl.textContent = `${data.checked}件確認、${data.confirmed}件が送信確認できました`;
+      if (data.confirmed > 0) loadAnalytics();
+    } catch (err) {
+      msgEl.textContent = `エラー: ${esc(err.message)}`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="mail-check"></i>📧 フォーム送信確認チェック';
       lucide.createIcons();
     }
   }
