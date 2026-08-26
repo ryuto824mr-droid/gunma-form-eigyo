@@ -58,8 +58,9 @@ module.exports = async function handler(req, res) {
     case "calendar-events":   return handleCalendarEvents(req, res);
     case "production-tasks": return handleProductionTasks(req, res);
     case "production-task-history": return handleProductionTaskHistory(req, res);
+    case "send-logs":        return handleSendLogsList(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs）を指定してください" });
   }
 };
 
@@ -1380,6 +1381,38 @@ async function handleReports(req, res) {
       weekday_response_rate,
       hour_response_rate,
     });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
+}
+
+// ==================== send-logs (生データ一覧。reportsは集計値のみのため、
+// 個別の送信記録を企業名・URL付きで確認したい調査用途にこちらを使う) ====================
+
+async function handleSendLogsList(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+  try {
+    const channel = req.query.channel || "form";
+    const status  = req.query.status  || "sent";
+    const project = req.query.project;
+    const hasProjectFilter = project === "locle" || project === "ozukanzukan";
+
+    const rows = hasProjectFilter
+      ? await sql`
+          SELECT c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
+          FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+          WHERE sl.channel = ${channel} AND sl.status = ${status} AND c.project = ${project}
+          ORDER BY sl.sent_at DESC
+        `
+      : await sql`
+          SELECT c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
+          FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+          WHERE sl.channel = ${channel} AND sl.status = ${status}
+          ORDER BY sl.sent_at DESC
+        `;
+    return res.status(200).json(rows);
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }
