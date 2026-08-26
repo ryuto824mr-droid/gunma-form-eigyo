@@ -357,6 +357,8 @@
   .wl-cal-cell.selected { border-color: var(--green-600); box-shadow: 0 0 0 2px var(--green-100); }
   .wl-cal-date-num { font-weight: 600; color: var(--gray-900); }
   .wl-cal-hours { font-size: 12px; font-weight: 700; color: var(--green-800); }
+  .wl-cal-member-dots { display: flex; gap: 2px; margin-top: 2px; }
+  .wl-cal-member-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
   .wl-cal-day-panel { margin-top: 16px; background: var(--gray-50); border-radius: var(--radius-md); padding: 16px; }
 
   @media (max-width: 700px) {
@@ -1304,7 +1306,7 @@
       const log = todayLogs.find(l => l.user_name === name);
       const sessions = todaySessions.filter(s => s.user_name === name);
       if (!log && sessions.length === 0) {
-        return `<div class="wl-team-card empty">
+        return `<div class="wl-team-card empty" style="border-left: 4px solid ${getMemberColor(name)};">
           <div class="wl-team-name">${esc(name)}</div>
           <div class="wl-team-empty">未入力</div>
         </div>`;
@@ -1318,7 +1320,7 @@
         ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
         : "";
       const confirmHtml = wlTeamConfirmHtml(log);
-      return `<div class="wl-team-card">
+      return `<div class="wl-team-card" style="border-left: 4px solid ${getMemberColor(name)};">
         <div class="wl-team-name">${esc(name)}</div>
         <div class="wl-team-sessions">${sessionsHtml}</div>
         <div class="wl-team-hours">${totalHours > 0 ? totalHours.toFixed(2) + "時間" : "—"}</div>
@@ -2221,6 +2223,27 @@
     return null;
   }
 
+  // その日に何らかの記録(出退勤セッション、または内容のある稼働ログ)がある人名の一覧を返す
+  function wlCalMembersForDate(dateKey) {
+    const names = new Set();
+    Object.keys(wlCalSessionsByUser).forEach(name => {
+      const hasSession = (wlCalSessionsByUser[name] || []).some(s => String(s.date).slice(0, 10) === dateKey);
+      const log = (wlCalLogsByUser[name] || []).find(l => String(l.date).slice(0, 10) === dateKey);
+      if (hasSession || (log && wlLogHasContent(log))) names.add(name);
+    });
+    return [...names];
+  }
+
+  // 複数人の記録がある日だけ、メンバーごとの色でドットを並べて表示する(1人だけの日は
+  // カード自体の色分けで十分なため出し分けない)
+  function wlCalMemberDotsHtml(dateKey) {
+    const names = wlCalMembersForDate(dateKey);
+    if (names.length < 2) return "";
+    return `<span class="wl-cal-member-dots">${names.map(n =>
+      `<span class="wl-cal-member-dot" style="background-color:${getMemberColor(n)};" title="${esc(n)}"></span>`
+    ).join("")}</span>`;
+  }
+
   // ヒートマップ的な背景の濃さ: 8時間を基準の濃さの目安にし、それ以上は上限で頭打ちにする
   function wlCalHeatmapStyle(hours) {
     if (hours <= 0) return "";
@@ -2265,6 +2288,7 @@
         ${mark}
         <span class="wl-cal-date-num">${c.day}</span>
         ${hours > 0 ? `<span class="wl-cal-hours">${hours.toFixed(1)}h</span>` : ""}
+        ${wlCalMemberDotsHtml(c.dateKey)}
       </div>`;
     }).join("");
   }

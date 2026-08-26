@@ -125,7 +125,11 @@
     font-size: 12px; padding: 2px; line-height: 1; opacity: 0.7;
   }
   .mn-participant-tag button:hover { opacity: 1; }
-  .mn-card-participants, .mn-detail-participants { font-size: 12px; color: var(--gray-400); }
+  .mn-card-participants, .mn-detail-participants { font-size: 12px; color: var(--gray-400); display: flex; flex-wrap: wrap; gap: 4px; }
+  .mn-participant-badge {
+    display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px;
+    border-radius: 999px; font-size: 11px; font-weight: 600;
+  }
 
   .mn-textarea-row { display: flex; gap: 8px; align-items: flex-start; }
   .mn-textarea-row .mn-raw-textarea { flex: 1; }
@@ -448,6 +452,15 @@
       <p class="mn-recording-status" id="mnRecordingStatus" hidden>🔴 録音中... もう一度タップで停止</p>
       <p class="mn-interim-preview" id="mnInterimPreview" hidden></p>
     </div>
+    <div class="mn-form-group full">
+      <label for="mnPersonalNotes">📝 手元メモ（任意）</label>
+      <div class="mn-textarea-row">
+        <textarea id="mnPersonalNotes" class="mn-raw-textarea" placeholder="議事録本文とは別に、自分用のメモ・補足を書けます(要約に統合されます)"></textarea>
+        <button type="button" class="mn-mic-btn" id="mnPersonalNotesMicBtn" onclick="togglePersonalNotesVoiceInput()" title="音声入力">🎤</button>
+      </div>
+      <p class="mn-recording-status" id="mnPersonalNotesRecordingStatus" hidden>🔴 録音中... もう一度タップで停止</p>
+      <p class="mn-interim-preview" id="mnPersonalNotesInterimPreview" hidden></p>
+    </div>
     <div class="mn-form-actions">
       <button type="button" class="btn-secondary" id="mnSummarizeBtn" onclick="summarizePreview()">要約してAIでTodo抽出</button>
       <button type="button" class="btn-primary" id="mnSaveBtn" onclick="saveMeetingNote()" disabled>保存する</button>
@@ -526,6 +539,11 @@
           <summary id="mnDetailRawTextLabel">元の議事録本文</summary>
           <pre class="mn-detail-raw-text" id="mnDetailRawText"></pre>
         </details>
+
+        <div id="mnDetailPersonalNotesWrap" hidden>
+          <p class="mn-detail-section-label">📝 手元メモ</p>
+          <pre class="mn-detail-raw-text" id="mnDetailPersonalNotes"></pre>
+        </div>
       </div>
 
       <div id="mnDetailEditMode" hidden>
@@ -571,6 +589,10 @@
         <div class="mn-form-group">
           <label for="mnEditRawText">本文</label>
           <textarea id="mnEditRawText" class="mn-raw-textarea"></textarea>
+        </div>
+        <div class="mn-form-group">
+          <label for="mnEditPersonalNotes">📝 手元メモ（任意）</label>
+          <textarea id="mnEditPersonalNotes" class="mn-raw-textarea"></textarea>
         </div>
       </div>
     </div>
@@ -666,6 +688,7 @@
     const rawText = document.getElementById("mnRawText").value.trim();
     if (!rawText) { showToast("議事録本文を入力してください", "error"); return; }
     const meetingType = document.getElementById("mnType").value;
+    const personalNotes = document.getElementById("mnPersonalNotes").value.trim();
 
     const btn = document.getElementById("mnSummarizeBtn");
     btn.disabled = true;
@@ -674,7 +697,7 @@
       const res = await fetch("/api/crm?action=summarize-meeting", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raw_text: rawText, meeting_type: meetingType }),
+        body: JSON.stringify({ raw_text: rawText, meeting_type: meetingType, personal_notes: personalNotes || null }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "要約に失敗しました");
@@ -700,6 +723,23 @@
   }
 
   // ===== 参加者(作成フォーム/編集モード共通。prefix="mn"=作成フォーム, "mnEdit"=編集モード) =====
+  // getMemberColor()(project-context.js)が返す#rrggbb形式の色を、指定した不透明度のrgba()に変換する
+  function hexToRgba(hex, alpha) {
+    const h = hex.replace("#", "");
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  // 参加者一覧をメンバーカラー付きのバッジHTMLとして返す(カード一覧・カレンダー日別パネル・詳細モーダルで共通利用)
+  function participantBadgesHtml(participants) {
+    return participants.map(p => {
+      const color = getMemberColor(p);
+      return `<span class="mn-participant-badge" style="background:${hexToRgba(color, 0.2)}; color:${color};">👤${esc(p)}</span>`;
+    }).join("");
+  }
+
   const PARTICIPANT_PRESETS = ["りゅうと", "宮田", "岡田", "山田さん"];
   const participantExtras = { mn: [], mnEdit: [] };
 
@@ -707,9 +747,12 @@
     const el = document.getElementById(prefix + "ParticipantTags");
     if (!el) return;
     const extras = participantExtras[prefix] || [];
-    el.innerHTML = extras.map((name, i) => `
-      <span class="mn-participant-tag">${esc(name)}<button type="button" onclick="removeParticipantTag('${prefix}', ${i})">✕</button></span>
-    `).join("");
+    el.innerHTML = extras.map((name, i) => {
+      const color = getMemberColor(name);
+      return `
+      <span class="mn-participant-tag" style="background:${hexToRgba(color, 0.2)}; color:${color}; border-color:${hexToRgba(color, 0.4)};">${esc(name)}<button type="button" onclick="removeParticipantTag('${prefix}', ${i})" style="color:${color};">✕</button></span>
+    `;
+    }).join("");
   }
 
   function addParticipantTag(prefix) {
@@ -750,6 +793,7 @@
   function resetForm() {
     document.getElementById("mnTitle").value = "";
     document.getElementById("mnRawText").value = "";
+    document.getElementById("mnPersonalNotes").value = "";
     document.getElementById("mnType").value = "other";
     document.getElementById("mnDate").value = todayStr();
     document.getElementById("mnPreview").hidden = true;
@@ -768,6 +812,7 @@
     const meetingType = document.getElementById("mnType").value;
     const meetingDate = document.getElementById("mnDate").value || todayStr();
     const participants = getParticipants("mn");
+    const personalNotes = document.getElementById("mnPersonalNotes").value.trim();
 
     const btn = document.getElementById("mnSaveBtn");
     btn.disabled = true;
@@ -779,6 +824,7 @@
           project: getCurrentProject(),
           title, meeting_type: meetingType, raw_text: rawText, meeting_date: meetingDate,
           summary: pendingSummary, todos: pendingTodos, participants,
+          personal_notes: personalNotes || null,
         }),
       });
       const data = await res.json();
@@ -825,7 +871,7 @@
       const doneCount = todos.filter(t => t.done).length;
       const participants = Array.isArray(n.participants) ? n.participants : [];
       const participantsHtml = participants.length > 0
-        ? `<div class="mn-card-participants">${participants.map(p => `👤${esc(p)}`).join(" ")}</div>`
+        ? `<div class="mn-card-participants">${participantBadgesHtml(participants)}</div>`
         : "";
       return `<div class="mn-card" onclick="openDetailModal(${n.id})">
         <div class="mn-card-header">
@@ -947,7 +993,7 @@
         const participants = Array.isArray(n.participants) ? n.participants : [];
         html += `<div class="mn-cal-day-note-item" onclick="openDetailModal(${n.id})">
           📝 <strong>${esc(n.title)}</strong>（${esc(typeLabel(n.meeting_type))}）
-          ${participants.length > 0 ? `<div class="mn-card-participants" style="margin-top:2px;">${participants.map(p => `👤${esc(p)}`).join(" ")}</div>` : ""}
+          ${participants.length > 0 ? `<div class="mn-card-participants" style="margin-top:2px;">${participantBadgesHtml(participants)}</div>` : ""}
           ${n.summary ? `<div style="margin-top:4px;color:var(--gray-500);">${esc(n.summary)}</div>` : ""}
         </div>`;
       });
@@ -976,7 +1022,7 @@
     const participantsEl = document.getElementById("mnDetailParticipants");
     const participants = Array.isArray(note.participants) ? note.participants : [];
     if (participants.length > 0) {
-      participantsEl.textContent = participants.map(p => `👤${p}`).join(" ");
+      participantsEl.innerHTML = participantBadgesHtml(participants);
       participantsEl.hidden = false;
     } else {
       participantsEl.hidden = true;
@@ -994,6 +1040,14 @@
     // 話者ラベル付き本文があれば、そちらの方が読みやすいため元の本文の代わりに表示する
     document.getElementById("mnDetailRawTextLabel").textContent = note.labeled_text ? "話者ラベル付き本文" : "元の議事録本文";
     document.getElementById("mnDetailRawText").textContent = note.labeled_text || note.raw_text;
+
+    const personalNotesWrap = document.getElementById("mnDetailPersonalNotesWrap");
+    if (note.personal_notes && note.personal_notes.trim()) {
+      document.getElementById("mnDetailPersonalNotes").textContent = note.personal_notes;
+      personalNotesWrap.hidden = false;
+    } else {
+      personalNotesWrap.hidden = true;
+    }
 
     renderDetailTodos();
     document.getElementById("mnDetailModal").classList.add("open");
@@ -1095,6 +1149,7 @@
     document.getElementById("mnEditParticipantInput").value = "";
     document.getElementById("mnEditSummary").value  = note.summary || "";
     document.getElementById("mnEditRawText").value  = note.raw_text;
+    document.getElementById("mnEditPersonalNotes").value = note.personal_notes || "";
 
     const rowsEl = document.getElementById("mnEditTodoRows");
     rowsEl.innerHTML = "";
@@ -1149,6 +1204,7 @@
     const summary      = document.getElementById("mnEditSummary").value.trim() || null;
     const todos         = getEditTodos();
     const participants   = getParticipants("mnEdit");
+    const personalNotes  = document.getElementById("mnEditPersonalNotes").value.trim() || null;
 
     const btn = document.getElementById("mnEditSaveBtn");
     btn.disabled = true;
@@ -1159,7 +1215,7 @@
         body: JSON.stringify({
           id: currentDetailNote.id,
           title, meeting_type: meetingType, raw_text: rawText, meeting_date: meetingDate,
-          summary, todos, participants,
+          summary, todos, participants, personal_notes: personalNotes,
         }),
       });
       const data = await res.json();
@@ -1179,13 +1235,13 @@
     }
   }
 
-  // ===== 議事録本文のリアルタイム音声入力 =====
+  // ===== 議事録本文・手元メモの音声入力(共通ファクトリ) =====
   // work-logs.htmlの音声入力実装(エラー種別ごとのメッセージ出し分け、start/stopの
   // try/catchガード)を踏襲しつつ、長時間の会議録音に対応するためcontinuous:trueで
   // 動作させ、ブラウザが録音を意図せず打ち切った場合は自動的に再開する。
-  let mnRecognition = null;
-  let mnIsRecording = false;
-
+  // 議事録本文・手元メモの2箇所で使うため、対象のtextarea/ボタン/ステータス表示のidを
+  // 引数で受け取れる形にしている(同時に2つ録音することはできないが、マイクは1つのため
+  // 実用上問題にならない)
   const MN_SPEECH_ERROR_MESSAGES = {
     "not-allowed":       "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
     "permission-denied": "マイクの使用が許可されていません。ブラウザの設定でマイクへのアクセスを許可してください。",
@@ -1195,105 +1251,126 @@
     "aborted":           "音声入力が中断されました。",
   };
 
-  function updateInterimPreview(text) {
-    const el = document.getElementById("mnInterimPreview");
-    if (text) {
-      el.textContent = text;
-      el.hidden = false;
-    } else {
-      el.textContent = "";
-      el.hidden = true;
-    }
-  }
+  function createVoiceInputController({ textareaId, micBtnId, statusId, interimId, onInputChange }) {
+    let recognition = null;
+    let isRecording = false;
 
-  function initMeetingSpeechRecognition() {
-    const micBtn = document.getElementById("mnMicBtn");
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognitionCtor) {
-      micBtn.hidden = true;
-      return;
+    function updateInterim(text) {
+      const el = document.getElementById(interimId);
+      if (text) {
+        el.textContent = text;
+        el.hidden = false;
+      } else {
+        el.textContent = "";
+        el.hidden = true;
+      }
     }
-    mnRecognition = new SpeechRecognitionCtor();
-    mnRecognition.lang = "ja-JP";
-    mnRecognition.continuous = true;
-    mnRecognition.interimResults = true;
 
-    mnRecognition.onresult = (event) => {
-      let finalTranscript = "";
-      let interimTranscript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
+    function init() {
+      const micBtn = document.getElementById(micBtnId);
+      const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognitionCtor) {
+        micBtn.hidden = true;
+        return;
+      }
+      recognition = new SpeechRecognitionCtor();
+      recognition.lang = "ja-JP";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event) => {
+        let finalTranscript = "";
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
         }
-      }
-      if (finalTranscript.trim()) {
-        const ta = document.getElementById("mnRawText");
-        ta.value = ta.value.trim() ? `${ta.value.trim()} ${finalTranscript.trim()}` : finalTranscript.trim();
-        invalidatePreview();
-      }
-      updateInterimPreview(interimTranscript);
-    };
+        if (finalTranscript.trim()) {
+          const ta = document.getElementById(textareaId);
+          ta.value = ta.value.trim() ? `${ta.value.trim()} ${finalTranscript.trim()}` : finalTranscript.trim();
+          if (onInputChange) onInputChange();
+        }
+        updateInterim(interimTranscript);
+      };
 
-    mnRecognition.onend = () => {
-      if (mnIsRecording) {
-        // 録音継続中にブラウザ側が意図せずセッションを終了させた場合は自動的に再開する
+      recognition.onend = () => {
+        if (isRecording) {
+          // 録音継続中にブラウザ側が意図せずセッションを終了させた場合は自動的に再開する
+          try {
+            recognition.start();
+            return;
+          } catch (e) {
+            // 再開自体に失敗した場合のみ録音状態を終了させる(下へフォールスルー)
+          }
+        }
+        isRecording = false;
+        micBtn.classList.remove("recording");
+        document.getElementById(statusId).hidden = true;
+        updateInterim("");
+      };
+
+      recognition.onerror = (event) => {
+        // "no-speech"は継続録音中(発話の合間の無音)によく発生する無害なタイムアウトのため、
+        // 録音自体は止めず、後続のonendでの自動再開に任せる
+        if (event.error === "no-speech" && isRecording) return;
+
+        isRecording = false;
+        micBtn.classList.remove("recording");
+        document.getElementById(statusId).hidden = true;
+        updateInterim("");
+        showToast(MN_SPEECH_ERROR_MESSAGES[event.error] || "音声入力に失敗しました", "error");
+      };
+    }
+
+    function toggle() {
+      if (!recognition) return;
+      const micBtn = document.getElementById(micBtnId);
+      const statusEl = document.getElementById(statusId);
+
+      if (isRecording) {
+        // onendの自動再開ロジックが働かないよう、stop()を呼ぶ前に明示的な停止であることを示しておく
+        isRecording = false;
         try {
-          mnRecognition.start();
-          return;
+          recognition.stop();
         } catch (e) {
-          // 再開自体に失敗した場合のみ録音状態を終了させる(下へフォールスルー)
+          micBtn.classList.remove("recording");
+          statusEl.hidden = true;
+        }
+      } else {
+        try {
+          recognition.start();
+          isRecording = true;
+          micBtn.classList.add("recording");
+          statusEl.hidden = false;
+        } catch (e) {
+          isRecording = false;
+          micBtn.classList.remove("recording");
+          statusEl.hidden = true;
+          showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
         }
       }
-      mnIsRecording = false;
-      micBtn.classList.remove("recording");
-      document.getElementById("mnRecordingStatus").hidden = true;
-      updateInterimPreview("");
-    };
-
-    mnRecognition.onerror = (event) => {
-      // "no-speech"は継続録音中(発話の合間の無音)によく発生する無害なタイムアウトのため、
-      // 録音自体は止めず、後続のonendでの自動再開に任せる
-      if (event.error === "no-speech" && mnIsRecording) return;
-
-      mnIsRecording = false;
-      micBtn.classList.remove("recording");
-      document.getElementById("mnRecordingStatus").hidden = true;
-      updateInterimPreview("");
-      showToast(MN_SPEECH_ERROR_MESSAGES[event.error] || "音声入力に失敗しました", "error");
-    };
-  }
-
-  function toggleMeetingVoiceInput() {
-    if (!mnRecognition) return;
-    const micBtn = document.getElementById("mnMicBtn");
-    const statusEl = document.getElementById("mnRecordingStatus");
-
-    if (mnIsRecording) {
-      // onendの自動再開ロジックが働かないよう、stop()を呼ぶ前に明示的な停止であることを示しておく
-      mnIsRecording = false;
-      try {
-        mnRecognition.stop();
-      } catch (e) {
-        micBtn.classList.remove("recording");
-        statusEl.hidden = true;
-      }
-    } else {
-      try {
-        mnRecognition.start();
-        mnIsRecording = true;
-        micBtn.classList.add("recording");
-        statusEl.hidden = false;
-      } catch (e) {
-        mnIsRecording = false;
-        micBtn.classList.remove("recording");
-        statusEl.hidden = true;
-        showToast("音声入力を開始できませんでした。もう一度お試しください。", "error");
-      }
     }
+
+    init();
+    return { toggle };
   }
+
+  const mnRawTextVoice = createVoiceInputController({
+    textareaId: "mnRawText", micBtnId: "mnMicBtn",
+    statusId: "mnRecordingStatus", interimId: "mnInterimPreview",
+    onInputChange: invalidatePreview,
+  });
+  function toggleMeetingVoiceInput() { mnRawTextVoice.toggle(); }
+
+  const mnPersonalNotesVoice = createVoiceInputController({
+    textareaId: "mnPersonalNotes", micBtnId: "mnPersonalNotesMicBtn",
+    statusId: "mnPersonalNotesRecordingStatus", interimId: "mnPersonalNotesInterimPreview",
+  });
+  function togglePersonalNotesVoiceInput() { mnPersonalNotesVoice.toggle(); }
 
   document.getElementById("mnDate").value = todayStr();
   // calendar.htmlなど他ページからの ?note=<id> リンクで直接その議事録の詳細を開けるようにする
@@ -1303,7 +1380,6 @@
     if (noteId && allNotes.find(n => n.id === noteId)) openDetailModal(noteId);
   }
 
-  initMeetingSpeechRecognition();
   loadNotes().then(openNoteFromUrlParam);
   initCalendarDefaults();
   loadCalendar();

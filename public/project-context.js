@@ -26,6 +26,18 @@ var PROJECT_THEME = {
   },
 };
 
+// メンバーごとの色分け(work-logs.html・meeting-notes.html・calendar.htmlで共通利用)。
+// 未登録の名前(自由入力の「その他」等)はグレーにフォールバックする
+var MEMBER_COLORS = {
+  "りゅうと": "#3b82f6",   // 青
+  "宮田": "#8b5cf6",       // 紫
+  "岡田": "#eab308",       // 黄色
+  "山田さん": "#f97316",   // オレンジ
+};
+function getMemberColor(name) {
+  return MEMBER_COLORS[name] || "#6b7280"; // 未登録の名前はグレー
+}
+
 function isValidProject(project) {
   return project === "locle" || project === "ozukanzukan";
 }

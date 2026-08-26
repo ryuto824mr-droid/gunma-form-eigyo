@@ -375,6 +375,9 @@ async function handleDbSetup(req, res) {
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS speakers_detected JSONB DEFAULT '[]'");
     // meeting_notes.participants追加（参加者記録機能用。例: ["りゅうと", "山田さん", "宮田さん"]）
     await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS participants JSONB DEFAULT '[]'");
+    // meeting_notes.personal_notes追加（「手元メモ」機能用。文字起こしとは別に個人的なメモを
+    // 保存し、要約時に両方を統合してAIに渡せるようにする）
+    await dbSql.query("ALTER TABLE meeting_notes ADD COLUMN IF NOT EXISTS personal_notes TEXT");
     // auto_pipeline_config / auto_pipeline_logsテーブル追加（完全自動営業パイプライン機能用）
     await dbSql.query(`
       CREATE TABLE IF NOT EXISTS auto_pipeline_config (
@@ -3374,12 +3377,12 @@ async function handleSummarizeMeetingPreview(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
-  const { raw_text, meeting_type } = req.body || {};
+  const { raw_text, meeting_type, personal_notes } = req.body || {};
   if (!raw_text || typeof raw_text !== "string" || !raw_text.trim()) {
     return res.status(400).json({ error: "raw_text（文字列）が必要です" });
   }
   try {
-    const result = await summarizeMeeting({ rawText: raw_text, meetingType: meeting_type });
+    const result = await summarizeMeeting({ rawText: raw_text, meetingType: meeting_type, personalNotes: personal_notes });
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ error: `要約エラー: ${err.message}` });
@@ -3408,7 +3411,7 @@ async function handleMeetingNotes(req, res) {
   }
 
   if (req.method === "POST") {
-    const { project, title, meeting_type, raw_text, meeting_date, summary: preSummary, todos: preTodos, participants } = req.body || {};
+    const { project, title, meeting_type, raw_text, meeting_date, summary: preSummary, todos: preTodos, participants, personal_notes } = req.body || {};
     if (project !== "locle" && project !== "ozukanzukan") {
       return res.status(400).json({ error: "有効なproject（locleまたはozukanzukan）が必要です" });
     }
@@ -3432,7 +3435,7 @@ async function handleMeetingNotes(req, res) {
           summary: typeof preSummary === "string" ? preSummary : null,
           todosRaw: Array.isArray(preTodos) ? preTodos.filter(t => typeof t === "string") : [],
         })
-      : summarizeMeeting({ rawText: raw_text, meetingType: type })
+      : summarizeMeeting({ rawText: raw_text, meetingType: type, personalNotes: personal_notes })
           .then(result => (result.configured === false
             ? { summary: null, todosRaw: [] }
             : { summary: result.summary, todosRaw: result.todos }))
@@ -3451,8 +3454,8 @@ async function handleMeetingNotes(req, res) {
 
     try {
       const [created] = await sql`
-        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date, labeled_text, speakers_detected, participants)
-        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date}, ${labeledText}, ${JSON.stringify(speakersDetected)}, ${JSON.stringify(participantsList)})
+        INSERT INTO meeting_notes (project, title, meeting_type, raw_text, summary, todos, meeting_date, labeled_text, speakers_detected, participants, personal_notes)
+        VALUES (${project}, ${title.trim()}, ${type}, ${raw_text.trim()}, ${summary}, ${JSON.stringify(todos)}, ${date}, ${labeledText}, ${JSON.stringify(speakersDetected)}, ${JSON.stringify(participantsList)}, ${personal_notes || null})
         RETURNING *
       `;
       return res.status(201).json({ ...created, meeting_date: toDateKey(created.meeting_date) });
@@ -3462,7 +3465,7 @@ async function handleMeetingNotes(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, summary, todos, title, meeting_type, raw_text, meeting_date, participants } = req.body || {};
+    const { id, summary, todos, title, meeting_type, raw_text, meeting_date, participants, personal_notes } = req.body || {};
     const noteId = parseInt(id, 10);
     if (!noteId || isNaN(noteId)) {
       return res.status(400).json({ error: "有効なidが必要です" });
@@ -3489,12 +3492,13 @@ async function handleMeetingNotes(req, res) {
       const newParticipants = participants !== undefined
         ? JSON.stringify(Array.isArray(participants) ? participants.filter(p => typeof p === "string" && p.trim()).map(p => p.trim()) : [])
         : JSON.stringify(current.participants || []);
+      const newPersonalNotes = personal_notes !== undefined ? (personal_notes || null) : current.personal_notes;
 
       const [updated] = await sql`
         UPDATE meeting_notes
         SET title = ${newTitle}, summary = ${newSummary}, todos = ${newTodos},
             meeting_type = ${newMeetingType}, raw_text = ${newRawText}, meeting_date = ${newMeetingDate},
-            participants = ${newParticipants}
+            participants = ${newParticipants}, personal_notes = ${newPersonalNotes}
         WHERE id = ${noteId}
         RETURNING *
       `;

@@ -152,6 +152,7 @@
   .cal-day-item.link { cursor: pointer; }
   .cal-day-item.link:hover { color: var(--gray-900); }
   .cal-day-item-sub { color: var(--gray-400); font-size: 12px; margin-top: 2px; }
+  .cal-member-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; vertical-align: middle; }
   .cal-day-item.done { text-decoration: line-through; color: var(--gray-400); }
   .cal-day-empty { font-size: 12px; color: var(--gray-400); padding: 4px 0; }
 
@@ -445,7 +446,7 @@
       const participants = Array.isArray(n.participants) ? n.participants : [];
       html += `<a class="cal-day-item link" href="/meeting-notes.html?project=${projKey}&note=${n.id}">
         📝 ${esc(n.title)}
-        ${participants.length > 0 ? `<div class="cal-day-item-sub">${participants.map(p => `👤${esc(p)}`).join(" ")}</div>` : ""}
+        ${participants.length > 0 ? `<div class="cal-day-item-sub">${participants.map(p => `<span class="cal-member-dot" style="background:${getMemberColor(p)};"></span>${esc(p)}`).join(" ")}</div>` : ""}
         ${n.summary ? `<div class="cal-day-item-sub">${esc(n.summary)}</div>` : ""}
       </a>`;
     });
@@ -467,7 +468,7 @@
     }
     el.innerHTML = logs.map(l => `
       <a class="cal-day-item link" href="/work-logs.html">
-        👤 ${esc(l.user_name)}: ${fmtTime(l.clock_in)} 〜 ${fmtTime(l.clock_out)}
+        <span class="cal-member-dot" style="background:${getMemberColor(l.user_name)};"></span>${esc(l.user_name)}: ${fmtTime(l.clock_in)} 〜 ${fmtTime(l.clock_out)}
       </a>`).join("");
   }
 
