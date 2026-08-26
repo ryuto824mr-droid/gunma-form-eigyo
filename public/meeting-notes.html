@@ -141,6 +141,7 @@
   }
   .mn-mic-btn:hover { border-color: var(--green-500); }
   .mn-mic-btn.recording { background: #fee2e2; border-color: #dc2626; animation: mnMicPulse 1s infinite; }
+  .mn-template-btn { margin-top: 6px; font-size: 12px; padding: 5px 10px; }
   @keyframes mnMicPulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
     50%      { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
@@ -418,7 +419,7 @@
       </div>
       <div class="mn-form-group">
         <label for="mnType">種別</label>
-        <select id="mnType" onchange="invalidatePreview()">
+        <select id="mnType" onchange="onMeetingTypeChange()">
           <option value="1on1">1on1</option>
           <option value="全体定例">全体定例</option>
           <option value="other" selected>その他</option>
@@ -449,6 +450,7 @@
         <textarea id="mnRawText" class="mn-raw-textarea" oninput="invalidatePreview()" placeholder="会議中のメモ・発言録などをそのまま貼り付けてください"></textarea>
         <button type="button" class="mn-mic-btn" id="mnMicBtn" onclick="toggleMeetingVoiceInput()" title="音声入力">🎤</button>
       </div>
+      <button type="button" class="btn-secondary mn-template-btn" onclick="insertMeetingTemplate('mnRawText', 'mnDate')">📋 テンプレートを挿入</button>
       <p class="mn-recording-status" id="mnRecordingStatus" hidden>🔴 録音中... もう一度タップで停止</p>
       <p class="mn-interim-preview" id="mnInterimPreview" hidden></p>
     </div>
@@ -589,6 +591,7 @@
         <div class="mn-form-group">
           <label for="mnEditRawText">本文</label>
           <textarea id="mnEditRawText" class="mn-raw-textarea"></textarea>
+          <button type="button" class="btn-secondary mn-template-btn" onclick="insertMeetingTemplate('mnEditRawText', 'mnEditDate')">📋 テンプレートを挿入</button>
         </div>
         <div class="mn-form-group">
           <label for="mnEditPersonalNotes">📝 手元メモ（任意）</label>
@@ -661,6 +664,47 @@
     if (type === "1on1") return "type-1on1";
     if (type === "全体定例") return "type-zentai";
     return "type-other";
+  }
+
+  // ===== 議事録本文テンプレート(1on1/全体定例) =====
+  function buildMeetingTemplate(dateStr) {
+    return `日時: ${dateStr}
+参加者:
+
+1. 先週のタスクの達成度
+
+
+2. 1on1での内容
+
+
+3. 今週のタスク
+
+
+4. 補足`;
+  }
+
+  // textareaIdの内容が空ならテンプレートで置き換え、既に何か入力されていれば末尾に追記する
+  // (既存の内容は消さない)。dateFieldIdの現在値(未入力ならtodayStr())をテンプレートの
+  // 日時欄に差し込む。作成フォームの本文(mnRawText)への挿入時は、内容が変わったので
+  // 既存のプレビューを無効化する
+  function insertMeetingTemplate(textareaId, dateFieldId) {
+    const ta = document.getElementById(textareaId);
+    const dateEl = document.getElementById(dateFieldId);
+    const dateStr = (dateEl && dateEl.value) || todayStr();
+    const template = buildMeetingTemplate(dateStr);
+    ta.value = ta.value.trim() ? `${ta.value.trim()}\n\n${template}` : template;
+    if (textareaId === "mnRawText") invalidatePreview();
+  }
+
+  // 種別選択時、1on1/全体定例が選ばれ、かつ本文がまだ空の場合のみテンプレートを自動挿入する
+  // (その他が選ばれた場合、および本文に既に入力がある場合は何もしない)
+  function onMeetingTypeChange() {
+    invalidatePreview();
+    const type = document.getElementById("mnType").value;
+    const ta = document.getElementById("mnRawText");
+    if ((type === "1on1" || type === "全体定例") && !ta.value.trim()) {
+      insertMeetingTemplate("mnRawText", "mnDate");
+    }
   }
 
   // ===== 議事録を作成 =====
