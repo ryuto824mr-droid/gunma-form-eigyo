@@ -1401,13 +1401,13 @@ async function handleSendLogsList(req, res) {
 
     const rows = hasProjectFilter
       ? await sql`
-          SELECT c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
+          SELECT sl.id AS send_log_id, c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
           FROM send_logs sl JOIN companies c ON c.id = sl.company_id
           WHERE sl.channel = ${channel} AND sl.status = ${status} AND c.project = ${project}
           ORDER BY sl.sent_at DESC
         `
       : await sql`
-          SELECT c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
+          SELECT sl.id AS send_log_id, c.name AS company_name, c.url AS company_url, sl.channel, sl.status, sl.sent_at
           FROM send_logs sl JOIN companies c ON c.id = sl.company_id
           WHERE sl.channel = ${channel} AND sl.status = ${status}
           ORDER BY sl.sent_at DESC
