@@ -481,7 +481,54 @@ async function handleDbSetup(req, res) {
         changed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
-    return res.status(200).json({ message: "スキーマのセットアップが完了しました", tables: statements.length });
+
+    // ==================== セットアップ後の存在確認 ====================
+    // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
+    // 反映前に実行されてしまった場合など、実際には新しいテーブルが作成されていないのに
+    // 成功レスポンスを返してしまうことがある(2026-08-23に production_tasks で発生)。
+    // schema.sqlのCREATE TABLE文名を動的に抽出し、それ以降このファイル内で個別に
+    // CREATE TABLEしているテーブルは additionalTables に手動で追記する運用とし、
+    // 実際にinformation_schema.tablesへ問い合わせて存在確認まで行う
+    const schemaTables = statements
+      .map((s) => {
+        const m = s.match(/^CREATE TABLE(?:\s+IF NOT EXISTS)?\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+        return m ? m[1] : null;
+      })
+      .filter(Boolean);
+    // schema.sql以降にこの関数内で個別にCREATE TABLEしたテーブル名。
+    // 新しいテーブルを追加したら必ずここにも追記すること
+    const additionalTables = [
+      "tasks", "settings", "ab_tests", "api_usage_logs", "discovered_urls",
+      "attachments", "work_logs", "work_sessions", "work_session_edits",
+      "generated_content", "sender_accounts", "meeting_notes",
+      "auto_pipeline_config", "auto_pipeline_logs", "send_queue",
+      "production_tasks", "production_task_history",
+    ];
+    const expectedTables = [...schemaTables, ...additionalTables];
+
+    const existingRows = await dbSql.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ANY($1)",
+      [expectedTables]
+    );
+    const existingTableSet = new Set(existingRows.map((r) => r.table_name));
+    const verifiedTables = expectedTables.filter((t) => existingTableSet.has(t));
+    const missingTables  = expectedTables.filter((t) => !existingTableSet.has(t));
+
+    if (missingTables.length > 0) {
+      return res.status(207).json({
+        message: "一部のテーブルが作成されていません。デプロイが完了しているか確認してから再実行してください",
+        tables: statements.length,
+        verified_tables: verifiedTables,
+        missing_tables: missingTables,
+      });
+    }
+
+    return res.status(200).json({
+      message: "スキーマのセットアップが完了しました",
+      tables: statements.length,
+      verified_tables: verifiedTables,
+      missing_tables: missingTables,
+    });
   } catch (err) {
     return res.status(500).json({ error: `DB実行エラー: ${err.message}` });
   }
