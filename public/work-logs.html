@@ -259,12 +259,24 @@
 
   /* 出退勤セッションのインライン編集・編集済みバッジ */
   .wl-session-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .wl-session-time { cursor: pointer; border-bottom: 1px dashed var(--gray-300); padding: 0 1px; }
-  .wl-session-time:hover { border-bottom-color: var(--green-500); color: var(--green-700); }
+  .wl-session-pair-display { cursor: pointer; border-bottom: 1px dashed var(--gray-300); padding: 0 1px; }
+  .wl-session-pair-display:hover { border-bottom-color: var(--green-500); color: var(--green-700); }
+  .wl-session-pair-edit { display: inline-flex; align-items: center; gap: 4px; }
+  .wl-session-pair-btn {
+    border: 1px solid var(--gray-200); background: var(--white); border-radius: 4px;
+    cursor: pointer; font-size: 12px; padding: 1px 6px; font-family: inherit; line-height: 1.4; color: var(--gray-700);
+  }
+  .wl-session-pair-btn:hover { border-color: var(--green-500); color: var(--green-700); }
   .wl-session-time-input {
     font-size: 13px; padding: 1px 4px; border: 1px solid var(--green-500); border-radius: 4px;
     font-family: inherit; background: var(--white); color: var(--gray-900); width: 90px;
   }
+  .wl-day-edit-toggle-btn {
+    font-size: 12px; padding: 4px 10px; border: 1px solid var(--gray-200); background: var(--white);
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; color: var(--gray-700); vertical-align: middle;
+  }
+  .wl-day-edit-toggle-btn:hover { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); }
+  .wl-day-add-session { border-top: 1px solid var(--gray-200); padding-top: 12px; margin-top: 12px; }
   .wl-session-edited-badge {
     font-size: 10px; font-weight: 600; color: var(--gray-500); background: var(--gray-100);
     border-radius: 999px; padding: 1px 6px; cursor: pointer; margin-left: 2px; border: none; font-family: inherit;
@@ -540,7 +552,7 @@
         <button class="modal-close" onclick="cancelEditorSelect()">&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="wl-todo-hint" style="margin:0;">この時刻編集を行っているのはどなたですか？</p>
+        <p class="wl-todo-hint" style="margin:0;" id="wlEditorSelectHint">この時刻編集を行っているのはどなたですか？</p>
         <div class="wl-editor-select-buttons">
           <button type="button" class="wl-editor-select-btn" onclick="confirmEditorSelect('りゅうと')">りゅうと</button>
           <button type="button" class="wl-editor-select-btn" onclick="confirmEditorSelect('宮田')">宮田</button>
@@ -1299,7 +1311,7 @@
       }
       const totalHours = sessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
       const sessionsHtml = sessions.length > 0
-        ? sessions.map(renderSessionTimeRow).join("")
+        ? sessions.map(s => renderSessionPairRow(s, "team")).join("")
         : '<div class="wl-team-empty">出退勤未記録</div>';
       const todoItems = log && Array.isArray(log.todo_items) ? log.todo_items : [];
       const todoHtml = todoItems.length > 0
@@ -1317,59 +1329,140 @@
     }).join("");
   }
 
-  // 1件のセッションの出退勤時刻表示(クリックでインライン編集)+ 編集済みバッジを描画する
-  function renderSessionTimeRow(s) {
+  // 1件のセッションの出退勤時刻表示(クリックで出勤・退勤をまとめてインライン編集)+
+  // 編集済みバッジ・削除ボタンを描画する。today's team status card・カレンダー詳細パネル・
+  // 月次サマリー表のいずれからも共通で使う(sourceでどの画面から開いたかを区別する)
+  function renderSessionPairRow(s, source) {
     const editedBadge = s.is_edited
       ? `<button type="button" class="wl-session-edited-badge" onclick="showSessionEditHistory(${s.id})">✏️編集済み</button>`
       : "";
     return `<div class="wl-session-row" data-session-id="${s.id}">
-      <span class="wl-session-time" onclick="startEditSessionTime(this, ${s.id}, 'clock_in')">${fmtTime(s.clock_in)}</span>
-      〜
-      <span class="wl-session-time" onclick="startEditSessionTime(this, ${s.id}, 'clock_out')">${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}</span>
+      ${renderSessionPairDisplay(s, source)}
       ${editedBadge}
-      <button type="button" class="wl-session-delete-btn" onclick="deleteSession(${s.id})" title="この出退勤記録を削除">🗑</button>
+      <button type="button" class="wl-session-delete-btn" onclick="deleteSession(${s.id}, '${source}', '${String(s.date).slice(0, 10)}')" title="この出退勤記録を削除">🗑</button>
     </div>`;
   }
 
-  // 出退勤時刻をクリックするとtime inputに差し替えてインライン編集できるようにする。
-  // 保存(blur/Enter)時は現在フォームで選択している氏名をedited_byとしてPATCHに含める。
-  // Escapeまたは値が未変更の場合は保存せずrenderTeamStatus()で元の表示に戻す
-  function startEditSessionTime(el, sessionId, field) {
-    if (el.querySelector("input")) return;
-    const session = todaySessions.find(s => s.id === sessionId);
-    const currentValue = session ? (field === "clock_in" ? session.clock_in : session.clock_out) : null;
-    const timeValue = currentValue ? String(currentValue).slice(0, 5) : "";
+  // 出退勤時刻ペアの読み取り専用表示。クリックすると出勤・退勤の2つのtime inputへ
+  // まとめて差し替わり、1回の保存操作で両方を更新できる
+  function renderSessionPairDisplay(s, source) {
+    const clockIn  = s.clock_in  ? String(s.clock_in).slice(0, 5)  : "";
+    const clockOut = s.clock_out ? String(s.clock_out).slice(0, 5) : "";
+    const dateStr  = String(s.date).slice(0, 10);
+    const text = `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`;
+    return `<span class="wl-session-pair-display" data-session-id="${s.id}" data-clock-in="${clockIn}" data-clock-out="${clockOut}" data-date="${dateStr}" data-source="${source}" data-user-name="${esc(s.user_name)}" onclick="startEditSessionPair(this)">${esc(text)}</span>`;
+  }
 
-    const input = document.createElement("input");
-    input.type = "time";
-    input.className = "wl-session-time-input";
-    input.value = timeValue;
+  function startEditSessionPair(el) {
+    const { sessionId, clockIn, clockOut, date, source, userName } = el.dataset;
+    const wrap = document.createElement("span");
+    wrap.className = "wl-session-pair-edit";
+    wrap.dataset.sessionId = sessionId;
+    wrap.dataset.origClockIn = clockIn;
+    wrap.dataset.origClockOut = clockOut;
+    wrap.dataset.date = date;
+    wrap.dataset.source = source;
+    wrap.dataset.userName = userName;
+    wrap.innerHTML = `
+      <input type="time" class="wl-session-time-input" value="${clockIn}">
+      <span>〜</span>
+      <input type="time" class="wl-session-time-input" value="${clockOut}">
+      <button type="button" class="wl-session-pair-btn" onclick="submitSessionPairEdit(this)" title="保存">✓</button>
+      <button type="button" class="wl-session-pair-btn" onclick="cancelSessionPairEdit(this)" title="キャンセル">✕</button>`;
+    el.replaceWith(wrap);
+    wrap.querySelector("input").focus();
+  }
 
-    let settled = false;
-    input.onblur = () => {
-      if (settled) return;
-      settled = true;
-      if (input.value && input.value !== timeValue) {
-        openEditorSelectModal({ type: "edit", sessionId, field, newValue: input.value });
-      } else {
-        renderTeamStatus();
-      }
-    };
-    input.onkeydown = (e) => {
-      if (e.key === "Enter") input.blur();
-      if (e.key === "Escape") { settled = true; renderTeamStatus(); }
-    };
+  // 変更を保存せず読み取り専用表示に戻す(値はdatasetに保持していた元の値を使い、
+  // 再フェッチせずにその場で戻せるようにする)
+  function cancelSessionPairEdit(btnEl) {
+    const wrap = btnEl.closest(".wl-session-pair-edit");
+    const { sessionId, origClockIn, origClockOut, date, source, userName } = wrap.dataset;
+    const span = document.createElement("span");
+    span.className = "wl-session-pair-display";
+    span.dataset.sessionId = sessionId;
+    span.dataset.clockIn = origClockIn;
+    span.dataset.clockOut = origClockOut;
+    span.dataset.date = date;
+    span.dataset.source = source;
+    span.dataset.userName = userName;
+    span.textContent = `${fmtTime(origClockIn)}〜${origClockOut ? fmtTime(origClockOut) : "勤務中"}`;
+    span.onclick = () => startEditSessionPair(span);
+    wrap.replaceWith(span);
+  }
 
-    el.textContent = "";
-    el.appendChild(input);
-    input.focus();
+  // 出勤・退勤どちらか(または両方)が変更されていれば、1回のPATCHでまとめて保存するため
+  // 「編集者を選択」モーダルを挟む。未変更ならそのままキャンセル扱いにする
+  function submitSessionPairEdit(btnEl) {
+    const wrap = btnEl.closest(".wl-session-pair-edit");
+    const inputs = wrap.querySelectorAll('input[type="time"]');
+    const newClockIn  = inputs[0].value;
+    const newClockOut = inputs[1].value;
+    const { sessionId, origClockIn, origClockOut, date, source, userName } = wrap.dataset;
+    if (!newClockIn) { showToast("出勤時刻を入力してください", "error"); return; }
+    if (newClockIn === origClockIn && (newClockOut || "") === (origClockOut || "")) {
+      cancelSessionPairEdit(btnEl);
+      return;
+    }
+    if (!confirmNoOverlapOrProceed(source, userName, date, newClockIn, newClockOut, parseInt(sessionId, 10))) return;
+    openEditorSelectModal({
+      type: "edit-pair",
+      sessionId: parseInt(sessionId, 10),
+      clock_in: newClockIn,
+      clock_out: newClockOut || null,
+      date,
+      source,
+    });
+  }
+
+  // ===== 重複時間帯の警告 =====
+  // aIn〜aOutとbIn〜bOutが時間的に重なっているかを判定する。clock_out未入力(勤務中)は
+  // 「その日の終わり(23:59)まで」とみなす
+  function sessionsOverlap(aIn, aOut, bIn, bOut) {
+    if (!aIn || !bIn) return false;
+    const aEnd = aOut || "23:59";
+    const bEnd = bOut || "23:59";
+    return aIn < bEnd && bIn < aEnd;
+  }
+
+  // 指定ユーザー・日付の既存セッション一覧を、現在キャッシュしているデータから取得する
+  // (source: "team"=今日のチーム状況/todaySessions, "day"=カレンダー詳細パネル/
+  // wlCalSessionsByUser, "summary"=月次サマリー/wlSummarySessionsByDate)
+  function getSiblingSessionsFor(source, userName, dateStr) {
+    if (source === "day") {
+      return (wlCalSessionsByUser[userName] || []).filter(s => String(s.date).slice(0, 10) === dateStr);
+    }
+    if (source === "summary") {
+      return wlSummarySessionsByDate[dateStr] || [];
+    }
+    return todaySessions.filter(s => s.user_name === userName && String(s.date).slice(0, 10) === dateStr);
+  }
+
+  // 保存前に同じユーザー・同じ日の他セッション(excludeSessionIdは自分自身なので除く)と
+  // 時間帯が重なっていないか確認する。重なっていれば確認ダイアログを出し、OKならそのまま
+  // 保存を続行(falseを返した場合は呼び出し元で保存処理を中断する)
+  function confirmNoOverlapOrProceed(source, userName, dateStr, clockIn, clockOut, excludeSessionId) {
+    const siblings = getSiblingSessionsFor(source, userName, dateStr);
+    const overlapping = siblings.filter(s => {
+      if (excludeSessionId != null && s.id === excludeSessionId) return false;
+      const sIn  = s.clock_in  ? String(s.clock_in).slice(0, 5)  : null;
+      const sOut = s.clock_out ? String(s.clock_out).slice(0, 5) : null;
+      return sessionsOverlap(clockIn, clockOut, sIn, sOut);
+    });
+    if (overlapping.length === 0) return true;
+    const overlapText = overlapping
+      .map(s => `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`)
+      .join("、");
+    return confirm(
+      `入力した時間帯(${clockIn}〜${clockOut || "勤務中"})が、同じ日の既存のセッション(${overlapText})と重なっています。\nこのまま保存しますか？`
+    );
   }
 
   // このセッション全体を削除する。確認ダイアログの後、時刻編集と同じ「編集者を選択」モーダルを
   // 挟んでから実際にDELETEする(誰が削除したか、time編集と同様にwork_session_editsへ記録するため)
-  function deleteSession(sessionId) {
+  function deleteSession(sessionId, source, date) {
     if (!confirm("この出退勤記録を削除しますか？")) return;
-    openEditorSelectModal({ type: "delete", sessionId });
+    openEditorSelectModal({ type: "delete", sessionId, source: source || "team", date: date || todayStr() });
   }
 
   // 「編集者を選択」モーダル: 時刻編集・セッション削除を保存する直前に必ず挟む。ページ上部
@@ -1381,13 +1474,29 @@
   function openEditorSelectModal(action) {
     pendingSessionAction = action;
     document.getElementById("wlEditorSelectOther").value = "";
+    const hintByType = {
+      "edit-pair": "この時刻編集を行っているのはどなたですか？",
+      "delete":    "この削除を行っているのはどなたですか？",
+      "add":       "この記録を入力しているのはどなたですか？",
+    };
+    document.getElementById("wlEditorSelectHint").textContent =
+      hintByType[action.type] || "この操作を行っているのはどなたですか？";
     document.getElementById("wlEditorSelectModal").classList.add("open");
   }
 
+  // インライン編集中の表示を元に戻す(編集・削除・追加自体はキャンセル)。どの画面から
+  // 開いたか(action.source)によって「元に戻す」先の再描画関数が異なるため分岐する
   function cancelEditorSelect() {
+    const action = pendingSessionAction;
     pendingSessionAction = null;
     document.getElementById("wlEditorSelectModal").classList.remove("open");
-    renderTeamStatus(); // インライン編集中の表示を元に戻す(編集・削除自体はキャンセル)
+    if (action && action.source === "day") {
+      renderWlCalDayPanel(wlCalSelectedDate);
+    } else if (action && action.source === "summary") {
+      loadSummary();
+    } else {
+      renderTeamStatus();
+    }
   }
 
   function confirmEditorSelect(editorName) {
@@ -1395,10 +1504,12 @@
     document.getElementById("wlEditorSelectModal").classList.remove("open");
     const action = pendingSessionAction;
     pendingSessionAction = null;
-    if (action.type === "edit") {
-      saveEditedSessionTime(action.sessionId, action.field, action.newValue, editorName);
+    if (action.type === "edit-pair") {
+      saveEditedSessionPair(action.sessionId, action.clock_in, action.clock_out, editorName, action.source, action.date);
     } else if (action.type === "delete") {
-      deleteSessionConfirmed(action.sessionId, editorName);
+      deleteSessionConfirmed(action.sessionId, editorName, action.source, action.date);
+    } else if (action.type === "add") {
+      createSessionWithEditor(action.user_name, action.date, action.clock_in, action.clock_out, editorName, action.source);
     }
   }
 
@@ -1408,24 +1519,37 @@
     confirmEditorSelect(name);
   }
 
-  async function saveEditedSessionTime(sessionId, field, newTimeValue, editorName) {
+  // confirmed_by_bossの変更(syncAfterConfirmChange)と同じ考え方で、出退勤セッションの
+  // 追加・編集・削除が影響しうる表示(今日のチーム状況・未確認一覧・カレンダー・月次サマリー)を
+  // まとめて再読み込みする。work_logsのidを持たない(work_sessions由来の)変更なので、
+  // 対象日付の文字列だけを受け取る版として用意する
+  function syncAfterSessionChange(dateStr) {
+    loadUnconfirmedLogs();
+    if (dateStr === todayStr()) loadTodayData();
+    loadCalendarHours(); // wlCalSelectedDateが設定済みならこの中でrenderWlCalDayPanel()も再実行される
+    if (getSummaryUserName()) loadSummary();
+  }
+
+  async function saveEditedSessionPair(sessionId, clockIn, clockOut, editorName, source, dateStr) {
     try {
       const res = await fetch("/api/crm?action=work-sessions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: sessionId, [field]: newTimeValue, edited_by: editorName }),
+        body: JSON.stringify({ id: sessionId, clock_in: clockIn, clock_out: clockOut, edited_by: editorName }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "更新に失敗しました");
-      showToast("時刻を更新しました", "success");
-      await loadTodayData();
+      showToast("出退勤時刻を更新しました", "success");
+      syncAfterSessionChange(dateStr);
     } catch (err) {
       showToast("更新に失敗しました: " + esc(err.message), "error");
-      renderTeamStatus();
+      if (source === "day") renderWlCalDayPanel(wlCalSelectedDate);
+      else if (source === "summary") loadSummary();
+      else renderTeamStatus();
     }
   }
 
-  async function deleteSessionConfirmed(sessionId, editorName) {
+  async function deleteSessionConfirmed(sessionId, editorName, source, dateStr) {
     try {
       const res = await fetch("/api/crm?action=work-sessions", {
         method: "DELETE",
@@ -1435,10 +1559,34 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "削除に失敗しました");
       showToast("出退勤記録を削除しました", "success");
-      await loadTodayData();
+      syncAfterSessionChange(dateStr);
     } catch (err) {
       showToast("削除に失敗しました: " + esc(err.message), "error");
-      renderTeamStatus();
+      if (source === "day") renderWlCalDayPanel(wlCalSelectedDate);
+      else if (source === "summary") loadSummary();
+      else renderTeamStatus();
+    }
+  }
+
+  // カレンダー詳細パネルの「＋セッションを追加」から、新しい出退勤セッションをまとめて
+  // 1回のPOSTで作成する。edited_byを渡すことでwork_session_editsに'created'として記録され、
+  // 通常のボタン打刻(edited_byなし)とは区別できる
+  async function createSessionWithEditor(userName, dateStr, clockIn, clockOut, editorName, source) {
+    try {
+      const res = await fetch("/api/crm?action=work-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_name: userName, date: dateStr, clock_in: clockIn, clock_out: clockOut, edited_by: editorName }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "追加に失敗しました");
+      showToast("出退勤記録を追加しました", "success");
+      syncAfterSessionChange(dateStr);
+    } catch (err) {
+      showToast("追加に失敗しました: " + esc(err.message), "error");
+      if (source === "day") renderWlCalDayPanel(wlCalSelectedDate);
+      else if (source === "summary") loadSummary();
+      else renderTeamStatus();
     }
   }
 
@@ -1791,6 +1939,7 @@
         const key = String(s.date).slice(0, 10);
         (sessionsByDate[key] = sessionsByDate[key] || []).push(s);
       });
+      wlSummarySessionsByDate = sessionsByDate; // 重複時間帯チェック(confirmNoOverlapOrProceed)用にキャッシュしておく
       const logsByDate = {};
       logs.forEach(l => { logsByDate[String(l.date).slice(0, 10)] = l; });
 
@@ -1803,7 +1952,7 @@
           const daySessions = sessionsByDate[date] || [];
           const log = logsByDate[date];
           const timesText = daySessions.length > 0
-            ? daySessions.map(s => `${fmtTime(s.clock_in)}〜${s.clock_out ? fmtTime(s.clock_out) : "勤務中"}`).join(", ")
+            ? daySessions.map(s => renderSessionPairDisplay(s, "summary")).join(", ")
             : "—";
           const dayHours = daySessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
           const editedMark = daySessions.some(s => s.is_edited)
@@ -1823,7 +1972,7 @@
           return `
             <tr>
               <td>${esc(date)}${editedMark}</td>
-              <td>${esc(timesText)}</td>
+              <td>${timesText}</td>
               <td>${dayHours > 0 ? dayHours.toFixed(2) : "—"}</td>
               <td>${esc(truncate(log && log.tasks_done ? log.tasks_done : "", 40))}</td>
               <td>${confirmMark}</td>
@@ -1963,8 +2112,10 @@
   // ユーザーごとに並列リクエストしてクライアント側でマージする
   let wlCalYear, wlCalMonth;
   let wlCalSelectedDate = null;
+  let wlCalDayEditMode = false; // 日別詳細パネルが読み取り専用か、入力・編集モードかを切り替えるフラグ
   let wlCalSessionsByUser = {}; // { userName: sessions[] }
   let wlCalLogsByUser = {};     // { userName: logs[] }
+  let wlSummarySessionsByDate = {}; // { dateStr: sessions[] } (月次サマリー表示中のユーザー分。重複時間帯チェック用)
 
   function initWlCalDefaults() {
     const [y, m] = todayStr().split("-").map(Number);
@@ -2127,8 +2278,20 @@
   function renderWlCalDayPanel(dateKey) {
     const panel = document.getElementById("wlCalDayPanel");
     const body = document.getElementById("wlCalDayPanelBody");
-    document.getElementById("wlCalDayPanelTitle").textContent = dateKey;
+    document.getElementById("wlCalDayPanelTitle").innerHTML =
+      `${esc(dateKey)} <button type="button" class="wl-day-edit-toggle-btn" onclick="toggleWlCalDayEditMode('${dateKey}')">${wlCalDayEditMode ? "閉じる" : "この日の記録を入力・編集"}</button>`;
+    body.innerHTML = wlCalDayEditMode
+      ? renderWlCalDayPanelEditableHtml(dateKey)
+      : renderWlCalDayPanelReadonlyHtml(dateKey);
+    panel.style.display = "block";
+  }
 
+  function toggleWlCalDayEditMode(dateKey) {
+    wlCalDayEditMode = !wlCalDayEditMode;
+    renderWlCalDayPanel(dateKey);
+  }
+
+  function renderWlCalDayPanelReadonlyHtml(dateKey) {
     const names = Object.keys(wlCalSessionsByUser);
     const multi = names.length > 1;
     const blocks = names.map(name => {
@@ -2156,8 +2319,82 @@
         ${todoHtml}
       </div>`;
     });
-    body.innerHTML = blocks.join("");
-    panel.style.display = "block";
+    return blocks.join("");
+  }
+
+  // 「この日の記録を入力・編集」モード: 各ユーザーの既存セッションを出勤・退勤まとめて
+  // 編集できる行として表示し、末尾に「＋セッションを追加」フォームを置く
+  function renderWlCalDayPanelEditableHtml(dateKey) {
+    const names = Object.keys(wlCalSessionsByUser);
+    if (names.length === 0) {
+      return '<p class="wl-team-empty">ユーザーを選択してください</p>';
+    }
+    const blocks = names.map(name => {
+      const sessions = (wlCalSessionsByUser[name] || []).filter(s => String(s.date).slice(0, 10) === dateKey);
+      const sessionsHtml = sessions.length > 0
+        ? sessions.map(s => renderSessionPairRow(s, "day")).join("")
+        : '<div class="wl-team-empty">出退勤未記録</div>';
+      return `<div style="margin-bottom:14px;">
+        <strong>${esc(name)}</strong>
+        <div class="wl-team-sessions" style="margin-top:4px;">${sessionsHtml}</div>
+      </div>`;
+    }).join("");
+
+    return `
+      ${blocks}
+      <div class="wl-day-add-session">
+        <p class="wl-section-title" style="font-size:13px; margin:0 0 8px;">＋セッションを追加</p>
+        <div class="wl-form-grid" style="margin-bottom:8px;">
+          <div class="wl-form-group">
+            <label for="wlDayAddNameSelect">氏名</label>
+            <select id="wlDayAddNameSelect" onchange="onWlDayAddNameChange()">
+              ${FIXED_MEMBERS.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("")}
+              <option value="__other__">その他</option>
+            </select>
+          </div>
+          <div class="wl-form-group" id="wlDayAddNameOtherGroup" hidden>
+            <label for="wlDayAddNameOther">氏名（その他）</label>
+            <input type="text" id="wlDayAddNameOther" placeholder="氏名を入力">
+          </div>
+          <div class="wl-form-group">
+            <label for="wlDayAddClockIn">出勤時刻</label>
+            <input type="time" id="wlDayAddClockIn">
+          </div>
+          <div class="wl-form-group">
+            <label for="wlDayAddClockOut">退勤時刻（任意）</label>
+            <input type="time" id="wlDayAddClockOut">
+          </div>
+        </div>
+        <button type="button" class="btn-primary" onclick="submitAddSession('${dateKey}')">保存</button>
+      </div>`;
+  }
+
+  function onWlDayAddNameChange() {
+    const isOther = document.getElementById("wlDayAddNameSelect").value === "__other__";
+    document.getElementById("wlDayAddNameOtherGroup").hidden = !isOther;
+  }
+
+  function getWlDayAddName() {
+    const sel = document.getElementById("wlDayAddNameSelect").value;
+    if (sel === "__other__") return document.getElementById("wlDayAddNameOther").value.trim();
+    return sel;
+  }
+
+  function submitAddSession(dateKey) {
+    const userName  = getWlDayAddName();
+    const clockIn   = document.getElementById("wlDayAddClockIn").value;
+    const clockOut  = document.getElementById("wlDayAddClockOut").value;
+    if (!userName) { showToast("氏名を入力してください", "error"); return; }
+    if (!clockIn) { showToast("出勤時刻を入力してください", "error"); return; }
+    if (!confirmNoOverlapOrProceed("day", userName, dateKey, clockIn, clockOut, null)) return;
+    openEditorSelectModal({
+      type: "add",
+      user_name: userName,
+      date: dateKey,
+      clock_in: clockIn,
+      clock_out: clockOut || null,
+      source: "day",
+    });
   }
 
   // カレンダーに現在表示中の月・現在選択中のユーザー(複数の場合は氏名ごとに別シート)を

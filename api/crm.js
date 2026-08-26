@@ -3120,7 +3120,11 @@ async function handleWorkSessions(req, res) {
   }
 
   if (req.method === "POST") {
-    const { user_name, date, clock_in } = req.body || {};
+    // clock_out・edited_byはどちらも任意。通常の出勤ボタン打刻はclock_inのみ・edited_byなしで
+    // 呼ばれる(自分自身の打刻のため「誰が」を確認する必要が無い)。カレンダー詳細パネルの
+    // 「＋セッションを追加」からは出勤・退勤をまとめて1回のPOSTで作成でき、edited_byを渡すことで
+    // 誰が入力したかをwork_session_editsに'created'として記録する(通常打刻とは区別する)
+    const { user_name, date, clock_in, clock_out, edited_by } = req.body || {};
     if (!user_name || typeof user_name !== "string" || !user_name.trim()) {
       return res.status(400).json({ error: "user_name（文字列）が必要です" });
     }
@@ -3132,10 +3136,18 @@ async function handleWorkSessions(req, res) {
     }
     try {
       const [session] = await sql`
-        INSERT INTO work_sessions (user_name, date, clock_in)
-        VALUES (${user_name.trim()}, ${date}, ${clock_in})
+        INSERT INTO work_sessions (user_name, date, clock_in, clock_out)
+        VALUES (${user_name.trim()}, ${date}, ${clock_in}, ${clock_out || null})
         RETURNING *
       `;
+      if (typeof edited_by === "string" && edited_by.trim()) {
+        await sql`
+          INSERT INTO work_session_edits (session_id, edited_by, field_changed, old_value, new_value)
+          VALUES (${session.id}, ${edited_by.trim()}, 'created', NULL, ${JSON.stringify(session)})
+        `;
+        await sql`UPDATE work_sessions SET is_edited = TRUE WHERE id = ${session.id}`;
+        session.is_edited = true;
+      }
       return res.status(201).json(session);
     } catch (err) {
       return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
