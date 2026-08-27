@@ -843,8 +843,10 @@
       const tasks     = Array.isArray(rawTasks) ? rawTasks : [];
 
       const totalCompanies = companies.length;
+      // status='sent'のみを「送信済み」として数える(companies.html/reports.html/analytics.html
+      // と定義を統一。'uncertain'は送信できたか確定していない状態のため含めない)
       const sentCount = Array.isArray(logs)
-        ? logs.filter(l => l.status === "sent" || l.status === "uncertain").length
+        ? logs.filter(l => l.status === "sent").length
         : 0;
       const errorCount = companies.filter(c => c.status === "error").length;
 

@@ -1126,25 +1126,40 @@ async function handleReports(req, res) {
     const project = req.query.project;
     const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 
+    // 月別の送信数・反応数は、送信ログの月(sent_at基準)でグルーピングし、その送信に
+    // 対応するresponses(send_log_id経由)の有無で反応数を数える(=コホート集計)。
+    // 以前は送信数を送信月、反応数を受信月でそれぞれ独立に集計してから割っていたため、
+    // 「先月送った分への今月の反応」が今月の反応率に混ざる等、月をまたいだ紐付けの
+    // ズレがあった。バリアント別/曜日別/時間帯別と同じLEFT JOIN + CASE式のパターンに統一する。
     // 合計送信数は「成功した送信」のみを分母にする(status='sent'限定)。
     // failed/uncertainは送信試行であって実際には相手に届いていないため、
     // 反応率の分母に含めると実態より低く出てしまう
-    const sendRows = hasProjectFilter
+    const monthlyCohortRows = hasProjectFilter
       ? await sql`
-          SELECT to_char(date_trunc('month', sl.sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
-          FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+          SELECT
+            to_char(date_trunc('month', sl.sent_at), 'YYYY-MM') AS month,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
+          FROM send_logs sl
+          JOIN companies c ON c.id = sl.company_id
+          LEFT JOIN responses r ON r.send_log_id = sl.id
           WHERE sl.sent_at >= ${sinceDate}::date AND c.project = ${project} AND sl.status = 'sent'
           GROUP BY 1
         `
       : await sql`
-          SELECT to_char(date_trunc('month', sent_at), 'YYYY-MM') AS month, COUNT(*)::int AS count
-          FROM send_logs
-          WHERE sent_at >= ${sinceDate}::date AND status = 'sent'
+          SELECT
+            to_char(date_trunc('month', sl.sent_at), 'YYYY-MM') AS month,
+            COUNT(DISTINCT sl.id)::int                                        AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
+          FROM send_logs sl
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.sent_at >= ${sinceDate}::date AND sl.status = 'sent'
           GROUP BY 1
         `;
-    const sendMap = {};
-    sendRows.forEach(r => { sendMap[r.month] = r.count; });
-    const monthly_sends = months.map(month => ({ month, count: sendMap[month] || 0 }));
+    const monthlyCohortMap = {};
+    monthlyCohortRows.forEach(r => { monthlyCohortMap[r.month] = r; });
+    const monthly_sends = months.map(month => ({ month, count: monthlyCohortMap[month]?.send_count || 0 }));
+    const monthly_responses = months.map(month => ({ month, count: monthlyCohortMap[month]?.response_count || 0 }));
 
     // 送信済み企業数(累計): status='sent'のユニーク企業数、期間制限なし。
     // companies.html の has_sent(非アーカイブ企業のみ)と同じ基準で揃える
@@ -1161,32 +1176,6 @@ async function handleReports(req, res) {
           JOIN send_logs sl ON sl.company_id = c.id
           WHERE c.archived = FALSE AND sl.status = 'sent'
         `;
-
-    // 反応数は「反応した企業のユニーク数」でカウントする(反応レコードの件数ではない)。
-    // 同じ企業が同一送信に対して複数回反応記録される場合があり、行数をそのまま数えると
-    // 反応率が100%を大きく超える等、実態と乖離した数字になってしまうため
-    // (紐づく送信ログがstatus='sent'のものだけをカウントする点は変更なし)
-    const responseRows = hasProjectFilter
-      ? await sql`
-          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
-                 COUNT(DISTINCT sl.company_id)::int AS count
-          FROM responses r
-          JOIN send_logs sl ON sl.id = r.send_log_id
-          JOIN companies c  ON c.id  = sl.company_id
-          WHERE r.received_at >= ${sinceDate}::date AND c.project = ${project} AND sl.status = 'sent'
-          GROUP BY 1
-        `
-      : await sql`
-          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
-                 COUNT(DISTINCT sl.company_id)::int AS count
-          FROM responses r
-          JOIN send_logs sl ON sl.id = r.send_log_id
-          WHERE r.received_at >= ${sinceDate}::date AND sl.status = 'sent'
-          GROUP BY 1
-        `;
-    const responseMap = {};
-    responseRows.forEach(r => { responseMap[r.month] = r.count; });
-    const monthly_responses = months.map(month => ({ month, count: responseMap[month] || 0 }));
 
     // チャネル別内訳も成功した送信のみを対象にする(失敗/不明な送信を含めると
     // 「実際にどのチャネルで送れているか」という成果の実態と乖離するため)
