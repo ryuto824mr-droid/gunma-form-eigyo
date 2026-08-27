@@ -116,37 +116,59 @@
   .kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
   .kanban-column {
     flex: 0 0 240px; background: var(--gray-50); border: 1px solid var(--gray-200);
+    border-top: 4px solid var(--gray-300);
     border-radius: var(--radius-md); padding: 10px; min-height: 200px;
-    display: flex; flex-direction: column; gap: 8px; transition: background 150ms;
+    display: flex; flex-direction: column; gap: 8px; transition: background 150ms, border-color 150ms;
   }
   .kanban-column.drag-over { background: var(--green-50); border-color: var(--green-500); }
+  /* ステージが進むほど列の上端の色をグレー→グリーンへ段階的に濃くし、進行度を視覚的に区切る */
+  .stage-appointment { border-top-color: var(--gray-300); }
+  .stage-interview   { border-top-color: var(--gray-400); }
+  .stage-shooting     { border-top-color: var(--green-300); }
+  .stage-editing       { border-top-color: var(--green-400); }
+  .stage-review         { border-top-color: var(--green-500); }
+  .stage-posted         { border-top-color: var(--green-700); }
   .kanban-column-header {
     font-size: 12px; font-weight: 700; color: var(--gray-700);
     display: flex; flex-direction: column; gap: 2px; align-items: flex-start; padding: 2px 4px 8px;
   }
   .kanban-column-header-top { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-  .kanban-count { font-size: 11px; color: var(--gray-400); font-weight: 500; }
+  /* 件数バッジ: 丸みのあるピル形状+ステージカラーで、列を見ただけで件数が把握できるようにする */
+  .kanban-count {
+    font-size: 12px; font-weight: 700; color: var(--gray-500); background: var(--gray-100);
+    padding: 2px 9px; border-radius: 999px; min-width: 20px; text-align: center;
+  }
+  .stage-appointment .kanban-count { background: var(--gray-200); color: var(--gray-700); }
+  .stage-interview   .kanban-count { background: var(--gray-200); color: var(--gray-700); }
+  .stage-shooting     .kanban-count { background: var(--green-100); color: var(--green-700); }
+  .stage-editing       .kanban-count { background: var(--green-100); color: var(--green-700); }
+  .stage-review         .kanban-count { background: var(--green-200); color: var(--green-700); }
+  .stage-posted         .kanban-count { background: var(--green-500); color: white; }
   .kanban-cards { display: flex; flex-direction: column; gap: 8px; min-height: 40px; }
   .kanban-card {
     background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-sm);
-    padding: 12px; cursor: grab; box-shadow: var(--shadow-sm); transition: box-shadow 150ms, opacity 150ms;
+    padding: 14px 16px; cursor: grab; box-shadow: var(--shadow-sm); transition: box-shadow 150ms, opacity 150ms, transform 150ms;
   }
-  .kanban-card:hover { box-shadow: var(--shadow-md); }
-  .kanban-card.dragging { opacity: 0.4; }
+  .kanban-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .kanban-card.dragging { opacity: 0.45; box-shadow: var(--shadow-lg); cursor: grabbing; }
   .kanban-card.pending-change { cursor: not-allowed; opacity: 0.6; }
   .kanban-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; }
-  .kanban-card-company { font-size: 12px; font-weight: 700; color: var(--gray-900); margin-bottom: 2px; }
+  .kanban-card-company { font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 3px; }
   .kanban-card-delete {
     background: none; border: none; color: var(--gray-300); cursor: pointer;
     font-size: 13px; padding: 0 2px; line-height: 1; flex-shrink: 0; transition: color 150ms;
   }
   .kanban-card-delete:hover { color: #dc2626; }
-  .kanban-card-title { font-size: 13px; font-weight: 500; margin: 0 0 6px; color: var(--gray-700); word-break: break-word; }
+  .kanban-card-title { font-size: 13px; font-weight: 500; margin: 0 0 10px; color: var(--gray-700); word-break: break-word; }
   .kanban-card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .kanban-card-assignee { font-size: 11px; color: var(--gray-500); }
-  .kanban-card-date { font-size: 11px; color: var(--gray-400); display: inline-flex; align-items: center; gap: 3px; }
-  .kanban-card-date.due-warning { color: #dc2626; font-weight: 700; }
-  .kanban-empty { font-size: 11px; color: var(--gray-300); text-align: center; padding: 12px 0; }
+  .kanban-card-assignee { font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .kanban-card-assignee-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .kanban-card-date {
+    font-size: 11px; color: var(--gray-500); font-weight: 600; display: inline-flex; align-items: center;
+    gap: 3px; background: var(--gray-100); padding: 2px 8px; border-radius: 999px;
+  }
+  .kanban-card-date.due-warning { color: #dc2626; font-weight: 700; background: #fee2e2; }
+  .kanban-empty { font-size: 12px; color: var(--gray-300); text-align: center; padding: 24px 8px; }
   .kanban-column-header-top span:first-child {
     display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600;
   }
@@ -205,7 +227,7 @@
     border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
     cursor: pointer; font-family: inherit; font-weight: 500; transition: all 150ms;
   }
-  .btn-modal-cancel:hover { background: var(--gray-50); }
+  .btn-modal-cancel:hover { background: var(--gray-50); transform: translateY(-1px); }
   .btn-modal-submit {
     padding: 7px 18px; font-size: 13px; border-radius: var(--radius-sm);
     border: none; background: linear-gradient(135deg, var(--green-500), var(--green-700)); color: white;
@@ -227,16 +249,16 @@
     border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-900);
     cursor: pointer; font-family: inherit; transition: all 150ms;
   }
-  .prod-editor-select-btn:hover { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); }
+  .prod-editor-select-btn:hover { border-color: var(--green-500); background: var(--green-50); color: var(--green-700); transform: translateY(-1px); }
   .prod-editor-select-hint { margin: 0; font-size: 12px; color: var(--gray-500); }
 
   /* 詳細モーダル */
   .prod-detail-meta { font-size: 12px; color: var(--gray-500); display: flex; flex-wrap: wrap; gap: 6px 14px; }
   .prod-detail-section-title { font-size: 13px; font-weight: 700; color: var(--gray-700); margin: 4px 0 0; }
 
-  /* Timeline (進行履歴) */
+  /* Timeline (進行履歴。crm.htmlの活動履歴タイムラインと同じ縦線+丸マーカーの構成に統一) */
   .timeline { position: relative; display: flex; flex-direction: column; }
-  .timeline-item { position: relative; padding: 0 0 16px 30px; }
+  .timeline-item { position: relative; padding: 0 0 18px 34px; }
   .timeline-item:last-child { padding-bottom: 0; }
   .timeline-item::before {
     content: ""; position: absolute; left: 10px; top: 22px; bottom: -2px; width: 2px; background: var(--gray-200);
@@ -245,8 +267,15 @@
   .timeline-marker {
     position: absolute; left: 0; top: 0; width: 22px; height: 22px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center; font-size: 11px;
-    background: var(--green-50); border: 2px solid var(--green-500); z-index: 1;
+    background: var(--gray-100); border: 2px solid var(--gray-400); z-index: 1;
   }
+  /* マーカーの色は「進んだ先のステージ」に合わせる(カンバンの列の色分けと対応させる) */
+  .timeline-marker.stage-appointment { border-color: var(--gray-400); background: var(--gray-100); }
+  .timeline-marker.stage-interview   { border-color: var(--gray-400); background: var(--gray-100); }
+  .timeline-marker.stage-shooting     { border-color: var(--green-400); background: var(--green-50); }
+  .timeline-marker.stage-editing       { border-color: var(--green-500); background: var(--green-50); }
+  .timeline-marker.stage-review         { border-color: var(--green-600); background: var(--green-100); }
+  .timeline-marker.stage-posted         { border-color: var(--green-700); background: var(--green-100); }
   .timeline-content-box {
     background: var(--gray-50); border: 1px solid var(--gray-100); border-radius: var(--radius-md);
     padding: 10px 14px;
@@ -365,11 +394,11 @@
   </div>
 
   <div id="prodMainContent">
-    <div class="panel-toolbar">
+    <div class="panel-toolbar reveal-on-scroll">
       <div></div>
       <button class="btn-add" onclick="openTaskAddModal()"><i data-lucide="plus"></i>タスクを追加</button>
     </div>
-    <div class="kanban-board" id="prodKanbanBoard"></div>
+    <div class="kanban-board reveal-on-scroll" id="prodKanbanBoard"></div>
   </div>
 
 </div>
@@ -607,7 +636,7 @@
       const stageTasks = productionTasks.filter(t => t.stage === stage);
       const cardsHtml = stageTasks.length
         ? stageTasks.map(t => renderTaskCard(t)).join("")
-        : '<p class="kanban-empty">なし</p>';
+        : '<p class="kanban-empty">まだタスクがありません</p>';
       return `
         <div class="kanban-column stage-${stage}" data-stage="${stage}"
              ondragover="onColumnDragOver(event)" ondragleave="onColumnDragLeave(event)" ondrop="onColumnDrop(event)">
@@ -642,8 +671,14 @@
         </div>
         <p class="kanban-card-title">${esc(t.title)}</p>
         <div class="kanban-card-meta">
-          <span class="kanban-card-assignee">${t.assignee ? esc(t.assignee) : ""}</span>
-          <span class="kanban-card-date ${dueWarning ? "due-warning" : ""}">${dueText ? (dueWarning ? "⚠️ " : "") + dueText : ""}</span>
+          ${t.assignee
+            ? `<span class="kanban-card-assignee" style="color:${getMemberColor(t.assignee)};">
+                 <span class="kanban-card-assignee-dot" style="background:${getMemberColor(t.assignee)};"></span>${esc(t.assignee)}
+               </span>`
+            : "<span></span>"}
+          ${dueText
+            ? `<span class="kanban-card-date ${dueWarning ? "due-warning" : ""}">${(dueWarning ? "⚠️ " : "") + dueText}</span>`
+            : "<span></span>"}
         </div>
       </div>`;
   }
@@ -901,7 +936,7 @@
       const toLabel   = PRODUCTION_STAGE_LABELS[h.to_stage] || h.to_stage;
       return `
         <div class="timeline-item">
-          <div class="timeline-marker">🔄</div>
+          <div class="timeline-marker stage-${h.to_stage}">🔄</div>
           <div class="timeline-content-box">
             <div class="timeline-header">
               <span class="timeline-stage-change">${esc(fromLabel)} → ${esc(toLabel)}</span>
@@ -916,6 +951,7 @@
   lucide.createIcons();
   initNavMenu("production");
   initProduction();
+  initScrollReveal();
 </script>
 </body>
 </html>
