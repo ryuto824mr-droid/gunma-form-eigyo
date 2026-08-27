@@ -1585,6 +1585,12 @@
   }
 
   function onShowArchivedChange() {
+    // 他のフィルタ変更(onFilterChange等)と同様にページを1に戻す。これが無いと、
+    // アーカイブ済み企業は作成日時が古く一覧の末尾側のページに現れることが多いため、
+    // ユーザーが現在1ページ目等を見ている場合、件数(サマリーバー・件数バッジ)は
+    // 増えても表示中のページの行が変わらず「チェックを入れても表示が切り替わらない」
+    // ように見えてしまう
+    currentPage = 1;
     loadCompanies();
   }
 
@@ -1791,7 +1797,11 @@
   function updateFilterCount(filteredCount) {
     const el = document.getElementById("filterCount");
     if (!el) return;
-    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all" || filters.companyIds || filters.actionNeeded;
+    // 「アーカイブ済みを表示」はfiltersオブジェクトで管理せずチェックボックスの状態を
+    // 直接読んでいるため、ここでも見て件数バッジに反映する(そうしないと、この
+    // チェックボックスだけをオン/オフしても件数バッジが変化せず、何も起きていないように見える)
+    const showArchived = document.getElementById("filterShowArchived")?.checked;
+    const isFiltering = filters.search || filters.status !== "all" || filters.automation !== "all" || filters.tag !== "all" || filters.companyIds || filters.actionNeeded || showArchived;
     el.textContent = isFiltering ? `${companies.length}社中${filteredCount}社を表示中` : "";
   }
 
