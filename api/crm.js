@@ -136,6 +136,10 @@ async function handleDbSetup(req, res) {
     `);
     // send_logs.tags追加（検索条件タグの記録用）
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS tags JSONB");
+    // send_logs.is_followup追加（フォローアップ効果測定用。api/send-email.js・api/submit-form.jsが
+    // リクエストのis_followupフラグをそのまま記録する。このカラム追加より前に送信された過去の
+    // 記録は全てFALSE扱いになる=既存データはフォローアップかどうか区別できない点に注意）
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS is_followup BOOLEAN NOT NULL DEFAULT FALSE");
     // responses.message_id追加（返信自動検出用）
     await dbSql.query("ALTER TABLE responses ADD COLUMN IF NOT EXISTS message_id TEXT");
     await dbSql.query("CREATE UNIQUE INDEX IF NOT EXISTS responses_message_id_uidx ON responses (message_id) WHERE message_id IS NOT NULL");
@@ -1407,6 +1411,184 @@ async function handleReports(req, res) {
       unique_companies: linkClickRow?.unique_companies || 0,
     };
 
+    // 初回送信 vs フォローアップ送信の反応率比較。send_logs.is_followupで判定するため、
+    // このカラム追加より前の送信は全てFALSE(初回)扱いになる(過去データは区別不能)
+    const followupRows = hasProjectFilter
+      ? await sql`
+          SELECT
+            sl.is_followup,
+            COUNT(DISTINCT sl.id)::int AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
+          FROM send_logs sl
+          JOIN companies c ON c.id = sl.company_id
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE c.project = ${project} AND sl.status = 'sent'
+          GROUP BY sl.is_followup
+        `
+      : await sql`
+          SELECT
+            sl.is_followup,
+            COUNT(DISTINCT sl.id)::int AS send_count,
+            COUNT(DISTINCT CASE WHEN r.id IS NOT NULL THEN sl.company_id END)::int AS response_count
+          FROM send_logs sl
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE sl.status = 'sent'
+          GROUP BY sl.is_followup
+        `;
+    const followupMap = {};
+    followupRows.forEach(r => { followupMap[r.is_followup] = r; });
+    const packFollowup = row => {
+      const send = row?.send_count || 0;
+      const resp = row?.response_count || 0;
+      return { send_count: send, response_count: resp, rate: send > 0 ? Math.round(resp / send * 1000) / 10 : 0 };
+    };
+    const followup_performance = {
+      initial: packFollowup(followupMap.false),
+      followup: packFollowup(followupMap.true),
+    };
+
+    // 返信内容の分類別トレンド(月次推移)。分類はclassification_breakdownと同じ4区分に正規化する
+    const classificationMonthlyRows = hasProjectFilter
+      ? await sql`
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
+                 r.classification, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          JOIN companies c  ON c.id  = sl.company_id
+          WHERE r.received_at >= ${sinceDate}::date AND c.project = ${project} AND sl.status = 'sent'
+          GROUP BY 1, 2
+        `
+      : await sql`
+          SELECT to_char(date_trunc('month', r.received_at), 'YYYY-MM') AS month,
+                 r.classification, COUNT(*)::int AS count
+          FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          WHERE r.received_at >= ${sinceDate}::date AND sl.status = 'sent'
+          GROUP BY 1, 2
+        `;
+    const classificationMonthlyMap = {};
+    classificationMonthlyRows.forEach(r => {
+      if (!classificationMonthlyMap[r.month]) {
+        classificationMonthlyMap[r.month] = { interested: 0, question: 0, declined: 0, other: 0 };
+      }
+      const key = ["interested", "question", "declined"].includes(r.classification) ? r.classification : "other";
+      classificationMonthlyMap[r.month][key] += r.count;
+    });
+    const classification_monthly_trend = months.map(month => ({
+      month,
+      ...(classificationMonthlyMap[month] || { interested: 0, question: 0, declined: 0, other: 0 }),
+    }));
+
+    // 業種別/企業規模別の反応率。company_tagsの"業種:XXX"/"規模:XXX"タグ(company-clustersと
+    // 同じprefix:値の形式、extractTagValueで抽出)が付いている企業のみ対象とする。
+    // 1社ごとに送信数・反応有無を集計してから、タグの値ごとにJS側でグルーピングする
+    // (反応数は「反応した企業のユニーク数」、送信数はその企業の送信ログ数の合計)
+    const tagPerformanceRows = hasProjectFilter
+      ? await sql`
+          SELECT c.company_tags,
+                 COUNT(DISTINCT sl.id)::int AS send_count,
+                 (COUNT(r.id) > 0) AS has_response
+          FROM companies c
+          JOIN send_logs sl ON sl.company_id = c.id AND sl.status = 'sent'
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          WHERE c.project = ${project}
+          GROUP BY c.id, c.company_tags
+        `
+      : await sql`
+          SELECT c.company_tags,
+                 COUNT(DISTINCT sl.id)::int AS send_count,
+                 (COUNT(r.id) > 0) AS has_response
+          FROM companies c
+          JOIN send_logs sl ON sl.company_id = c.id AND sl.status = 'sent'
+          LEFT JOIN responses r ON r.send_log_id = sl.id
+          GROUP BY c.id, c.company_tags
+        `;
+    const industryMap = {};
+    const sizeMap = {};
+    tagPerformanceRows.forEach(row => {
+      const tags = Array.isArray(row.company_tags) ? row.company_tags : [];
+      const industry = extractTagValue(tags, "業種");
+      const size = extractTagValue(tags, "規模");
+      if (industry) {
+        if (!industryMap[industry]) industryMap[industry] = { send_count: 0, response_count: 0 };
+        industryMap[industry].send_count += row.send_count;
+        if (row.has_response) industryMap[industry].response_count += 1;
+      }
+      if (size) {
+        if (!sizeMap[size]) sizeMap[size] = { send_count: 0, response_count: 0 };
+        sizeMap[size].send_count += row.send_count;
+        if (row.has_response) sizeMap[size].response_count += 1;
+      }
+    });
+    const packTagGroup = (key, name, v) => ({
+      [key]: name,
+      send_count: v.send_count,
+      response_count: v.response_count,
+      rate: v.send_count > 0 ? Math.round(v.response_count / v.send_count * 1000) / 10 : 0,
+    });
+    const industry_performance = Object.entries(industryMap)
+      .map(([name, v]) => packTagGroup("industry", name, v))
+      .sort((a, b) => b.send_count - a.send_count);
+    const company_size_performance = Object.entries(sizeMap)
+      .map(([name, v]) => packTagGroup("size", name, v))
+      .sort((a, b) => b.send_count - a.send_count);
+
+    // 送信からの経過日数別の反応分布。1つのsend_logに複数のresponses(同じ企業から複数回の
+    // 返信)がある場合、そのまま responses を COUNT(*) すると同じ送信が複数の区分に(あるいは
+    // 同じ区分に複数回)カウントされてしまい、「反応数=反応した企業/送信のユニーク数」という
+    // 他の指標(variant_performance・曜日別・時間帯別など)と一貫しなくなる。そのため、まず
+    // send_logごとに最初の反応(MIN(received_at))だけを抽出してから経過日数を区分する
+    // (2通目以降の返信は「初回の反応までの日数」という観点では対象外)
+    const responseDaysRows = hasProjectFilter
+      ? await sql`
+          SELECT
+            CASE
+              WHEN days < 1  THEN '0'
+              WHEN days < 3  THEN '1-2'
+              WHEN days < 8  THEN '3-7'
+              WHEN days < 15 THEN '8-14'
+              ELSE '15+'
+            END AS bucket,
+            COUNT(*)::int AS count
+          FROM (
+            SELECT EXTRACT(EPOCH FROM (MIN(r.received_at) - sl.sent_at)) / 86400.0 AS days
+            FROM send_logs sl
+            JOIN companies c ON c.id = sl.company_id
+            JOIN responses r ON r.send_log_id = sl.id
+            WHERE c.project = ${project} AND sl.status = 'sent'
+            GROUP BY sl.id, sl.sent_at
+          ) first_response
+          GROUP BY 1
+        `
+      : await sql`
+          SELECT
+            CASE
+              WHEN days < 1  THEN '0'
+              WHEN days < 3  THEN '1-2'
+              WHEN days < 8  THEN '3-7'
+              WHEN days < 15 THEN '8-14'
+              ELSE '15+'
+            END AS bucket,
+            COUNT(*)::int AS count
+          FROM (
+            SELECT EXTRACT(EPOCH FROM (MIN(r.received_at) - sl.sent_at)) / 86400.0 AS days
+            FROM send_logs sl
+            JOIN responses r ON r.send_log_id = sl.id
+            WHERE sl.status = 'sent'
+            GROUP BY sl.id, sl.sent_at
+          ) first_response
+          GROUP BY 1
+        `;
+    const responseDaysMap = {};
+    responseDaysRows.forEach(r => { responseDaysMap[r.bucket] = r.count; });
+    const response_days_distribution = [
+      { label: "当日(0日)",  count: responseDaysMap["0"]    || 0 },
+      { label: "1〜2日",     count: responseDaysMap["1-2"]  || 0 },
+      { label: "3〜7日",     count: responseDaysMap["3-7"]  || 0 },
+      { label: "8〜14日",    count: responseDaysMap["8-14"] || 0 },
+      { label: "15日以上",   count: responseDaysMap["15+"]  || 0 },
+    ];
+
     return res.status(200).json({
       monthly_sends,
       monthly_responses,
@@ -1420,6 +1602,11 @@ async function handleReports(req, res) {
       weekday_response_rate,
       hour_response_rate,
       link_click_stats,
+      followup_performance,
+      classification_monthly_trend,
+      industry_performance,
+      company_size_performance,
+      response_days_distribution,
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });

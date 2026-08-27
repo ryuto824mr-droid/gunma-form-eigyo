@@ -125,8 +125,8 @@ module.exports = async function handler(req, res) {
   // send_logsに記録
   const tagsJson = Array.isArray(tags) && tags.length > 0 ? JSON.stringify(tags) : null;
   const [logEntry] = await sql`
-    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
-    VALUES (${company_id}, ${variant_id}, 'form', ${logStatus}, 'auto', NOW(), ${tagsJson})
+    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags, is_followup)
+    VALUES (${company_id}, ${variant_id}, 'form', ${logStatus}, 'auto', NOW(), ${tagsJson}, ${!!is_followup})
     RETURNING *
   `;
 

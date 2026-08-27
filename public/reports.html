@@ -532,6 +532,48 @@
         </div>
       </section>
 
+      <!-- フォローアップ効果 -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>フォローアップ効果</h2>
+        <p class="section-sub">初回送信とフォローアップ送信の反応率比較(累計・status='sent'のみ。このカラムの追加以前に送信された記録は全て「初回」扱いになります)</p>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="followupChart"></canvas>
+          <p class="empty" id="followupEmpty" hidden>まだデータが不足しています</p>
+        </div>
+      </section>
+
+      <!-- 返信内容の分類別トレンド -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>返信内容の分類別トレンド</h2>
+        <p class="section-sub">過去6ヶ月・反応の受信月別の分類内訳(累計のclassification_breakdownと同じ4区分)</p>
+        <div class="chart-wrap">
+          <canvas id="classificationTrendChart"></canvas>
+          <p class="empty" id="classificationTrendEmpty" hidden>まだデータが不足しています</p>
+        </div>
+      </section>
+
+      <!-- 業種別・企業規模別パフォーマンス -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>業種・企業規模別パフォーマンス</h2>
+        <p class="section-sub">企業タグ「業種:◯◯」「規模:◯◯」が設定されている企業のみ対象(累計・status='sent'のみ)</p>
+
+        <h3 class="subsection-title">業種別</h3>
+        <div class="table-wrap" id="industryTableWrap"></div>
+
+        <h3 class="subsection-title">企業規模別</h3>
+        <div class="table-wrap" id="sizeTableWrap"></div>
+      </section>
+
+      <!-- 送信からの経過日数別の反応傾向 -->
+      <section class="stat-section reveal-on-scroll">
+        <h2>反応までの日数分布</h2>
+        <p class="section-sub">送信から「最初の」反応受信までの経過日数の分布(累計・status='sent'のみ、1送信につき1件のみ集計)。何日待てば反応が来やすいかの目安</p>
+        <div class="chart-wrap">
+          <canvas id="responseDaysChart"></canvas>
+          <p class="empty" id="responseDaysEmpty" hidden>まだデータが不足しています</p>
+        </div>
+      </section>
+
     </div>
   </div>
 
@@ -551,6 +593,9 @@
   let classificationChartInstance = null;
   let weekdayChartInstance = null;
   let hourChartInstance = null;
+  let followupChartInstance = null;
+  let classificationTrendChartInstance = null;
+  let responseDaysChartInstance = null;
   let lastReportData = null;
 
   function animateCount(el, target, isFloat = false, suffix = "") {
@@ -620,6 +665,10 @@
     renderClassificationSection(data.classification_breakdown, data.response_time_avg_days, data.link_click_stats);
     renderWeekdaySection(data.weekday_response_rate);
     renderHourSection(data.hour_response_rate);
+    renderFollowupSection(data.followup_performance);
+    renderClassificationTrendSection(data.classification_monthly_trend);
+    renderIndustrySizeSection(data.industry_performance, data.company_size_performance);
+    renderResponseDaysSection(data.response_days_distribution);
     lucide.createIcons();
   }
 
@@ -1006,6 +1055,163 @@
         scales: {
           x: { grid: { display: false }, ticks: { color: textColor } },
           y: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: v => v + "%" }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  // ===== フォローアップ効果 =====
+  function renderFollowupSection(followupPerformance) {
+    const data = followupPerformance || { initial: { send_count: 0, response_count: 0, rate: 0 }, followup: { send_count: 0, response_count: 0, rate: 0 } };
+    const canvas  = document.getElementById("followupChart");
+    const emptyEl = document.getElementById("followupEmpty");
+    const totalSends = data.initial.send_count + data.followup.send_count;
+
+    if (followupChartInstance) { followupChartInstance.destroy(); followupChartInstance = null; }
+
+    if (totalSends < 3) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+    const rows = [data.initial, data.followup];
+
+    followupChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: ["初回送信", "フォローアップ送信"],
+        datasets: [{ label: "反応率", data: rows.map(r => r.rate), backgroundColor: [getProjectColor(getCurrentProject()), "#94a3b8"], borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => {
+            const r = rows[ctx.dataIndex];
+            return `反応率 ${r.rate}%（送信${r.send_count}件中${r.response_count}件）`;
+          } } },
+        },
+        scales: {
+          x: { beginAtZero: true, max: 100, ticks: { color: textColor, callback: v => v + "%" }, grid: { color: gridColor } },
+          y: { grid: { display: false }, ticks: { color: textColor } },
+        },
+      },
+    });
+  }
+
+  // ===== 返信内容の分類別トレンド =====
+  function renderClassificationTrendSection(trendData) {
+    const stats = trendData || [];
+    const total = stats.reduce((s, r) => s + r.interested + r.question + r.declined + r.other, 0);
+    const canvas  = document.getElementById("classificationTrendChart");
+    const emptyEl = document.getElementById("classificationTrendEmpty");
+
+    if (classificationTrendChartInstance) { classificationTrendChartInstance.destroy(); classificationTrendChartInstance = null; }
+
+    if (total < 3) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+    const colors = [getProjectColor(getCurrentProject()), "#64748b", "#dc2626", "#94a3b8"];
+
+    classificationTrendChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => monthLabel(r.month)),
+        datasets: [
+          { label: "興味あり", data: stats.map(r => r.interested), backgroundColor: colors[0] },
+          { label: "質問",     data: stats.map(r => r.question),   backgroundColor: colors[1] },
+          { label: "お断り",   data: stats.map(r => r.declined),   backgroundColor: colors[2] },
+          { label: "その他",   data: stats.map(r => r.other),      backgroundColor: colors[3] },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: true, position: "top", labels: { boxWidth: 12, font: { size: 11 }, color: textColor } } },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { color: textColor } },
+          y: { stacked: true, beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: gridColor } },
+        },
+      },
+    });
+  }
+
+  // ===== 業種別・企業規模別パフォーマンス =====
+  function renderTagPerformanceTable(wrapId, stats, keyName, colLabel) {
+    const wrap = document.getElementById(wrapId);
+    if (!stats || !stats.length) {
+      wrap.innerHTML = '<p class="empty">データがありません（該当のタグが設定された企業がまだありません）</p>';
+      return;
+    }
+    const rows = stats.map(r => {
+      const rate = Number(r.rate);
+      const rc = rate >= 20 ? "rate-hi" : (rate === 0 ? "rate-lo" : "");
+      return `
+        <tr>
+          <td>${esc(r[keyName])}</td>
+          <td class="r">${r.send_count}</td>
+          <td class="r">${r.response_count}</td>
+          <td class="r"><span class="${rc}">${rate}%</span></td>
+        </tr>`;
+    }).join("");
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>${colLabel}</th><th class="r">送信数</th><th class="r">反応数</th><th class="r">反応率</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function renderIndustrySizeSection(industryPerformance, sizePerformance) {
+    renderTagPerformanceTable("industryTableWrap", industryPerformance, "industry", "業種");
+    renderTagPerformanceTable("sizeTableWrap", sizePerformance, "size", "規模");
+  }
+
+  // ===== 送信からの経過日数別の反応傾向 =====
+  function renderResponseDaysSection(distribution) {
+    const stats = distribution || [];
+    const total = stats.reduce((s, r) => s + r.count, 0);
+    const canvas  = document.getElementById("responseDaysChart");
+    const emptyEl = document.getElementById("responseDaysEmpty");
+
+    if (responseDaysChartInstance) { responseDaysChartInstance.destroy(); responseDaysChartInstance = null; }
+
+    if (total < 3) {
+      canvas.hidden = true;
+      emptyEl.hidden = false;
+      return;
+    }
+    canvas.hidden = false;
+    emptyEl.hidden = true;
+
+    const dark = isDarkMode();
+    const textColor = dark ? "#cbd5e1" : "#334155";
+    const gridColor = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+
+    responseDaysChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: {
+        labels: stats.map(r => r.label),
+        datasets: [{ label: "初回反応があった送信数", data: stats.map(r => r.count), backgroundColor: getProjectColor(getCurrentProject()), borderRadius: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: textColor } },
+          y: { beginAtZero: true, ticks: { precision: 0, color: textColor }, grid: { color: gridColor } },
         },
       },
     });

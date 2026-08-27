@@ -106,8 +106,8 @@ module.exports = async function handler(req, res) {
   // 置換するにはsend_log_idが必要なため)。'pending'はsend_logs.statusのデフォルト値と
   // 同じで、以降の処理で必ずsent/failedに更新される一時的な状態
   const [pendingLog] = await sql`
-    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
-    VALUES (${company_id}, ${variant_id}, 'email', 'pending', 'manual', NOW(), ${tagsJson})
+    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags, is_followup)
+    VALUES (${company_id}, ${variant_id}, 'email', 'pending', 'manual', NOW(), ${tagsJson}, ${!!is_followup})
     RETURNING *
   `;
 
