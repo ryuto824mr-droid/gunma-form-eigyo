@@ -153,6 +153,7 @@
   .wl-team-name { font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
   .wl-team-sessions { font-size: 13px; color: var(--gray-700); line-height: 1.5; }
   .wl-team-hours { font-size: 12px; color: var(--green-700); font-weight: 700; margin: 4px 0; }
+  .wl-team-monthly { font-size: 11px; color: var(--gray-400); margin: 0 0 4px; }
   .wl-team-tasks { font-size: 12px; color: var(--gray-500); line-height: 1.6; white-space: pre-wrap; }
   .wl-team-empty { font-size: 13px; color: var(--gray-400); font-style: italic; margin-top: 4px; }
   .wl-team-todo { font-size: 12px; color: var(--gray-500); margin-top: 6px; }
@@ -1258,19 +1259,32 @@
   // ===== 今日のチーム状況 =====
   // work_logs(やったこと/Todo/確認)とwork_sessions(出退勤セッション)を両方取得し、
   // user_nameで突き合わせてから描画する
+  let monthlyHoursByUser = {}; // { user_name: 今月の累計稼働時間(h) } (今日のチーム状況カード用)
+
   async function loadTodayData(populateDrafts) {
     const grid = document.getElementById("wlTeamGrid");
     try {
-      const [logsRes, sessionsRes] = await Promise.all([
+      const monthFrom = todayStr().slice(0, 7) + "-01";
+      const [logsRes, sessionsRes, monthlyRes] = await Promise.all([
         fetch("/api/crm?action=work-logs&date=" + todayStr()),
         fetch("/api/crm?action=work-sessions&date=" + todayStr()),
+        fetch("/api/crm?action=work-sessions&from=" + monthFrom + "&to=" + todayStr()),
       ]);
       const logsData = await logsRes.json();
       const sessionsData = await sessionsRes.json();
+      const monthlyData = await monthlyRes.json();
       if (!logsRes.ok) throw new Error(logsData.error || "取得に失敗しました");
       if (!sessionsRes.ok) throw new Error(sessionsData.error || "取得に失敗しました");
       todayLogs = Array.isArray(logsData) ? logsData : [];
       todaySessions = Array.isArray(sessionsData) ? sessionsData : [];
+
+      monthlyHoursByUser = {};
+      if (monthlyRes.ok && Array.isArray(monthlyData)) {
+        monthlyData.forEach(s => {
+          if (s.work_hours == null) return;
+          monthlyHoursByUser[s.user_name] = (monthlyHoursByUser[s.user_name] || 0) + Number(s.work_hours);
+        });
+      }
     } catch (err) {
       grid.innerHTML = `<p style="font-size:13px; color:#dc2626;">読み込みに失敗しました: ${esc(err.message)}</p>`;
       return;
@@ -1309,6 +1323,7 @@
         return `<div class="wl-team-card empty" style="border-left: 4px solid ${getMemberColor(name)};">
           <div class="wl-team-name">${esc(name)}</div>
           <div class="wl-team-empty">未入力</div>
+          <div class="wl-team-monthly">今月: ${(monthlyHoursByUser[name] || 0).toFixed(1)}h</div>
         </div>`;
       }
       const totalHours = sessions.reduce((sum, s) => sum + (s.work_hours != null ? Number(s.work_hours) : 0), 0);
@@ -1320,10 +1335,13 @@
         ? `<div class="wl-team-todo">Todo: ${todoItems.filter(t => t.done).length}/${todoItems.length}完了</div>`
         : "";
       const confirmHtml = wlTeamConfirmHtml(log);
+      const monthlyHours = monthlyHoursByUser[name] || 0;
+      const monthlyHtml = `<div class="wl-team-monthly">今月: ${monthlyHours.toFixed(1)}h</div>`;
       return `<div class="wl-team-card" style="border-left: 4px solid ${getMemberColor(name)};">
         <div class="wl-team-name">${esc(name)}</div>
         <div class="wl-team-sessions">${sessionsHtml}</div>
         <div class="wl-team-hours">${totalHours > 0 ? totalHours.toFixed(2) + "時間" : "—"}</div>
+        ${monthlyHtml}
         <div class="wl-team-tasks">${esc(truncate(log && log.tasks_done ? log.tasks_done : "未入力", 60))}</div>
         ${todoHtml}
         ${confirmHtml}

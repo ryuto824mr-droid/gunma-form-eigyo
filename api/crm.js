@@ -3154,6 +3154,17 @@ async function handleWorkSessions(req, res) {
         return res.status(200).json({ sessions, total_hours: Math.round(totalHours * 100) / 100 });
       }
 
+      if (!userName && !req.query.date && (req.query.from || req.query.to)) {
+        // ユーザー指定なし・期間指定あり: 全員分の期間内セッション(「今日のチーム状況」カードの
+        // 「今月の累計稼働時間」表示用。ユーザーごとの合計はフロント側でuser_nameごとに集計する)
+        const from = req.query.from || `${todayJst().slice(0, 7)}-01`;
+        const to   = req.query.to   || todayJst();
+        const sessions = await sql`
+          SELECT * FROM work_sessions WHERE date >= ${from} AND date <= ${to} ORDER BY user_name ASC, date ASC, clock_in ASC
+        `;
+        return res.status(200).json(sessions);
+      }
+
       const date = req.query.date || todayJst();
       if (userName) {
         // 特定ユーザー・特定日の全セッション(出勤ボタンの状態判定・当日ステータス表示用)
@@ -3420,6 +3431,26 @@ function toDateKey(value) {
   return value; // 既に文字列の場合はそのまま返す
 }
 
+// meeting_notes.summaryは新方式(先週の達成度/会議内容/今週のタスク/補足の4項目に構造化した
+// オブジェクト)と、それ以前に保存された旧方式(単一テキスト)の両方を受け付ける。オブジェクトが
+// 渡された場合は{section1..4}の形にJSON文字列化してTEXT列にそのまま保存し(スキーマ変更はせず、
+// 読み取り側=public/meeting-notes.htmlでJSON.parseを試みて新旧どちらの形式かを判別させる)、
+// 4項目すべて空ならnull(要約なし)として扱う
+function serializeSummary(s) {
+  if (s === null || s === undefined) return null;
+  if (typeof s === "string") return s.trim() ? s : null;
+  if (typeof s === "object") {
+    const sections = {
+      section1: typeof s.section1 === "string" ? s.section1.trim() : "",
+      section2: typeof s.section2 === "string" ? s.section2.trim() : "",
+      section3: typeof s.section3 === "string" ? s.section3.trim() : "",
+      section4: typeof s.section4 === "string" ? s.section4.trim() : "",
+    };
+    return Object.values(sections).some(v => v) ? JSON.stringify(sections) : null;
+  }
+  return null;
+}
+
 // プレビュー用: 保存はせず、要約・Todo抽出結果だけを返す
 // (public/meeting-notes.htmlの「要約してAIでTodo抽出」ボタンから呼ばれる)
 async function handleSummarizeMeetingPreview(req, res) {
@@ -3481,13 +3512,13 @@ async function handleMeetingNotes(req, res) {
     // 話者分離(identifySpeakers)はプレビューの仕組みが無いため常にここで並行実行する。
     const summaryPromise = (preSummary !== undefined || preTodos !== undefined)
       ? Promise.resolve({
-          summary: typeof preSummary === "string" ? preSummary : null,
+          summary: serializeSummary(preSummary),
           todosRaw: Array.isArray(preTodos) ? preTodos.filter(t => typeof t === "string") : [],
         })
       : summarizeMeeting({ rawText: raw_text, meetingType: type, personalNotes: personal_notes })
           .then(result => (result.configured === false
             ? { summary: null, todosRaw: [] }
-            : { summary: result.summary, todosRaw: result.todos }))
+            : { summary: serializeSummary(result.summary), todosRaw: result.todos }))
           .catch(() => ({ summary: null, todosRaw: [] })); // AI要約に失敗しても議事録自体の保存は継続する
 
     const speakersPromise = identifySpeakers({ rawText: raw_text })
@@ -3533,7 +3564,7 @@ async function handleMeetingNotes(req, res) {
       if (!current) return res.status(404).json({ error: "議事録が見つかりません" });
 
       const newTitle        = title        !== undefined ? title.trim()      : current.title;
-      const newSummary      = summary      !== undefined ? summary           : current.summary;
+      const newSummary      = summary      !== undefined ? serializeSummary(summary) : current.summary;
       const newTodos        = todos        !== undefined ? JSON.stringify(todos) : JSON.stringify(current.todos);
       const newMeetingType  = meeting_type !== undefined ? meeting_type      : current.meeting_type;
       const newRawText      = raw_text     !== undefined ? raw_text.trim()   : current.raw_text;
@@ -3635,7 +3666,10 @@ async function handleCalendarEvents(req, res) {
     const [locle, ozukanzukan, workLogs] = await Promise.all([
       aggregateMeetingCalendar("locle", from, to),
       aggregateMeetingCalendar("ozukanzukan", from, to),
-      sql`SELECT user_name, date, clock_in, clock_out FROM work_logs WHERE date >= ${from} AND date <= ${to}`,
+      // 出退勤時刻はwork_sessions(複数セッション対応後の新テーブル)から取得する。
+      // work_logs.clock_in/clock_outは後方互換のため残っているだけで、複数セッション機能の
+      // 追加以降は書き込まれずnullのままのため、ここから取得すると常に空欄表示になってしまう
+      sql`SELECT user_name, date, clock_in, clock_out FROM work_sessions WHERE date >= ${from} AND date <= ${to} ORDER BY user_name ASC, clock_in ASC, id ASC`,
     ]);
 
     const workLogsByDate = {};

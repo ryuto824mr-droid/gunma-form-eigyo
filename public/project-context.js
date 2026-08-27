@@ -38,6 +38,55 @@ function getMemberColor(name) {
   return MEMBER_COLORS[name] || "#6b7280"; // 未登録の名前はグレー
 }
 
+// 議事録(meeting_notes.summary)は先週の達成度/会議内容/今週のタスク/補足の4項目に構造化した
+// オブジェクトをJSON文字列化してDBに保存している(新方式)。それ以前に保存された議事録は
+// 単一テキストのまま(旧方式)残っているため、読み取り側は必ずこの関数を通して判別する。
+// meeting-notes.html・calendar.htmlで共通利用する
+var MEETING_SUMMARY_SECTION_KEYS = ["section1", "section2", "section3", "section4"];
+function parseMeetingSummary(raw) {
+  if (!raw) return null;
+  if (typeof raw === "object") {
+    return MEETING_SUMMARY_SECTION_KEYS.some(function (k) { return raw[k]; })
+      ? { structured: true, sections: raw }
+      : null;
+  }
+  try {
+    var parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && MEETING_SUMMARY_SECTION_KEYS.some(function (k) { return typeof parsed[k] === "string"; })) {
+      return { structured: true, sections: parsed };
+    }
+  } catch (e) {
+    // JSONとして解析できない = 旧方式の単一テキストとみなす
+  }
+  return { structured: false, text: raw };
+}
+
+// meeting_typeに応じてsection2の見出しを読み替える(lib/meeting-summarizer.jsのsection2Label()と対応)
+function meetingSummarySection2Label(meetingType) {
+  return meetingType === "全体定例" ? "議題・共有事項" : "1on1での内容";
+}
+var MEETING_SUMMARY_SECTION_LABELS = {
+  section1: "先週のタスクの達成度",
+  section3: "今週のタスク",
+  section4: "補足",
+};
+function meetingSummarySectionLabel(key, meetingType) {
+  if (key === "section2") return meetingSummarySection2Label(meetingType);
+  return MEETING_SUMMARY_SECTION_LABELS[key] || key;
+}
+
+// 一覧・カレンダー等、短いプレビュー1行だけ欲しい場面で使う。構造化データは非空の項目を
+// 「 / 」で連結して返し、旧方式はそのままのテキストを返す
+function meetingSummaryPreviewText(raw) {
+  var parsed = parseMeetingSummary(raw);
+  if (!parsed) return "";
+  if (!parsed.structured) return parsed.text;
+  return MEETING_SUMMARY_SECTION_KEYS
+    .map(function (k) { return parsed.sections[k]; })
+    .filter(function (v) { return v && String(v).trim(); })
+    .join(" / ");
+}
+
 function isValidProject(project) {
   return project === "locle" || project === "ozukanzukan";
 }

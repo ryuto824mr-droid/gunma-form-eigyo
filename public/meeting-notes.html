@@ -141,7 +141,6 @@
   }
   .mn-mic-btn:hover { border-color: var(--green-500); }
   .mn-mic-btn.recording { background: #fee2e2; border-color: #dc2626; animation: mnMicPulse 1s infinite; }
-  .mn-template-btn { margin-top: 6px; font-size: 12px; padding: 5px 10px; }
   @keyframes mnMicPulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
     50%      { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
@@ -180,6 +179,12 @@
   .mn-preview-todos li::before { content: "☐"; position: absolute; left: 0; color: var(--green-500); }
   .mn-preview-empty { font-size: 13px; color: var(--gray-400); font-style: italic; padding-left: 0 !important; }
   .mn-preview-empty::before { content: none !important; }
+
+  .mn-summary-section { margin-bottom: 12px; }
+  .mn-summary-section:last-child { margin-bottom: 0; }
+  .mn-summary-section-label { font-size: 11px; font-weight: 700; color: var(--green-700); margin: 0 0 3px; }
+  .mn-summary-section-text { font-size: 13px; color: var(--gray-700); line-height: 1.8; white-space: pre-wrap; margin: 0; }
+  .mn-edit-summary-sections { display: flex; flex-direction: column; gap: 10px; }
 
   .mn-cal-section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
   .mn-cal-cross-link { font-size: 12px; color: var(--green-700); text-decoration: none; font-weight: 600; white-space: nowrap; }
@@ -419,7 +424,7 @@
       </div>
       <div class="mn-form-group">
         <label for="mnType">種別</label>
-        <select id="mnType" onchange="onMeetingTypeChange()">
+        <select id="mnType" onchange="invalidatePreview()">
           <option value="1on1">1on1</option>
           <option value="全体定例">全体定例</option>
           <option value="other" selected>その他</option>
@@ -450,7 +455,6 @@
         <textarea id="mnRawText" class="mn-raw-textarea" oninput="invalidatePreview()" placeholder="会議中のメモ・発言録などをそのまま貼り付けてください"></textarea>
         <button type="button" class="mn-mic-btn" id="mnMicBtn" onclick="toggleMeetingVoiceInput()" title="音声入力">🎤</button>
       </div>
-      <button type="button" class="btn-secondary mn-template-btn" onclick="insertMeetingTemplate('mnRawText', 'mnDate')">📋 テンプレートを挿入</button>
       <p class="mn-recording-status" id="mnRecordingStatus" hidden>🔴 録音中... もう一度タップで停止</p>
       <p class="mn-interim-preview" id="mnInterimPreview" hidden></p>
     </div>
@@ -555,7 +559,7 @@
         </div>
         <div class="mn-form-group">
           <label for="mnEditType">種別</label>
-          <select id="mnEditType">
+          <select id="mnEditType" onchange="updateEditSummarySection2Label()">
             <option value="1on1">1on1</option>
             <option value="全体定例">全体定例</option>
             <option value="other">その他</option>
@@ -579,9 +583,26 @@
           </div>
           <div class="mn-participant-tags" id="mnEditParticipantTags"></div>
         </div>
-        <div class="mn-form-group">
-          <label for="mnEditSummary">要約</label>
-          <textarea id="mnEditSummary" rows="4"></textarea>
+        <div class="mn-form-group full">
+          <label>要約</label>
+          <div class="mn-edit-summary-sections">
+            <div class="mn-form-group">
+              <label for="mnEditSummarySection1">先週のタスクの達成度</label>
+              <textarea id="mnEditSummarySection1" rows="2"></textarea>
+            </div>
+            <div class="mn-form-group">
+              <label for="mnEditSummarySection2" id="mnEditSummarySection2Label">1on1での内容</label>
+              <textarea id="mnEditSummarySection2" rows="2"></textarea>
+            </div>
+            <div class="mn-form-group">
+              <label for="mnEditSummarySection3">今週のタスク</label>
+              <textarea id="mnEditSummarySection3" rows="2"></textarea>
+            </div>
+            <div class="mn-form-group">
+              <label for="mnEditSummarySection4">補足</label>
+              <textarea id="mnEditSummarySection4" rows="2"></textarea>
+            </div>
+          </div>
         </div>
         <div class="mn-form-group">
           <label>Todo</label>
@@ -591,7 +612,6 @@
         <div class="mn-form-group">
           <label for="mnEditRawText">本文</label>
           <textarea id="mnEditRawText" class="mn-raw-textarea"></textarea>
-          <button type="button" class="btn-secondary mn-template-btn" onclick="insertMeetingTemplate('mnEditRawText', 'mnEditDate')">📋 テンプレートを挿入</button>
         </div>
         <div class="mn-form-group">
           <label for="mnEditPersonalNotes">📝 手元メモ（任意）</label>
@@ -666,47 +686,6 @@
     return "type-other";
   }
 
-  // ===== 議事録本文テンプレート(1on1/全体定例) =====
-  function buildMeetingTemplate(dateStr) {
-    return `日時: ${dateStr}
-参加者:
-
-1. 先週のタスクの達成度
-
-
-2. 1on1での内容
-
-
-3. 今週のタスク
-
-
-4. 補足`;
-  }
-
-  // textareaIdの内容が空ならテンプレートで置き換え、既に何か入力されていれば末尾に追記する
-  // (既存の内容は消さない)。dateFieldIdの現在値(未入力ならtodayStr())をテンプレートの
-  // 日時欄に差し込む。作成フォームの本文(mnRawText)への挿入時は、内容が変わったので
-  // 既存のプレビューを無効化する
-  function insertMeetingTemplate(textareaId, dateFieldId) {
-    const ta = document.getElementById(textareaId);
-    const dateEl = document.getElementById(dateFieldId);
-    const dateStr = (dateEl && dateEl.value) || todayStr();
-    const template = buildMeetingTemplate(dateStr);
-    ta.value = ta.value.trim() ? `${ta.value.trim()}\n\n${template}` : template;
-    if (textareaId === "mnRawText") invalidatePreview();
-  }
-
-  // 種別選択時、1on1/全体定例が選ばれ、かつ本文がまだ空の場合のみテンプレートを自動挿入する
-  // (その他が選ばれた場合、および本文に既に入力がある場合は何もしない)
-  function onMeetingTypeChange() {
-    invalidatePreview();
-    const type = document.getElementById("mnType").value;
-    const ta = document.getElementById("mnRawText");
-    if ((type === "1on1" || type === "全体定例") && !ta.value.trim()) {
-      insertMeetingTemplate("mnRawText", "mnDate");
-    }
-  }
-
   // ===== 議事録を作成 =====
   let pendingSummary = null;
   let pendingTodos = [];
@@ -719,9 +698,39 @@
     pendingTodos = [];
   }
 
-  function renderPreview(summary, todos) {
+  // AIが返す構造化summary({section1..4})を、見出し付きの4ブロックとしてHTML化する。
+  // 空の項目は表示しない(全項目空ならnullを返す)
+  function summarySectionsHtml(sections, meetingType) {
+    const keys = ["section1", "section2", "section3", "section4"];
+    const blocks = keys
+      .map(k => ({ label: meetingSummarySectionLabel(k, meetingType), text: sections[k] }))
+      .filter(b => b.text && String(b.text).trim());
+    if (blocks.length === 0) return null;
+    return blocks.map(b => `
+      <div class="mn-summary-section">
+        <p class="mn-summary-section-label">${esc(b.label)}</p>
+        <p class="mn-summary-section-text">${esc(b.text)}</p>
+      </div>`).join("");
+  }
+
+  // 保存済みの議事録(DBのTEXT列に入った生のsummary)を、新方式(構造化4項目)・旧方式(単一テキスト)
+  // どちらでも表示できるようにする。詳細モーダルの表示専用(parseMeetingSummary/summarySectionsHtmlは
+  // project-context.jsで定義)
+  function renderSummaryForDisplay(rawSummary, meetingType) {
+    const parsed = parseMeetingSummary(rawSummary);
+    if (!parsed) return '<p class="mn-preview-empty">(要約なし)</p>';
+    if (parsed.structured) {
+      const html = summarySectionsHtml(parsed.sections, meetingType);
+      return html || '<p class="mn-preview-empty">(要約なし)</p>';
+    }
+    // 旧方式: 単一テキストのまま、見出し無しで表示する
+    return `<p class="mn-summary-section-text">${esc(parsed.text)}</p>`;
+  }
+
+  function renderPreview(summary, todos, meetingType) {
     document.getElementById("mnPreview").hidden = false;
-    document.getElementById("mnPreviewSummary").textContent = summary || "(要約なし)";
+    const html = summary ? summarySectionsHtml(summary, meetingType) : null;
+    document.getElementById("mnPreviewSummary").innerHTML = html || '<p class="mn-preview-empty">(要約なし)</p>';
     const todosEl = document.getElementById("mnPreviewTodos");
     todosEl.innerHTML = todos.length
       ? todos.map(t => `<li>${esc(t)}</li>`).join("")
@@ -750,11 +759,11 @@
         pendingSummary = null;
         pendingTodos = [];
         showToast("AI機能が設定されていません。要約なしで保存できます", "warning");
-        renderPreview(null, []);
+        renderPreview(null, [], meetingType);
       } else {
-        pendingSummary = data.summary || "";
+        pendingSummary = data.summary || null;
         pendingTodos = Array.isArray(data.todos) ? data.todos : [];
-        renderPreview(pendingSummary, pendingTodos);
+        renderPreview(pendingSummary, pendingTodos, meetingType);
         showToast("✓ 要約しました", "success");
       }
       document.getElementById("mnSaveBtn").disabled = false;
@@ -924,7 +933,7 @@
           <span class="mn-card-date">${esc(n.meeting_date)}</span>
         </div>
         ${participantsHtml}
-        <div class="mn-card-summary">${esc(n.summary || "(要約なし)")}</div>
+        <div class="mn-card-summary">${esc(meetingSummaryPreviewText(n.summary) || "(要約なし)")}</div>
         <div class="mn-card-todo-count">${todos.length > 0 ? `✓ Todo ${doneCount}/${todos.length}件` : "Todoなし"}</div>
       </div>`;
     }).join("");
@@ -1038,7 +1047,7 @@
         html += `<div class="mn-cal-day-note-item" onclick="openDetailModal(${n.id})">
           📝 <strong>${esc(n.title)}</strong>（${esc(typeLabel(n.meeting_type))}）
           ${participants.length > 0 ? `<div class="mn-card-participants" style="margin-top:2px;">${participantBadgesHtml(participants)}</div>` : ""}
-          ${n.summary ? `<div style="margin-top:4px;color:var(--gray-500);">${esc(n.summary)}</div>` : ""}
+          ${meetingSummaryPreviewText(n.summary) ? `<div style="margin-top:4px;color:var(--gray-500);">${esc(meetingSummaryPreviewText(n.summary))}</div>` : ""}
         </div>`;
       });
       todos.forEach(t => {
@@ -1061,7 +1070,7 @@
     badge.textContent = typeLabel(note.meeting_type);
     badge.className = "mn-type-badge " + typeBadgeClass(note.meeting_type);
     document.getElementById("mnDetailDate").textContent = note.meeting_date;
-    document.getElementById("mnDetailSummary").textContent = note.summary || "(要約なし)";
+    document.getElementById("mnDetailSummary").innerHTML = renderSummaryForDisplay(note.summary, note.meeting_type);
 
     const participantsEl = document.getElementById("mnDetailParticipants");
     const participants = Array.isArray(note.participants) ? note.participants : [];
@@ -1191,7 +1200,17 @@
     document.getElementById("mnEditDate").value     = note.meeting_date;
     setParticipants("mnEdit", note.participants);
     document.getElementById("mnEditParticipantInput").value = "";
-    document.getElementById("mnEditSummary").value  = note.summary || "";
+
+    // 新方式(構造化4項目)ならそのまま各欄に振り分け、旧方式(単一テキスト)は
+    // section2(会議の主内容)欄にそのまま入れておく(次回保存時に新方式へ移行される)
+    const parsedSummary = parseMeetingSummary(note.summary);
+    const sections = parsedSummary && parsedSummary.structured ? parsedSummary.sections : {};
+    document.getElementById("mnEditSummarySection1").value = sections.section1 || "";
+    document.getElementById("mnEditSummarySection2").value = sections.section2 || (parsedSummary && !parsedSummary.structured ? parsedSummary.text : "");
+    document.getElementById("mnEditSummarySection3").value = sections.section3 || "";
+    document.getElementById("mnEditSummarySection4").value = sections.section4 || "";
+    updateEditSummarySection2Label();
+
     document.getElementById("mnEditRawText").value  = note.raw_text;
     document.getElementById("mnEditPersonalNotes").value = note.personal_notes || "";
 
@@ -1208,6 +1227,13 @@
 
   function cancelEditMode() {
     exitEditMode();
+  }
+
+  // 編集モードの種別セレクトが変更されたら、section2欄の見出し(1on1での内容/議題・共有事項)を
+  // 即座に読み替える
+  function updateEditSummarySection2Label() {
+    const type = document.getElementById("mnEditType").value;
+    document.getElementById("mnEditSummarySection2Label").textContent = meetingSummarySection2Label(type);
   }
 
   function addEditTodoRow(text, done, dueDate) {
@@ -1245,7 +1271,12 @@
     if (!rawText) { showToast("本文を入力してください", "error"); return; }
     const meetingType = document.getElementById("mnEditType").value;
     const meetingDate = document.getElementById("mnEditDate").value;
-    const summary      = document.getElementById("mnEditSummary").value.trim() || null;
+    const summary      = {
+      section1: document.getElementById("mnEditSummarySection1").value.trim(),
+      section2: document.getElementById("mnEditSummarySection2").value.trim(),
+      section3: document.getElementById("mnEditSummarySection3").value.trim(),
+      section4: document.getElementById("mnEditSummarySection4").value.trim(),
+    };
     const todos         = getEditTodos();
     const participants   = getParticipants("mnEdit");
     const personalNotes  = document.getElementById("mnEditPersonalNotes").value.trim() || null;

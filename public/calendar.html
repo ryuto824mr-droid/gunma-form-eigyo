@@ -404,7 +404,10 @@
       }
       const locleCount = countForDate("locle", c.dateKey);
       const ozuCount = countForDate("ozukanzukan", c.dateKey);
-      const workCount = (calData.work_logs_by_date[c.dateKey] || []).length;
+      // 👤マーカーは「その日出勤した人数」を表す。work_sessionsは1人が1日に複数セッションを
+      // 持ちうるため、配列の要素数(=セッション数)をそのまま使うと同じ人が2回出勤しただけで
+      // 人数が水増しされてしまう。user_nameの重複を除いた人数を数える
+      const workCount = new Set((calData.work_logs_by_date[c.dateKey] || []).map(l => l.user_name)).size;
       const classes = ["cal-cell"];
       if (c.dateKey === today) classes.push("today");
       if (c.dateKey === selectedCalDate) classes.push("selected");
@@ -447,7 +450,7 @@
       html += `<a class="cal-day-item link" href="/meeting-notes.html?project=${projKey}&note=${n.id}">
         📝 ${esc(n.title)}
         ${participants.length > 0 ? `<div class="cal-day-item-sub">${participants.map(p => `<span class="cal-member-dot" style="background:${getMemberColor(p)};"></span>${esc(p)}`).join(" ")}</div>` : ""}
-        ${n.summary ? `<div class="cal-day-item-sub">${esc(n.summary)}</div>` : ""}
+        ${meetingSummaryPreviewText(n.summary) ? `<div class="cal-day-item-sub">${esc(meetingSummaryPreviewText(n.summary))}</div>` : ""}
       </a>`;
     });
     todos.forEach(t => {
