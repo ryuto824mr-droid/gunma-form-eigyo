@@ -114,6 +114,7 @@
   .summary-item { display: flex; flex-direction: column; gap: 2px; }
   .summary-item strong { color: var(--green-700); font-size: 18px; font-weight: 700; display: block; }
   .summary-item span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--gray-400); }
+  .summary-item small { font-size: 11px; color: var(--gray-300); font-weight: 400; text-transform: none; letter-spacing: normal; }
 
   .usage-cards {
     display: flex; gap: 16px; margin-bottom: 26px; flex-wrap: wrap;
@@ -1620,11 +1621,11 @@
     if (total === 0) { el.hidden = true; return; }
     el.hidden = false;
     el.innerHTML = `
-      <div class="summary-item"><strong>${total}</strong><span>登録企業数</span></div>
-      <div class="summary-item"><strong>${automatable}</strong><span>自動化可能</span></div>
-      <div class="summary-item"><strong>${sentCount}</strong><span>送信済み企業数</span></div>
-      <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span></div>
-      <div class="summary-item"><strong>${errorCount}</strong><span>エラー</span></div>`;
+      <div class="summary-item"><strong>${total}</strong><span>登録企業数</span><small>現在の表示条件(プロジェクト/アーカイブ設定)での件数</small></div>
+      <div class="summary-item"><strong>${automatable}</strong><span>自動化可能</span><small>リサーチ済みで自動送信可と判定された数</small></div>
+      <div class="summary-item"><strong>${sentCount}</strong><span>送信済み企業数</span><small>累計・status='sent'のみ</small></div>
+      <div class="summary-item"><strong>${companies.filter(c => c.status === "pending").length}</strong><span>未リサーチ</span><small>status='pending'の件数</small></div>
+      <div class="summary-item"><strong>${errorCount}</strong><span>エラー</span><small>status='error'の件数</small></div>`;
   }
 
   function needsManualAction(c) {

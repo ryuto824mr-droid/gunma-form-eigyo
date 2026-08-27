@@ -146,6 +146,7 @@
     line-height: 1; letter-spacing: -0.03em;
   }
   .summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+  .card-desc { font-size: 11px; color: var(--gray-400); margin-top: 6px; line-height: 1.4; }
 
   /* Empty state */
   .empty-state {
@@ -160,7 +161,8 @@
     border-radius: var(--radius-lg); padding: 28px;
     margin-bottom: 26px; box-shadow: var(--shadow-sm);
   }
-  .stat-section h2 { margin: 0 0 18px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .stat-section h2 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--gray-700); }
+  .section-desc { margin: 0 0 18px; font-size: 11px; color: var(--gray-400); }
 
   /* Channel breakdown cards */
   .channel-cards { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -453,6 +455,7 @@
 
   <section class="stat-section reveal-on-scroll">
     <h2>月別送信数</h2>
+    <p class="section-desc">直近6ヶ月・status='sent'のみ</p>
     <div class="chart-wrap" style="height:140px;"><canvas id="miniMonthlyChart"></canvas></div>
   </section>
 
@@ -557,6 +560,7 @@
     return `
       <section class="stat-section reveal-on-scroll">
         <h2>チャネル別パフォーマンス</h2>
+        <p class="section-desc">累計・status='sent'のみ(平均返信日数の対象は各カードに記載)</p>
         <div class="channel-cards">
           ${channelBreakdownCardHtml("email", email)}
           ${channelBreakdownCardHtml("form", form)}
@@ -606,12 +610,14 @@
           renderChannelBreakdownSection(data.channel_breakdown) +
           `<section class="stat-section reveal-on-scroll">
             <h2>バリアント別集計</h2>
+            <p class="section-desc">累計・status='sent'のみ。反応数は反応した企業のユニーク数</p>
             <div class="chart-wrap"><canvas id="variantsChart"></canvas></div>
             <div class="table-wrap">${renderVariantsTable(data.variants_stats)}</div>
             ${generateInsights(data.variants_stats, data.tags_stats)}
           </section>
           <section class="stat-section reveal-on-scroll">
             <h2>タグ別集計</h2>
+            <p class="section-desc">累計・status='sent'のみ。反応数は反応した企業のユニーク数</p>
             <div class="chart-wrap" id="tagsChartWrap"><canvas id="tagsChart"></canvas></div>
             <div class="table-wrap">${renderTagsTable(data.tags_stats)}</div>
           </section>`;
@@ -646,6 +652,7 @@
         <div class="card-value">
           <span class="count-num" data-target="${totalSends}">0</span><span class="card-unit">件</span>
         </div>
+        <div class="card-desc">累計・status='sent'のみ</div>
       </div>
       <div class="summary-card">
         <i data-lucide="message-circle" class="card-icon"></i>
@@ -653,6 +660,7 @@
         <div class="card-value">
           <span class="count-num" data-target="${totalResponses}">0</span><span class="card-unit">件</span>
         </div>
+        <div class="card-desc">累計・反応した企業のユニーク数</div>
       </div>
       <div class="summary-card">
         <i data-lucide="trending-up" class="card-icon"></i>
@@ -660,6 +668,7 @@
         <div class="card-value">
           <span class="count-num" data-target="${overallRate}" data-float="true">0</span><span class="card-unit">%</span>
         </div>
+        <div class="card-desc">累計・総反応数÷総送信数</div>
       </div>`;
   }
 

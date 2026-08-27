@@ -118,6 +118,7 @@
     line-height: 1; letter-spacing: -0.03em;
   }
   .hero-summary-card .card-unit { font-size: 14px; font-weight: 400; color: var(--gray-400); margin-left: 3px; }
+  .card-desc { font-size: 11px; color: var(--gray-400); margin-top: 6px; line-height: 1.4; }
 
   /* Summary cards(要フォローアップ・期限切れタスクの2枚。hero外に残す) */
   .summary-cards { display: flex; gap: 16px; margin-bottom: 40px; flex-wrap: wrap; }
@@ -511,18 +512,21 @@
           <div class="card-value" id="statCompanies">
             <span style="font-size:20px;color:var(--gray-300)">…</span>
           </div>
+          <div class="card-desc">累計・アーカイブ済みを除く</div>
         </div>
         <div class="hero-summary-card">
           <div class="card-label">送信済み</div>
           <div class="card-value" id="statSent">
             <span style="font-size:20px;color:var(--gray-300)">…</span>
           </div>
+          <div class="card-desc">累計・status='sent'のみ</div>
         </div>
         <div class="hero-summary-card">
           <div class="card-label">全体反応率</div>
           <div class="card-value" id="statRate">
             <span style="font-size:20px;color:var(--gray-300)">…</span>
           </div>
+          <div class="card-desc">累計・反応企業数÷送信数</div>
         </div>
       </div>
     </div>
@@ -545,18 +549,21 @@
       <div class="card-value" id="statFollowUp">
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
+      <div class="card-desc">本日が期日の件数</div>
     </div>
     <div class="summary-card">
       <div class="card-label">期限切れタスク</div>
       <div class="card-value" id="statOverdueTasks">
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
+      <div class="card-desc">本日までの未完了タスク数</div>
     </div>
     <div class="summary-card">
       <div class="card-label">エラー企業数</div>
       <div class="card-value" id="statErrors">
         <span style="font-size:20px;color:var(--gray-300)">…</span>
       </div>
+      <div class="card-desc">累計・リサーチ失敗企業数</div>
     </div>
   </div>
 

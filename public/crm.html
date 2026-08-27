@@ -133,6 +133,7 @@
   .summary-stat-label { font-size: 11px; color: var(--gray-500); font-weight: 600; }
   .summary-stat-value { font-size: 19px; font-weight: 700; color: var(--gray-900); }
   .summary-stat-value.accent { color: var(--green-700); }
+  .summary-stat-desc { font-size: 11px; color: var(--gray-400); }
 
   /* Kanban */
   .kanban-board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
@@ -590,14 +591,17 @@
       <div class="summary-stat">
         <span class="summary-stat-label">パイプライン総額</span>
         <span class="summary-stat-value accent" id="summaryTotalPipeline">—</span>
+        <span class="summary-stat-desc">進行中の商談のみ(成約・失注を除く)</span>
       </div>
       <div class="summary-stat">
         <span class="summary-stat-label">成約</span>
         <span class="summary-stat-value" id="summaryWonCount">—</span>
+        <span class="summary-stat-desc">累計件数</span>
       </div>
       <div class="summary-stat">
         <span class="summary-stat-label">成約率</span>
         <span class="summary-stat-value" id="summaryWinRate">—</span>
+        <span class="summary-stat-desc">成約÷(成約+失注)・累計</span>
       </div>
     </div>
     <div class="kanban-board" id="kanbanBoard"></div>

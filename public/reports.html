@@ -368,15 +368,18 @@
         <div class="main-summary-label">今月の反応率</div>
         <div class="main-summary-value" id="mainRate">—</div>
         <div class="main-summary-compare" id="mainRateCompare"></div>
+        <div class="mini-stat-sub">当月の送信(status='sent')に対する反応企業数の割合</div>
       </div>
       <div class="main-summary-secondary">
         <div class="main-summary-stat">
           <div class="main-summary-stat-label">今月の送信数</div>
           <div class="main-summary-stat-value" id="mainSends">—</div>
+          <div class="mini-stat-sub">status='sent'のみ</div>
         </div>
         <div class="main-summary-stat">
           <div class="main-summary-stat-label">今月の反応数</div>
           <div class="main-summary-stat-value" id="mainResponses">—</div>
+          <div class="mini-stat-sub">反応した企業のユニーク数</div>
         </div>
       </div>
     </div>
@@ -385,7 +388,7 @@
   <!-- セクション1: 送信パフォーマンス(月別推移グラフ) -->
   <section class="stat-section reveal-on-scroll" id="section-sends">
     <h2>送信パフォーマンス</h2>
-    <p class="section-sub">過去6ヶ月の月別送信数・反応数</p>
+    <p class="section-sub">過去6ヶ月の月別送信数・反応数(status='sent'のみ)</p>
     <div class="report-row">
       <div class="report-chart-col">
         <div class="chart-wrap"><canvas id="sendsChart"></canvas></div>
@@ -394,14 +397,17 @@
         <div class="mini-stat">
           <div class="mini-stat-label">合計送信数</div>
           <div class="mini-stat-value" id="statTotalSends">—</div>
+          <div class="mini-stat-sub">過去6ヶ月の合計</div>
         </div>
         <div class="mini-stat">
           <div class="mini-stat-label">合計反応数</div>
           <div class="mini-stat-value" id="statTotalResponses">—</div>
+          <div class="mini-stat-sub">過去6ヶ月・反応した企業のユニーク数</div>
         </div>
         <div class="mini-stat">
           <div class="mini-stat-label">平均反応率</div>
           <div class="mini-stat-value accent" id="statAvgRate">—</div>
+          <div class="mini-stat-sub">過去6ヶ月の合計反応数÷合計送信数</div>
         </div>
       </div>
     </div>
@@ -418,7 +424,7 @@
       <!-- チャネル別内訳 -->
       <section class="stat-section reveal-on-scroll">
         <h2>チャネル別内訳</h2>
-        <p class="section-sub">フォーム送信とメール送信の比率</p>
+        <p class="section-sub">フォーム送信とメール送信の比率(累計・status='sent'のみ)</p>
         <div class="report-row">
           <div class="report-chart-col" style="flex: 1 1 220px;">
             <div class="chart-wrap donut"><canvas id="channelChart"></canvas></div>
@@ -430,7 +436,7 @@
       <!-- バリアント別パフォーマンス -->
       <section class="stat-section reveal-on-scroll">
         <h2>バリアント別パフォーマンス</h2>
-        <p class="section-sub">反応率の高い上位5件</p>
+        <p class="section-sub">送信数が多い上位5件(累計・status='sent'のみ)</p>
         <div class="chart-wrap"><canvas id="variantChart"></canvas></div>
         <div class="table-wrap" id="variantTableWrap"></div>
       </section>
@@ -445,7 +451,7 @@
       <!-- パイプライン価値 -->
       <section class="stat-section reveal-on-scroll" id="section-pipeline">
         <h2>パイプライン価値</h2>
-        <p class="section-sub">ステージ別の商談金額合計</p>
+        <p class="section-sub">ステージ別の商談金額合計(累計)</p>
         <div class="report-row">
           <div class="report-chart-col">
             <div class="chart-wrap"><canvas id="pipelineChart"></canvas></div>
@@ -454,10 +460,12 @@
             <div class="mini-stat">
               <div class="mini-stat-label">合計パイプライン金額</div>
               <div class="mini-stat-value accent" id="statTotalPipelineValue">—</div>
+              <div class="mini-stat-sub">累計・全ステージ合計(成約・失注を含む)</div>
             </div>
             <div class="mini-stat">
               <div class="mini-stat-label">期待成約額（提案中+交渉中）</div>
               <div class="mini-stat-value" id="statExpectedValue">—</div>
+              <div class="mini-stat-sub">累計・提案中/交渉中ステージのみ合計</div>
             </div>
           </div>
         </div>
@@ -473,8 +481,9 @@
           </div>
           <div class="report-summary-col">
             <div class="mini-stat">
-              <div class="mini-stat-label">累計成約金額</div>
+              <div class="mini-stat-label">成約件数</div>
               <div class="mini-stat-value accent" id="statWonTotal">—</div>
+              <div class="mini-stat-sub">直近6ヶ月の合計(金額ではなく件数)</div>
             </div>
           </div>
         </div>
@@ -483,7 +492,7 @@
       <!-- 反応の詳細分析 -->
       <section class="stat-section reveal-on-scroll" id="section-response-detail">
         <h2>反応の詳細分析</h2>
-        <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向</p>
+        <p class="section-sub">返信内容の分類・返信までの日数・曜日/時間帯別の反応傾向(いずれも累計・status='sent'のみ)</p>
 
         <div class="report-row">
           <div class="report-chart-col" style="flex: 1 1 220px;">
@@ -497,22 +506,26 @@
             <div class="mini-stat">
               <div class="mini-stat-label">平均返信日数（全チャネル合算）</div>
               <div class="mini-stat-value accent" id="statAvgResponseDays">—</div>
+              <div class="mini-stat-sub">累計・status='sent'のみ</div>
             </div>
             <div class="mini-stat">
               <div class="mini-stat-label">🔗 リンククリック数</div>
               <div class="mini-stat-value accent" id="statLinkClicks">—</div>
+              <div class="mini-stat-sub">累計・メール本文中のリンクのみ対象</div>
               <div class="mini-stat-sub" id="statLinkClickCompanies"></div>
             </div>
           </div>
         </div>
 
         <h3 class="subsection-title">曜日別の反応率</h3>
+        <p class="section-sub" style="margin:-6px 0 10px;">送信日時(日本時間)基準の曜日ごとの反応率</p>
         <div class="chart-wrap">
           <canvas id="weekdayChart"></canvas>
           <p class="empty" id="weekdayEmpty" hidden>まだデータが不足しています</p>
         </div>
 
         <h3 class="subsection-title">時間帯別の反応率</h3>
+        <p class="section-sub" style="margin:-6px 0 10px;">送信日時(日本時間)基準の時間帯ごとの反応率</p>
         <div class="chart-wrap">
           <canvas id="hourChart"></canvas>
           <p class="empty" id="hourEmpty" hidden>まだデータが不足しています</p>
