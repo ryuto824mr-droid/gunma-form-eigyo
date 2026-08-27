@@ -59,8 +59,9 @@ module.exports = async function handler(req, res) {
     case "production-tasks": return handleProductionTasks(req, res);
     case "production-task-history": return handleProductionTaskHistory(req, res);
     case "send-logs":        return handleSendLogsList(req, res);
+    case "track-click":      return handleTrackClick(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
   }
 };
 
@@ -501,6 +502,16 @@ async function handleDbSetup(req, res) {
         changed_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // link_clicksテーブル追加（メール本文中のリンククリック計測用）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS link_clicks (
+        id           SERIAL PRIMARY KEY,
+        send_log_id  INTEGER NOT NULL REFERENCES send_logs(id),
+        original_url TEXT NOT NULL,
+        clicked_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        user_agent   TEXT
+      )
+    `);
 
     // ==================== セットアップ後の存在確認 ====================
     // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
@@ -522,7 +533,7 @@ async function handleDbSetup(req, res) {
       "attachments", "work_logs", "work_sessions", "work_session_edits",
       "generated_content", "sender_accounts", "meeting_notes",
       "auto_pipeline_config", "auto_pipeline_logs", "send_queue",
-      "production_tasks", "production_task_history",
+      "production_tasks", "production_task_history", "link_clicks",
     ];
     const expectedTables = [...schemaTables, ...additionalTables];
 
@@ -1387,6 +1398,26 @@ async function handleReports(req, res) {
       return { hour_range: b.label, send_count, response_count, rate };
     });
 
+    // リンククリック数(メール本文中のトラッキングリンクのクリック計測)。
+    // 件数と、クリックした企業のユニーク数の両方を返す
+    const [linkClickRow] = hasProjectFilter
+      ? await sql`
+          SELECT COUNT(*)::int AS total_clicks, COUNT(DISTINCT sl.company_id)::int AS unique_companies
+          FROM link_clicks lc
+          JOIN send_logs sl ON sl.id = lc.send_log_id
+          JOIN companies c  ON c.id  = sl.company_id
+          WHERE c.project = ${project}
+        `
+      : await sql`
+          SELECT COUNT(*)::int AS total_clicks, COUNT(DISTINCT sl.company_id)::int AS unique_companies
+          FROM link_clicks lc
+          JOIN send_logs sl ON sl.id = lc.send_log_id
+        `;
+    const link_click_stats = {
+      total_clicks: linkClickRow?.total_clicks || 0,
+      unique_companies: linkClickRow?.unique_companies || 0,
+    };
+
     return res.status(200).json({
       monthly_sends,
       monthly_responses,
@@ -1399,6 +1430,7 @@ async function handleReports(req, res) {
       response_time_avg_days,
       weekday_response_rate,
       hour_response_rate,
+      link_click_stats,
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
@@ -3764,4 +3796,75 @@ async function handleProductionTaskHistory(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
   }
+}
+
+// ==================== track-click (メール本文中のリンククリック計測用リダイレクト) ====================
+
+// 不正なurlパラメータ(スキームが危険、値が無い、改ざんされている等)の場合の
+// 安全なフォールバック先。エラーJSONをそのまま返すとメール受信者が生のAPIエラー画面を
+// 見ることになってしまうため、代わりにこのツール自体のホーム画面(LOCLEブランドの
+// ダッシュボード)へ誘導する
+const TRACK_CLICK_FALLBACK_URL = "https://gunma-form-eigyo.vercel.app/home.html";
+
+// http:// または https:// で始まるURLのみを安全とみなす。javascript:, data:, file: 等の
+// 危険なスキームは明示的に拒否する。URLとして解析できない値(改ざん等)も安全でないとみなす
+function isSafeRedirectUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function handleTrackClick(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています" });
+  }
+
+  const targetUrl = req.query.url;
+
+  // urlが無い、または安全でないスキーム(javascript:/data:/file:等)の場合は
+  // このURLへリダイレクトせず、安全なデフォルトページへ転送する
+  if (!isSafeRedirectUrl(targetUrl)) {
+    res.writeHead(302, { Location: TRACK_CLICK_FALLBACK_URL });
+    return res.end();
+  }
+
+  // send_log_idが欠落・不正(改ざん等でも)、クリック計測ができなくなるだけで致命的ではない。
+  // urlの安全性さえ確認できていればリダイレクト自体は行う(記録はベストエフォート)
+  const sendLogId = parseInt(req.query.send_log_id, 10);
+  if (sendLogId && !isNaN(sendLogId)) {
+    try {
+      const userAgent = req.headers["user-agent"] || null;
+      await sql`
+        INSERT INTO link_clicks (send_log_id, original_url, user_agent)
+        VALUES (${sendLogId}, ${targetUrl}, ${userAgent})
+      `;
+
+      // その企業(send_log_idから辿ったcompany_id)に紐づくresponsesがまだ無ければ、
+      // クリック=興味ありとみなして自動記録する(既にresponsesがあれば重複記録しない)
+      const [sendLog] = await sql`SELECT company_id FROM send_logs WHERE id = ${sendLogId}`;
+      if (sendLog) {
+        const [existingResponse] = await sql`
+          SELECT r.id FROM responses r
+          JOIN send_logs sl ON sl.id = r.send_log_id
+          WHERE sl.company_id = ${sendLog.company_id}
+          LIMIT 1
+        `;
+        if (!existingResponse) {
+          await sql`
+            INSERT INTO responses (send_log_id, classification, raw_excerpt, received_at)
+            VALUES (${sendLogId}, 'interested', 'リンククリックによる自動記録', NOW())
+          `;
+        }
+      }
+    } catch (err) {
+      // 記録に失敗してもリダイレクト自体(ユーザー体験)は優先して必ず行う
+    }
+  }
+
+  res.writeHead(302, { Location: targetUrl });
+  return res.end();
 }

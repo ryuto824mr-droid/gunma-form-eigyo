@@ -3,6 +3,30 @@ const { sendEmail, ensureLabel, addLabelToMessage } = require("../lib/gmail-send
 
 const SENT_LABEL_NAME = "LOCLE営業/送信済み";
 
+// リンククリック計測用リダイレクト(api/crm.js ?action=track-click)の絶対URLのベース。
+// 環境変数で上書きできるようにしておく(カスタムドメイン移行時等のため)
+const TRACKING_BASE_URL = process.env.APP_BASE_URL || "https://gunma-form-eigyo.vercel.app";
+// URLとして妥当なASCII文字のみを対象にする(否定ではなく肯定の文字集合)。日本語の文章は
+// メール本文中でURLの直後に空白なしで続くことが多く(例: "...info。よろしくお願いします。")、
+// 否定方式([^\s<>"')]]+等)だと日本語の句読点・文章まで丸ごとURLとして飲み込んでしまうため
+const URL_PATTERN = /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+
+// 本文中のhttp(s)リンクを、クリック計測用のリダイレクトURLに置換する。文末のASCII句読点
+// (英語文脈のピリオド等)はURLの一部ではない可能性が高いため、末尾から切り離してから
+// リンク化し、そのまま後ろに戻す(例: "Please check https://example.com/page. Thank you.")。
+// 既にトラッキング済みのURL(TRACKING_BASE_URL自身へのリンク)は二重ラップしないよう対象外にする
+function replaceLinksWithTrackingUrls(body, sendLogId) {
+  if (!body) return body;
+  return body.replace(URL_PATTERN, (match) => {
+    const trailingMatch = match.match(/[.,;:!?]+$/);
+    const trailing = trailingMatch ? trailingMatch[0] : "";
+    const originalUrl = trailing ? match.slice(0, -trailing.length) : match;
+    if (!originalUrl || originalUrl.startsWith(TRACKING_BASE_URL)) return match;
+    const trackingUrl = `${TRACKING_BASE_URL}/api/crm?action=track-click&send_log_id=${sendLogId}&url=${encodeURIComponent(originalUrl)}`;
+    return trackingUrl + trailing;
+  });
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
@@ -78,10 +102,20 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ error: "企業とバリアントのプロジェクトが一致しません" });
   }
 
-  // テンプレート置換
+  // send_logsを先に'pending'で作成し、IDを確定させる(本文中のリンクをクリック計測用URLに
+  // 置換するにはsend_log_idが必要なため)。'pending'はsend_logs.statusのデフォルト値と
+  // 同じで、以降の処理で必ずsent/failedに更新される一時的な状態
+  const [pendingLog] = await sql`
+    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
+    VALUES (${company_id}, ${variant_id}, 'email', 'pending', 'manual', NOW(), ${tagsJson})
+    RETURNING *
+  `;
+
+  // テンプレート置換 → 本文中のリンクをクリック計測用URLに置換
   const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
   const subject = replace(variant.subject_template);
-  const body    = replace(variant.body_template);
+  const rawBody = replace(variant.body_template);
+  const body    = replaceLinksWithTrackingUrls(rawBody, pendingLog.id);
 
   // 添付ファイル取得(指定があれば)
   let attachment = null;
@@ -98,14 +132,12 @@ module.exports = async function handler(req, res) {
   try {
     result = await sendEmail({ to: toEmail, subject, body, attachment, senderId });
   } catch (err) {
-    await sql`
-      INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
-      VALUES (${company_id}, ${variant_id}, 'email', 'failed', 'manual', NOW(), ${tagsJson})
-    `;
+    await sql`UPDATE send_logs SET status = 'failed' WHERE id = ${pendingLog.id}`;
     return res.status(500).json({ error: `メール送信に失敗しました: ${err.message}` });
   }
 
   if (!result.configured) {
+    await sql`UPDATE send_logs SET status = 'failed' WHERE id = ${pendingLog.id}`;
     return res.status(400).json({
       error: "Gmail APIが設定されていません。Vercel環境変数にGMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKENを設定してください。",
     });
@@ -122,9 +154,7 @@ module.exports = async function handler(req, res) {
   }
 
   const [logEntry] = await sql`
-    INSERT INTO send_logs (company_id, variant_id, channel, status, trigger_mode, sent_at, tags)
-    VALUES (${company_id}, ${variant_id}, 'email', 'sent', 'manual', NOW(), ${tagsJson})
-    RETURNING *
+    UPDATE send_logs SET status = 'sent' WHERE id = ${pendingLog.id} RETURNING *
   `;
 
   return res.status(200).json({ success: true, log: logEntry, messageId: result.messageId });
