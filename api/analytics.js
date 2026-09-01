@@ -455,13 +455,35 @@ async function handleCheckFormConfirmations(req, res) {
   const debugAuthorized =
     !!process.env.SETUP_SECRET && req.query.debug_key === process.env.SETUP_SECRET;
 
+  // days/max/company_idsは、通常のcron実行(7日/20件・全件対象)を変えないよう
+  // debug_key認証時のみ上書きを許可する(過去に遡った個別調査用)
+  const options = {};
+  if (debugAuthorized) {
+    if (req.query.days) {
+      const d = parseInt(req.query.days, 10);
+      if (!isNaN(d) && d > 0 && d <= 90) options.days = d;
+    }
+    if (req.query.max) {
+      const m = parseInt(req.query.max, 10);
+      if (!isNaN(m) && m > 0 && m <= 200) options.maxResults = m;
+    }
+    if (req.query.company_ids) {
+      const ids = String(req.query.company_ids)
+        .split(",")
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => !isNaN(n));
+      if (ids.length > 0) options.companyIds = ids;
+    }
+  }
+
   try {
-    const result = await checkFormConfirmationEmails();
+    const result = await checkFormConfirmationEmails(undefined, options);
     const payload = { checked: result.checked, confirmed: result.confirmed };
     if (debugAuthorized) {
       payload.debug = {
         uncertain_count: result.uncertain_count,
         matches: result.matches,
+        options,
       };
     }
     return res.status(200).json(payload);
