@@ -26,6 +26,10 @@ module.exports = async function handler(req, res) {
       status = "rejected";
     } else if (result.captchaDetected) {
       status = "captcha_blocked";
+    } else if (!result.formFound && result.iframeFormDetected) {
+      // iframe内にフォームらしきものが見つかったが、クロスオリジン制約等で
+      // 中身までは解析できなかったケース。自動送信はできないため要手動確認とする
+      status = "iframe_form_detected";
     } else if (!result.formFound) {
       status = "no_form";
     } else {
