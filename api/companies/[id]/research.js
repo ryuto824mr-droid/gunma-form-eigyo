@@ -2,6 +2,15 @@ const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
 const { classifyAppealPoints } = require("../../../lib/appeal-point-classifier");
 
+// vercel.jsonでこの関数のmaxDurationは60秒に設定されている。Puppeteerでの解析が
+// 遅いサイト(反応の遅いサーバー、多段階のページ遷移等)でこれを超えると、Vercelに
+// 強制終了(504)され、companies.statusが"pending"のまま更新されずに残ってしまい、
+// エラーメッセージも一切記録されないため「なぜか終わらない企業」に見えてしまっていた。
+// maxDurationの90%が経過した時点で自ら諦めて中間状態(エラー)を保存することで、
+// 強制終了される前に必ず何らかの結果を記録できるようにする
+const RESEARCH_TIMEOUT_MS = 54000;
+const RESEARCH_TIMEOUT_SENTINEL = "__RESEARCH_TIMEOUT__";
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
@@ -19,9 +28,15 @@ module.exports = async function handler(req, res) {
 
   let result;
   let status;
+  let timedOut = false;
 
   try {
-    result = await analyzeForm(company.url);
+    result = await Promise.race([
+      analyzeForm(company.url),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(RESEARCH_TIMEOUT_SENTINEL)), RESEARCH_TIMEOUT_MS);
+      }),
+    ]);
     if (result.accessBlocked) {
       // NinjaFirewall等のセキュリティプラグインに自動アクセスそのものを拒否されている場合。
       // コード側の再試行では解決できないため、要手動対応として扱う
@@ -40,7 +55,12 @@ module.exports = async function handler(req, res) {
       status = "researched";
     }
   } catch (err) {
-    result = { error: err.message };
+    if (err.message === RESEARCH_TIMEOUT_SENTINEL) {
+      timedOut = true;
+      result = { error: "リサーチがタイムアウトしました。再度お試しください" };
+    } else {
+      result = { error: err.message };
+    }
     status = "error";
   }
 
@@ -66,8 +86,9 @@ module.exports = async function handler(req, res) {
     RETURNING *
   `;
 
-  // 訴求ポイントの自動推定（ANTHROPIC_API_KEY未設定時は何もしない）
-  if (process.env.ANTHROPIC_API_KEY) {
+  // 訴求ポイントの自動推定（ANTHROPIC_API_KEY未設定時は何もしない。タイムアウト時は
+  // 残り時間がほぼ無いため、これ以上時間のかかる処理は行わずすぐ応答を返す）
+  if (!timedOut && process.env.ANTHROPIC_API_KEY) {
     try {
       const appealPoints = await classifyAppealPoints(updated);
       if (appealPoints.length > 0) {

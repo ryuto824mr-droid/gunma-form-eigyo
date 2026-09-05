@@ -577,6 +577,7 @@
   .badge-ng         { background: #fff5f5; color: #dc2626; }
   .hiring-badge     { background: var(--green-50); color: var(--green-700); margin-left: 6px; vertical-align: middle; }
   .action-needed-badge { background: #fffbeb; color: #b45309; margin-left: 6px; vertical-align: middle; }
+  .badge-timeout-warning { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; margin-left: 6px; vertical-align: middle; }
 
   /* Action buttons */
   .btn-research {
@@ -1642,6 +1643,17 @@
     return "📞 要手動対応";
   }
 
+  // ステータスが"pending"のまま一定時間以上更新されていない企業は、リサーチ処理が
+  // Vercelの関数タイムアウト(504)で無言のまま失敗した可能性がある(正常に一度も
+  // リサーチされていないだけの場合もあるため、断定はせず「可能性」として案内する)
+  const PENDING_TIMEOUT_WARNING_MS = 10 * 60 * 1000; // 10分
+  function getPendingTimeoutWarning(company) {
+    if (company.status !== "pending") return false;
+    const ts = company.updated_at || company.created_at;
+    if (!ts) return false;
+    return (Date.now() - new Date(ts).getTime()) > PENDING_TIMEOUT_WARNING_MS;
+  }
+
   function getFilteredCompanies() {
     return companies.filter(c => {
       if (filters.search) {
@@ -2101,6 +2113,9 @@
       const actionNeededBadge = needsManualAction(c)
         ? `<span class="badge action-needed-badge" title="${esc(getManualActionReason(c))}">${esc(getManualActionReason(c))}</span>`
         : "";
+      const pendingTimeoutBadge = getPendingTimeoutWarning(c)
+        ? `<span class="badge badge-timeout-warning" title="ステータスがpendingのまま長時間経過しています(リサーチ処理がタイムアウトした可能性があります)">⚠️ タイムアウトの可能性があります。再リサーチをお試しください</span>`
+        : "";
       const archiveBtn = !c.archived
         ? `<button class="btn-archive-company" onclick="archiveCompany(${c.id})" title="アーカイブ">📦</button>`
         : "";
@@ -2112,7 +2127,7 @@
           <td class="name">${esc(c.name)}${projectBadgeHtml}${hiringBadge}${actionNeededBadge}${archivedBadge}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
-          <td>${statusBadge(c.status)}</td>
+          <td>${statusBadge(c.status)}${pendingTimeoutBadge}</td>
           <td>${automatableBadge(result)}</td>
           <td style="white-space:nowrap">
             ${priorityLabel(priority)}
