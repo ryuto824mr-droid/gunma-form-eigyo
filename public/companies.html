@@ -578,6 +578,7 @@
   .hiring-badge     { background: var(--green-50); color: var(--green-700); margin-left: 6px; vertical-align: middle; }
   .action-needed-badge { background: #fffbeb; color: #b45309; margin-left: 6px; vertical-align: middle; }
   .badge-timeout-warning { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; margin-left: 6px; vertical-align: middle; }
+  .badge-large-org  { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; margin-left: 6px; vertical-align: middle; }
 
   /* Action buttons */
   .btn-research {
@@ -1654,6 +1655,42 @@
     return (Date.now() - new Date(ts).getTime()) > PENDING_TIMEOUT_WARNING_MS;
   }
 
+  // 大手チェーン・公的機関・大規模組織らしき企業名パターン。中小企業向けの
+  // 営業リストに大企業や公的機関が混じっていないか、参考情報として示すためのもの。
+  // 除外はせず、あくまで注意喚起のラベル表示にとどめる
+  const LARGE_ORG_NAME_PATTERNS = [
+    /労働金庫/, /信用金庫/, /信用組合/, /銀行/, /総合病院/, /病院/, /学校法人/, /大学/,
+    /独立行政法人/, /国立/, /県立/, /市立/, /町立/, /村立/, /社会福祉法人/, /医療法人/,
+    /農業協同組合/, /^JA[^A-Za-z]/, /生活協同組合/, /ホールディングス/,
+  ];
+  // チェーン店の支店表記(「〇〇店」「〇〇支店」等)。「本店」は本社的な意味合いのため対象外
+  function looksLikeChainBranch(name) {
+    if (!name) return false;
+    if (name.includes("本店")) return false;
+    if (/支店$|営業所$|出張所$/.test(name)) return true;
+    if (/[一-龠ぁ-んァ-ヶー]店$/.test(name)) return true;
+    return false;
+  }
+  // employee_count_textから最初の人数らしき数値を抜き出す(例: "従業員数\t70名" → 70)
+  function parseEmployeeCount(text) {
+    if (!text) return null;
+    const m = String(text).match(/([0-9０-９,，]{1,7})\s*名/);
+    if (!m) return null;
+    const n = parseInt(m[1].replace(/[,，]/g, "").replace(/[０-９]/g, d => "０１２３４５６７８９".indexOf(d)), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  const LARGE_ORG_EMPLOYEE_THRESHOLD = 300;
+  function getLargeOrgWarning(company) {
+    const name = company.name || "";
+    if (LARGE_ORG_NAME_PATTERNS.some(p => p.test(name))) return "企業名のパターンから";
+    if (looksLikeChainBranch(name)) return "チェーン店の支店表記から";
+    const employeeCount = parseEmployeeCount(company.company_info?.employee_count_text);
+    if (employeeCount !== null && employeeCount >= LARGE_ORG_EMPLOYEE_THRESHOLD) {
+      return `従業員数${employeeCount}名との記載から`;
+    }
+    return null;
+  }
+
   function getFilteredCompanies() {
     return companies.filter(c => {
       if (filters.search) {
@@ -2116,6 +2153,10 @@
       const pendingTimeoutBadge = getPendingTimeoutWarning(c)
         ? `<span class="badge badge-timeout-warning" title="ステータスがpendingのまま長時間経過しています(リサーチ処理がタイムアウトした可能性があります)">⚠️ タイムアウトの可能性があります。再リサーチをお試しください</span>`
         : "";
+      const largeOrgReason = getLargeOrgWarning(c);
+      const largeOrgBadge = largeOrgReason
+        ? `<span class="badge badge-large-org" title="${esc(largeOrgReason)}判定した参考情報です。除外はしていません">⚠️大規模組織の可能性</span>`
+        : "";
       const archiveBtn = !c.archived
         ? `<button class="btn-archive-company" onclick="archiveCompany(${c.id})" title="アーカイブ">📦</button>`
         : "";
@@ -2124,7 +2165,7 @@
         : `<button class="btn-delete-company" onclick="deleteCompany(${c.id})" title="削除"><i data-lucide="trash-2"></i></button>`;
       return `
         <tr id="row-${c.id}">
-          <td class="name">${esc(c.name)}${projectBadgeHtml}${hiringBadge}${actionNeededBadge}${archivedBadge}${companyTagsHtml(c)}</td>
+          <td class="name">${esc(c.name)}${projectBadgeHtml}${hiringBadge}${actionNeededBadge}${largeOrgBadge}${archivedBadge}${companyTagsHtml(c)}</td>
           <td class="url"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></td>
           <td style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:#2563eb">${esc(c.email)}</a>` : '<span style="color:var(--gray-300)">—</span>'}</td>
           <td>${statusBadge(c.status)}${pendingTimeoutBadge}</td>
@@ -3654,7 +3695,7 @@
           <dt>自動化可否</dt><dd>${r.automatable ? '<span class="badge badge-ok">✓ OK</span>' : '<span class="badge badge-ng">✕ NG</span>'}</dd>
           <dt>フォームページ</dt><dd>${r.formPageUrl ? `<a href="${esc(r.formPageUrl)}" target="_blank" rel="noopener">${esc(r.formPageUrl)}</a>` : "—"}</dd>
           ${r.aiError ? `<dt>AI推定エラー</dt><dd style="color:#dc2626">${esc(r.aiError)}</dd>` : ""}
-          ${r.error ? `<dt>エラー</dt><dd style="color:#dc2626">${esc(r.error)}</dd>` : ""}
+          ${r.error ? `<dt>エラー</dt><dd style="color:#dc2626">${errorTypeLabel(r.errorType)}${esc(r.error)}</dd>` : ""}
         </dl>`;
       if (r.fieldMapping && r.fieldMapping.length > 0) {
         const fieldMap = {};
@@ -3870,6 +3911,16 @@
     };
     const s = map[status] || { label: status, cls: "badge-pending" };
     return `<span class="badge ${s.cls}">${s.label}</span>`;
+  }
+
+  // status="error"の内訳(research_result.errorType)を詳細モーダルで区別表示するためのラベル。
+  // 原因によって「再試行が有効そうか」の見当が付けやすくなる
+  function errorTypeLabel(errorType) {
+    const map = {
+      connection_error: '<span class="badge badge-error" style="margin-right:6px">接続エラー</span>',
+      slow_response:    '<span class="badge badge-error" style="margin-right:6px">応答が遅い(タイムアウト)</span>',
+    };
+    return map[errorType] || "";
   }
 
   function automatableBadge(result) {

@@ -11,6 +11,19 @@ const { classifyAppealPoints } = require("../../../lib/appeal-point-classifier")
 const RESEARCH_TIMEOUT_MS = 54000;
 const RESEARCH_TIMEOUT_SENTINEL = "__RESEARCH_TIMEOUT__";
 
+// エラーメッセージから大まかな原因を分類する。原因によって「サイト側が
+// そもそも繋がらない(connection_error)」のか「繋がるが遅すぎる(slow_response)」
+// のかが変わり、対応方針(再試行が有効かどうか等)も異なるため区別して記録する
+const CONNECTION_ERROR_RE = /ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_ADDRESS_UNREACHABLE|ERR_INTERNET_DISCONNECTED|ERR_SSL_PROTOCOL_ERROR|ERR_CERT_|ERR_EMPTY_RESPONSE|ERR_FAILED/i;
+const SLOW_RESPONSE_RE = /navigation timeout|ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT|timeout of \d+ ?ms exceeded/i;
+
+function classifyErrorType(message) {
+  if (!message) return "error";
+  if (CONNECTION_ERROR_RE.test(message)) return "connection_error";
+  if (SLOW_RESPONSE_RE.test(message)) return "slow_response";
+  return "error";
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
@@ -57,9 +70,9 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     if (err.message === RESEARCH_TIMEOUT_SENTINEL) {
       timedOut = true;
-      result = { error: "リサーチがタイムアウトしました。再度お試しください" };
+      result = { error: "リサーチがタイムアウトしました。再度お試しください", errorType: "slow_response" };
     } else {
-      result = { error: err.message };
+      result = { error: err.message, errorType: classifyErrorType(err.message) };
     }
     status = "error";
   }
