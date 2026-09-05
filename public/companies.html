@@ -572,6 +572,7 @@
   .badge-captcha    { background: #fffbeb; color: #b45309; }
   .badge-error      { background: #fff5f5; color: #dc2626; }
   .badge-rejected   { background: #fff5f5; color: #dc2626; border: 1px solid #fca5a5; }
+  .badge-blocked    { background: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db; }
   .badge-ok         { background: var(--green-50); color: var(--green-700); }
   .badge-ng         { background: #fff5f5; color: #dc2626; }
   .hiring-badge     { background: var(--green-50); color: var(--green-700); margin-left: 6px; vertical-align: middle; }
@@ -1278,6 +1279,7 @@
         <option value="researched">完了</option>
         <option value="captcha_blocked">CAPTCHA</option>
         <option value="no_form">フォームなし</option>
+        <option value="access_blocked">要手動対応(アクセス拒否)</option>
         <option value="error">エラー</option>
       </select>
       <select id="filterAutomation" onchange="onFilterChange()">
@@ -1635,6 +1637,7 @@
   function getManualActionReason(company) {
     if (company.status === "captcha_blocked") return "📞 要手動対応(CAPTCHA検出)";
     if (company.status === "no_form") return "📞 要手動対応(フォームなし)";
+    if (company.status === "access_blocked") return "📞 要手動対応(セキュリティによりアクセス拒否)";
     if (company.status === "researched" && !company.email) return "📞 要手動対応(メアド未検出)";
     return "📞 要手動対応";
   }
@@ -2554,6 +2557,8 @@
 
           if (updated.status === "captcha_blocked") {
             resultClass = "captcha"; resultIcon = "🔒"; resultText = "CAPTCHA検出";
+          } else if (updated.status === "access_blocked") {
+            resultClass = "captcha"; resultIcon = "🛡️"; resultText = "アクセス拒否(要手動対応)";
           } else if (succeeded) {
             resultClass = "success"; resultIcon = "✓";
             resultText = updated.research_result?.automatable ? "完了（自動化OK）" : "完了";
@@ -3548,6 +3553,7 @@
           <option value="researched" ${company.status === "researched" ? "selected" : ""}>完了</option>
           <option value="captcha_blocked" ${company.status === "captcha_blocked" ? "selected" : ""}>CAPTCHA</option>
           <option value="no_form" ${company.status === "no_form" ? "selected" : ""}>フォームなし</option>
+          <option value="access_blocked" ${company.status === "access_blocked" ? "selected" : ""}>要手動対応(アクセス拒否)</option>
           <option value="error" ${company.status === "error" ? "selected" : ""}>エラー</option>
         </select>
         <button class="btn-status-update" onclick="updateStatus(${id})">更新</button>
@@ -3845,6 +3851,7 @@
       captcha_blocked:{ label: "🔒 CAPTCHA",          cls: "badge-captcha" },
       error:          { label: "✕ エラー",            cls: "badge-error" },
       rejected:       { label: "🚫 営業お断り",         cls: "badge-rejected" },
+      access_blocked: { label: "🛡️ 要手動対応(アクセス拒否)", cls: "badge-blocked" },
     };
     const s = map[status] || { label: status, cls: "badge-pending" };
     return `<span class="badge ${s.cls}">${s.label}</span>`;

@@ -22,7 +22,11 @@ module.exports = async function handler(req, res) {
 
   try {
     result = await analyzeForm(company.url);
-    if (result.rejection_detected) {
+    if (result.accessBlocked) {
+      // NinjaFirewall等のセキュリティプラグインに自動アクセスそのものを拒否されている場合。
+      // コード側の再試行では解決できないため、要手動対応として扱う
+      status = "access_blocked";
+    } else if (result.rejection_detected) {
       status = "rejected";
     } else if (result.captchaDetected) {
       status = "captcha_blocked";
