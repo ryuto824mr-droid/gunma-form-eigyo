@@ -2587,7 +2587,10 @@
 
     let success = 0, failure = 0, completed = 0;
     const total = pending.length;
-    const BATCH_SIZE = 3;
+    // 3並列で実行すると、Vercel関数内で複数のPuppeteerインスタンスが同時に
+    // 共有メモリ(/dev/shm)を取り合い、Chromiumの起動自体に失敗することがある
+    // (一括CAPTCHA再リサーチで実際に発生・再現済み)。2並列に下げてリスクを減らす
+    const BATCH_SIZE = 2;
     const batches = [];
     for (let i = 0; i < pending.length; i += BATCH_SIZE) batches.push(pending.slice(i, i + BATCH_SIZE));
 
