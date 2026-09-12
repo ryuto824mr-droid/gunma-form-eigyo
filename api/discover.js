@@ -90,6 +90,10 @@ function isBranchOrStore(name) {
 const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
 
 module.exports = async function handler(req, res) {
+  if (req.method === "GET" && req.query.action === "search-history") {
+    return handleGetSearchHistory(req, res);
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
@@ -261,6 +265,24 @@ async function recordDiscoveredUrls(project, results) {
 // search_historyはapi/crm.js側のdb-setup(SETUP_SECRET必須)を待たずに記録を
 // 開始できるよう、ここで自前にCREATE TABLE IF NOT EXISTSしておく(db-setupにも
 // 同じ定義を登録済みなので、後からdb-setupが実行されても衝突しない)
+// 中断・再開時に「どの業種×市区町村を既に検索したか」をAPIから確認できるようにする
+// (GET /api/discover?action=search-history&project=locle)
+async function handleGetSearchHistory(req, res) {
+  const project = req.query.project === "ozukanzukan" ? "ozukanzukan" : "locle";
+  try {
+    const rows = await sql`
+      SELECT industry, prefecture, city, result_count, searched_at
+      FROM search_history
+      WHERE project = ${project}
+      ORDER BY searched_at ASC
+    `;
+    return res.status(200).json({ rows });
+  } catch (err) {
+    // search_historyがまだ存在しない(一度も検索が実行されていない)場合は空配列を返す
+    return res.status(200).json({ rows: [], note: err.message });
+  }
+}
+
 async function recordSearchHistory(project, params, resultCount) {
   try {
     await sql`
