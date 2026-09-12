@@ -258,8 +258,22 @@ async function recordDiscoveredUrls(project, results) {
   }
 }
 
+// search_historyはapi/crm.js側のdb-setup(SETUP_SECRET必須)を待たずに記録を
+// 開始できるよう、ここで自前にCREATE TABLE IF NOT EXISTSしておく(db-setupにも
+// 同じ定義を登録済みなので、後からdb-setupが実行されても衝突しない)
 async function recordSearchHistory(project, params, resultCount) {
   try {
+    await sql`
+      CREATE TABLE IF NOT EXISTS search_history (
+        id           SERIAL PRIMARY KEY,
+        project      TEXT NOT NULL,
+        industry     TEXT NOT NULL,
+        prefecture   TEXT,
+        city         TEXT,
+        result_count INTEGER,
+        searched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
     await sql`
       INSERT INTO search_history (project, industry, prefecture, city, result_count)
       VALUES (${project}, ${params.industry}, ${params.prefecture || null}, ${params.city || null}, ${resultCount})
