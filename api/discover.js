@@ -182,6 +182,11 @@ module.exports = async function handler(req, res) {
     // 重複して検索・処理しないようにするため)。記録の失敗は検索処理自体に影響させない
     await recordDiscoveredUrls(project, merged);
 
+    // 8. 検索履歴を記録する(業種×都道府県×市区町村のどの組み合わせを検索したかを後から
+    // 正確に判定できるようにするため。以前はこの記録が無く、既に検索済みの組み合わせを
+    // 再確認する手段が企業名からの推測しかなかった)。記録の失敗は検索処理自体に影響させない
+    await recordSearchHistory(project, params, merged.length);
+
     const payload = { configured: true, results: merged, excluded_duplicate_count: excludedKnownCount + excludedRecentCount };
     if (debugAuthorized) {
       payload.debug = {
@@ -250,6 +255,17 @@ async function recordDiscoveredUrls(project, results) {
     } catch {
       // 記録失敗は検索処理自体には影響させない
     }
+  }
+}
+
+async function recordSearchHistory(project, params, resultCount) {
+  try {
+    await sql`
+      INSERT INTO search_history (project, industry, prefecture, city, result_count)
+      VALUES (${project}, ${params.industry}, ${params.prefecture || null}, ${params.city || null}, ${resultCount})
+    `;
+  } catch {
+    // 履歴記録の失敗は検索処理自体には影響させない
   }
 }
 

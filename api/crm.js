@@ -516,6 +516,19 @@ async function handleDbSetup(req, res) {
         user_agent   TEXT
       )
     `);
+    // search_historyテーブル追加（api/discover.jsの検索実行ごとに業種・都道府県・市区町村・
+    // 件数を記録し、後から「どの組み合わせを検索済みか」を正確に判定できるようにする）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS search_history (
+        id           SERIAL PRIMARY KEY,
+        project      TEXT NOT NULL,
+        industry     TEXT NOT NULL,
+        prefecture   TEXT,
+        city         TEXT,
+        result_count INTEGER,
+        searched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
 
     // ==================== セットアップ後の存在確認 ====================
     // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
@@ -538,6 +551,7 @@ async function handleDbSetup(req, res) {
       "generated_content", "sender_accounts", "meeting_notes",
       "auto_pipeline_config", "auto_pipeline_logs", "send_queue",
       "production_tasks", "production_task_history", "link_clicks",
+      "search_history",
     ];
     const expectedTables = [...schemaTables, ...additionalTables];
 
