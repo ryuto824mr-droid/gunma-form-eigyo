@@ -3,6 +3,18 @@ const { sql } = require("../lib/db");
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
     try {
+      // 1社分のみ取得(companies.htmlのcallResearchAPIが、リサーチAPIの応答を受信できなかった
+      // 場合にサーバー側で結果が書き込まれたかを確認するために使う)
+      const singleId = parseInt(req.query?.id, 10);
+      if (singleId) {
+        const [company] = await sql`
+          SELECT c.*, EXISTS(SELECT 1 FROM send_logs sl WHERE sl.company_id = c.id AND sl.status = 'sent') AS has_sent
+          FROM companies c WHERE c.id = ${singleId}
+        `;
+        if (!company) return res.status(404).json({ error: "企業が見つかりません" });
+        return res.status(200).json(company);
+      }
+
       const showArchived = req.query?.show_archived === "1";
       const project = req.query?.project;
       const hasProjectFilter = project === "locle" || project === "ozukanzukan";

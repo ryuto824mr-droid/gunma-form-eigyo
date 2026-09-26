@@ -2223,15 +2223,61 @@
     lucide.createIcons();
   }
 
+  // リサーチAPI(maxDuration 60秒)の応答が届かなくなってから、サーバー側で結果が書き込まれたかを
+  // 確認し続ける上限時間。maxDurationに余裕を持たせた値にする
+  const RESEARCH_RECOVERY_DEADLINE_MS = 70000;
+  const RESEARCH_RECOVERY_POLL_MS = 3000;
+
+  // 戻り値のdataは常にサーバーに保存された企業レコード。リサーチ処理自体の失敗
+  // (解析エラー・タイムアウト)はdata.status === "error"で表す。企業レコードを
+  // 取得できなかった場合(404等のAPIエラー、応答断のまま結果も確認できない場合)はthrowする
   async function callResearchAPI(id) {
     const before = companies.find(c => c.id === id);
     const hadEmail = !!(before && before.email);
-    const res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
-    const data = await res.json();
+    const startedAt = Date.now();
+
+    let res, data;
+    try {
+      res = await fetch(`/api/companies/${id}/research`, { method: "POST" });
+      data = await res.json();
+    } catch (err) {
+      // ネットワーク瞬断・Vercel側の接続リセット・504(JSON以外の応答)等でブラウザが応答を
+      // 受け取れなくても、サーバー側ではリサーチが完了してDBに結果が書き込まれていることがある
+      // (株式会社スターキャリアの事例)。DBの最新状態を取り直し、実際の結果で表示する
+      data = await recoverResearchResult(id, before, startedAt, err);
+      res = null;
+    }
+
+    if (res && !res.ok) {
+      throw new Error(data?.error || `リサーチAPIエラー (HTTP ${res.status})`);
+    }
     if (!hadEmail && data && data.email) {
       showToast(`📧 メアドを自動取得しました: ${esc(data.email)}`, "info");
     }
-    return { ok: res.ok, data };
+    return { ok: true, data };
+  }
+
+  // research.jsは処理の成否にかかわらず最後にupdated_atを更新するため、リクエスト前の
+  // updated_atから変化していれば「サーバー側でリサーチが完了した」と判定できる
+  async function recoverResearchResult(id, before, startedAt, cause) {
+    const baselineUpdatedAt = before?.updated_at;
+    while (true) {
+      try {
+        const res = await fetch(`/api/companies?id=${id}`);
+        if (res.ok) {
+          const latest = await res.json();
+          const finished = baselineUpdatedAt
+            ? latest.updated_at !== baselineUpdatedAt
+            : latest.status !== "pending";
+          if (finished) return latest;
+        }
+      } catch {
+        // 通信が戻るまでポーリングを続ける
+      }
+      if (Date.now() - startedAt >= RESEARCH_RECOVERY_DEADLINE_MS) break;
+      await new Promise(r => setTimeout(r, RESEARCH_RECOVERY_POLL_MS));
+    }
+    throw new Error(`リサーチ結果を受信できませんでした(${cause.message})。時間をおいて一覧を再読み込みしてください`);
   }
 
   function updateCompany(updated) {
@@ -2398,9 +2444,9 @@
     renderTable();
 
     try {
-      const { ok, data: updated } = await callResearchAPI(newCompany.id);
+      const { data: updated } = await callResearchAPI(newCompany.id);
       updateCompany(updated);
-      return { ok: true, company: updated, researchOk: ok };
+      return { ok: true, company: updated, researchOk: updated.status !== "error" };
     } catch (err) {
       const idx = companies.findIndex(c => c.id === newCompany.id);
       if (idx !== -1) companies[idx] = { ...newCompany, status: "error", research_result: { error: err.message } };
@@ -2609,9 +2655,9 @@
         const company = batch[i];
         let resultClass, resultIcon, resultText;
         if (result.status === "fulfilled") {
-          const { ok, data: updated } = result.value;
+          const { data: updated } = result.value;
           updateCompany(updated);
-          const succeeded = ok && updated.status !== "error";
+          const succeeded = updated.status !== "error";
           if (succeeded) success++; else failure++;
 
           if (updated.status === "captcha_blocked") {
@@ -2925,9 +2971,9 @@
     if (idx !== -1) companies[idx] = { ...companies[idx], status: "researching" };
     renderTable();
     try {
-      const { ok, data: updated } = await callResearchAPI(id);
-      if (!ok) {
-        showToast("エラー: " + esc(updated.error || "不明なエラー"), "error");
+      const { data: updated } = await callResearchAPI(id);
+      if (updated.status === "error") {
+        showToast("リサーチエラー: " + esc(updated.research_result?.error || "不明なエラー"), "error");
       } else {
         showToast("リサーチが完了しました", "success");
       }
@@ -3385,7 +3431,7 @@
         const idx = companies.findIndex(c => c.id === company.id);
         if (idx !== -1) companies[idx] = { ...company, status: "error", research_result: { error: err.message } };
         renderTable();
-        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー</li>`);
+        resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー: ${esc(err.message)}</li>`);
         error++;
         barFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
         continue;
@@ -3488,7 +3534,7 @@
       const idx = companies.findIndex(c => c.id === company.id);
       if (idx !== -1) companies[idx] = { ...company, status: "error", research_result: { error: err.message } };
       renderTable();
-      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー</li>`);
+      state.resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">✕ ${esc(name)} → リサーチエラー: ${esc(err.message)}</li>`);
       state.error++;
       state.index++;
       state.barFill.style.width = `${Math.round((state.index / total) * 100)}%`;

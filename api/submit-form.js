@@ -1,7 +1,18 @@
 const { sql, isExcludedDomain, getSettings } = require("../lib/db");
 const { submitForm } = require("../lib/form-submitter");
 
+// vercel.jsonでこの関数のmaxDurationは60秒に設定されている。送信しても画面遷移しない
+// JS発火型フォーム等でPuppeteerの処理が長引きこれを超えると、Vercelに強制終了され、
+// ブラウザ側には応答が届かず「Failed to fetch」になってしまう(send_logsへの記録も
+// 保証されない)。api/companies/[id]/research.jsと同様に、maxDurationの90%(54秒)が
+// 経過した時点で自ら諦めてstatus='failed'を記録し、必ずJSONで応答を返すようにする。
+// 前段のDB問い合わせにかかった時間も含めるため、ハンドラ開始時刻から計測する
+const SUBMIT_TIMEOUT_MS = 54000;
+const SUBMIT_TIMEOUT_SENTINEL = "__SUBMIT_TIMEOUT__";
+
 module.exports = async function handler(req, res) {
+  const startedAt = Date.now();
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POSTメソッドのみ対応しています" });
   }
@@ -112,14 +123,27 @@ module.exports = async function handler(req, res) {
   // フォーム自動送信
   let logStatus = "failed";
   let logExtra  = {};
+  let timeoutId;
 
   try {
-    const result = await submitForm(contactFormUrl, fieldValues);
+    const remainingMs = Math.max(0, SUBMIT_TIMEOUT_MS - (Date.now() - startedAt));
+    const result = await Promise.race([
+      submitForm(contactFormUrl, fieldValues),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(SUBMIT_TIMEOUT_SENTINEL)), remainingMs);
+      }),
+    ]);
     // "success" → "sent" / "uncertain" → "uncertain" / throw → "failed"
     logStatus = result.status === "success" ? "sent" : "uncertain";
     logExtra  = { resultUrl: result.resultUrl, resultTitle: result.resultTitle, submitStatus: result.status };
   } catch (err) {
-    logExtra = { error: err.message };
+    if (err.message === SUBMIT_TIMEOUT_SENTINEL) {
+      logExtra = { error: "送信処理がタイムアウトしました", timedOut: true };
+    } else {
+      logExtra = { error: err.message };
+    }
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // send_logsに記録
@@ -134,6 +158,7 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({
       error: `自動送信に失敗しました: ${logExtra.error}`,
       log:   logEntry,
+      ...(logExtra.timedOut ? { type: "submit_timeout" } : {}),
     });
   }
 
