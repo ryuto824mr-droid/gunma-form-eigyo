@@ -38,6 +38,8 @@ const EXCLUDE_DOMAINS = [
   "usappy.jp",
   "hokennomadoguchi.com", "jfc.go.jp", "hoken-clinic.com", "jp-life.japanpost.jp",
   "aeonbank.co.jp", "fp-moneydoctor.com", "gran-class-hoken.com", "gunmabank.co.jp",
+  // まとめサイト・ポータルサイト(藤岡市の検索結果に混入)
+  "suumo.jp", "tsukulink.jp", "homepro.jp", "map.goo.ne.jp",
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -53,6 +55,9 @@ const NOISE_NAME_KEYWORDS = [
   "ガソリンスタンド", "service station",
   "ほけんの窓口", "保険クリニック", "保険相談", "マネードクター",
   "商工会議所", "商工会",
+  // まとめサイト・ポータルサイト・口コミサイトのページタイトル
+  "【SUUMO】", "クチコミ", "評価・クチコミ", "費用相場",
+  "サービス情報公表システム", "goo地図", "goo市街",
 ];
 
 // 「銀行」単体では正当な金融法人ヒットもあり誤除外が多いため、
