@@ -81,6 +81,17 @@ module.exports = async function handler(req, res) {
   const [company] = await sql`SELECT * FROM companies WHERE id = ${company_id}`;
   if (!company) return res.status(404).json({ error: "企業が見つかりません" });
 
+  // アーカイブ済み、またはアクションステータスが「クローズ」の企業は営業対象から除外されている。
+  // 以前は営業お断りの判定(research_result.rejection_detected)しか見ておらず、
+  // rejection_detectedが更新されていない除外済み企業(花山うどん等)に手動送信できてしまったため、
+  // rejection_detected・強制送信(force)・skip_rejection_sitesの設定に関わらず必ず拒否する
+  if (company.archived === true || company.action_status === "closed") {
+    return res.status(400).json({
+      error: "この企業は営業対象から除外されています(アーカイブ済み、またはアクションステータスが「クローズ」)",
+      type: "excluded_company",
+    });
+  }
+
   if (await isExcludedDomain(company.url)) {
     return res.status(400).json({ error: "除外ドメインに登録されています", type: "excluded_domain" });
   }
