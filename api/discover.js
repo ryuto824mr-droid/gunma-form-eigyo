@@ -40,6 +40,7 @@ const EXCLUDE_DOMAINS = [
   "aeonbank.co.jp", "fp-moneydoctor.com", "gran-class-hoken.com", "gunmabank.co.jp",
   // まとめサイト・ポータルサイト(藤岡市の検索結果に混入)
   "suumo.jp", "tsukulink.jp", "homepro.jp", "map.goo.ne.jp",
+  "hapisumu.jp", "house.goo.ne.jp", "myhome.nifty.com", "gunmadekurasu.com",
 ];
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
@@ -58,7 +59,15 @@ const NOISE_NAME_KEYWORDS = [
   // まとめサイト・ポータルサイト・口コミサイトのページタイトル
   "【SUUMO】", "クチコミ", "評価・クチコミ", "費用相場",
   "サービス情報公表システム", "goo地図", "goo市街",
+  // 漢字表記の口コミ、不動産ポータル特有のタイトル表現(「新築・分譲マンション最新情報
+  // （販売中・販売予定）」等)。「物件情報」は実在の不動産会社も自社サイトのタイトルに
+  // 使うことが多く誤除外が大きいため対象にしない
+  "口コミ", "最新情報", "販売中",
 ];
+
+// 「南牧村のリフォーム会社19選！」のような「数字+選」形式のまとめ記事
+// (「選挙」「選手」「選考」「選抜」等の単語の一部は除く)
+const NOISE_NAME_PATTERNS = [/[0-9０-９]+選(?![挙手考抜択定])/];
 
 // 「銀行」単体では正当な金融法人ヒットもあり誤除外が多いため、
 // 支店・出張所単位の結果(例: "〇〇銀行△△支店")に限定して除外する
@@ -71,6 +80,7 @@ function isNoisyName(rawName) {
   if (!rawName) return false;
   if (isBankBranchName(rawName)) return true;
   const name = rawName.toLowerCase();
+  if (NOISE_NAME_PATTERNS.some(re => re.test(rawName))) return true;
   return NOISE_NAME_KEYWORDS.some(k => name.includes(k.toLowerCase()));
 }
 
@@ -81,6 +91,8 @@ function isBranchOrStore(name) {
   if (name.includes("本店")) return false;
   const branchKeywords = ["支店", "営業所", "出張所"];
   if (branchKeywords.some(k => name.includes(k))) return true;
+  // 英語表記の支店・営業所("Tsumagoi Sales Office"等)。"Branch"は単語として含む場合のみ
+  if (/sales office|branch office|\bbranch\b/i.test(name)) return true;
   if (/[一-龠ぁ-んァ-ヶ]店$/.test(name) && !name.endsWith("本店")) return true;
 
   // 駅名+方角+店舗系(「駅」という文字を含み、かつ店舗を示す語も含む場合)
