@@ -135,15 +135,27 @@ module.exports = async function handler(req, res) {
   let logStatus = "failed";
   let logExtra  = {};
   let timeoutId;
+  let rejectionText = null;
+
+  // 項目対応に含まれない欄(確認用メールアドレス・3分割の電話番号)の補完や、お名前/ふりがなの
+  // 取り違え補正に使う送信者情報
+  const profile = {
+    companyName:    VALUE_MAP.company_name,
+    personName:     VALUE_MAP.contact_person_name,
+    personNameKana: VALUE_MAP.contact_person_name_kana,
+    email:          VALUE_MAP.email,
+    phone:          VALUE_MAP.phone,
+  };
 
   try {
     const remainingMs = Math.max(0, SUBMIT_TIMEOUT_MS - (Date.now() - startedAt));
     const result = await Promise.race([
-      submitForm(contactFormUrl, fieldValues),
+      submitForm(contactFormUrl, fieldValues, { profile }),
       new Promise((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error(SUBMIT_TIMEOUT_SENTINEL)), remainingMs);
       }),
     ]);
+    if (result.status === "rejection_checkbox") rejectionText = result.rejectionText;
     // "success" → "sent" / "uncertain" → "uncertain" / throw → "failed"
     logStatus = result.status === "success" ? "sent" : "uncertain";
     logExtra  = { resultUrl: result.resultUrl, resultTitle: result.resultTitle, submitStatus: result.status };
@@ -155,6 +167,22 @@ module.exports = async function handler(req, res) {
     }
   } finally {
     clearTimeout(timeoutId);
+  }
+
+  // 「営業目的ではありません」等の確認チェックを求めるフォームだった(実質的な営業お断り)。
+  // 何も入力・送信していないためsend_logsには記録せず、以後の送信も止まるよう
+  // research_result.rejection_detectedをtrueにする(リサーチ時の営業お断り検出と同じ扱い)
+  if (rejectionText) {
+    const note = `営業目的でないことの確認チェックを検出: ${rejectionText}`;
+    await sql`
+      UPDATE companies
+      SET research_result = jsonb_set(
+            jsonb_set(COALESCE(research_result, '{}'::jsonb), '{rejection_detected}', 'true'::jsonb),
+            '{rejection_text}', to_jsonb(${note}::text)),
+          updated_at = NOW()
+      WHERE id = ${company_id}
+    `;
+    return res.status(400).json({ error: `このサイトは営業お断りとみなされます(${note})`, type: "rejection_detected" });
   }
 
   // send_logsに記録
