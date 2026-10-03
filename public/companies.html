@@ -129,6 +129,16 @@
     display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
     font-size: 13px; font-weight: 600; color: var(--gray-700);
   }
+  .usage-card-help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--gray-100); color: var(--gray-400);
+    font-size: 11px; font-weight: 700; cursor: help;
+  }
+  .usage-card-purpose {
+    font-size: 11px; color: var(--gray-400); line-height: 1.5;
+    margin: -6px 0 10px;
+  }
   .usage-card-count {
     font-size: 28px; font-weight: 700; color: var(--gray-900);
     margin-bottom: 8px;
@@ -1487,7 +1497,21 @@
     return "green";
   }
 
-  function usageCardHtml({ icon, label, count, freeLimit, percentage, estimatedCostJpy, daysUntilReset }) {
+  // 各APIが「何のためのものか」の説明。見出しの?アイコンのホバー(title属性)と、見出し直下の
+  // 1行表示の両方に使う(ホバーできないスマートフォンでも読めるよう常時表示も併用する)
+  const API_PURPOSES = {
+    brave:     "企業を探す(Web検索)。検索結果から企業候補を見つけるために使用",
+    places:    "企業を探す(地図・場所情報)。Brave Searchと組み合わせて企業候補の精度を上げるために使用",
+    anthropic: "探した後の賢い判断に使用。検索結果の絞り込み、フォームの入力欄の読み取り、文章の生成・要約など",
+  };
+
+  function usageCardHeaderHtml(title, purpose) {
+    return `
+        <div class="usage-card-header">${title}<span class="usage-card-help" title="${esc(purpose)}" aria-label="${esc(purpose)}">?</span></div>
+        <div class="usage-card-purpose">${esc(purpose)}</div>`;
+  }
+
+  function usageCardHtml({ icon, label, purpose, count, freeLimit, percentage, estimatedCostJpy, daysUntilReset }) {
     const pct = Math.max(0, percentage || 0);
     const barClass = usageBarClass(pct);
     const barWidth = Math.min(pct, 100);
@@ -1499,7 +1523,7 @@
       : "";
     return `
       <div class="usage-card">
-        <div class="usage-card-header">${icon} ${label}</div>
+        ${usageCardHeaderHtml(`${icon} ${label}`, purpose)}
         <div class="usage-card-count">${count}<span class="unit">回</span></div>
         <div class="usage-bar-track">
           <div class="usage-bar-fill ${barClass}" style="width:${barWidth}%"></div>
@@ -1516,7 +1540,7 @@
   function anthropicUsageCardHtml({ count, inputTokens, outputTokens, estimatedCostJpy, note }) {
     return `
       <div class="usage-card">
-        <div class="usage-card-header">🤖 Anthropic API</div>
+        ${usageCardHeaderHtml("🤖 Anthropic API(AI)", API_PURPOSES.anthropic)}
         <div class="usage-card-count">${count}<span class="unit">回</span></div>
         <div class="usage-card-tokens">入力: ${inputTokens.toLocaleString()} トークン / 出力: ${outputTokens.toLocaleString()} トークン</div>
         <div class="usage-card-cost-big">
@@ -1546,13 +1570,13 @@
 
       container.innerHTML =
         usageCardHtml({
-          icon: "🦁", label: "Brave Search",
+          icon: "🦁", label: "Brave Search", purpose: API_PURPOSES.brave,
           count: brave.count, freeLimit: brave.free_limit,
           percentage: brave.percentage, estimatedCostJpy: brave.estimated_cost_jpy,
           daysUntilReset,
         }) +
         usageCardHtml({
-          icon: "📍", label: "Google Places",
+          icon: "📍", label: "Google Places", purpose: API_PURPOSES.places,
           count: places.count, freeLimit: GOOGLE_PLACES_FREE_CALLS_APPROX,
           percentage: places.percentage, estimatedCostJpy: places.estimated_cost_jpy,
           daysUntilReset,
