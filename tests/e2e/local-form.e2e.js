@@ -21,6 +21,23 @@ const page = (title, inner) => `<!doctype html><html lang="ja"><head><meta chars
 <body><h1>お問い合わせ</h1><form method="post" action="/done/${title}">${inner}
 <p><label for="message">お問い合わせ内容</label><textarea id="message" name="message"></textarea></p>
 <p><button type="submit">送信する</button></p></form></body></html>`;
+// 確認画面のあるフォーム: 「確認する」→ 確認画面(入力内容を表示)→「この内容で送信する」→ 完了
+const confirmInputPage = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>confirm</title></head>
+<body><h1>お問い合わせ</h1><form method="post" action="/confirm/confirm">
+<p><label>お名前<input type="text" name="name"></label></p>
+<p><label>フリガナ<input type="text" name="kana"></label></p>
+<p><label>会社名<input type="text" name="company"></label></p>
+<p><label>メールアドレス<input type="email" name="email"></label></p>
+<p><label>電話番号<input type="tel" name="tel"></label></p>
+<p><label for="message">お問い合わせ内容</label><textarea id="message" name="message"></textarea></p>
+<p><button type="submit">入力内容を確認する</button></p></form></body></html>`;
+const escapeHtml = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const confirmScreen = (values) => `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>入力内容の確認</title></head>
+<body><h1>入力内容の確認</h1><p>以下の内容でよろしければ送信してください。</p>
+<form method="post" action="/done/confirm">
+${Object.entries(values).map(([k, v]) => `<p>${escapeHtml(k)}: ${escapeHtml(v)}</p><input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("")}
+<p><button type="button" onclick="history.back()">戻る</button> <button type="submit">この内容で送信する</button></p></form></body></html>`;
+
 const row = (labelText, input) => `<p><label>${labelText}${input}</label></p>`;
 
 // テスト用フォーム: 名前 → { html, fieldMapping(リサーチ結果の項目対応) }
@@ -77,6 +94,17 @@ const FIXTURES = {
       { role: "message", name: "message" },
     ],
   },
+  confirm: {
+    html: confirmInputPage,
+    fieldMapping: [
+      { role: "contact_person_name", name: "name" },
+      { role: "contact_person_name_kana", name: "kana" },
+      { role: "company_name", name: "company" },
+      { role: "email", name: "email" },
+      { role: "phone", name: "tel" },
+      { role: "message", name: "message" },
+    ],
+  },
   phone: {
     html: page("phone",
       row("お名前", '<input type="text" name="name">') +
@@ -104,13 +132,14 @@ let baseUrl;
 function startServer() {
   return new Promise((resolve) => {
     server = http.createServer((req, res) => {
-      const m = req.url.match(/^\/(form|done)\/(\w+)$/);
+      const m = req.url.match(/^\/(form|confirm|done)\/(\w+)$/);
       if (!m || !FIXTURES[m[2]]) { res.statusCode = 404; return res.end(); }
       res.setHeader("content-type", "text/html; charset=utf-8");
       if (m[1] === "form") return res.end(FIXTURES[m[2]].html);
       let body = "";
       req.on("data", (c) => { body += c; });
       req.on("end", () => {
+        if (m[1] === "confirm") return res.end(confirmScreen(querystring.parse(body)));
         (received[m[2]] = received[m[2]] || []).push(querystring.parse(body));
         res.end("<!doctype html><html><head><meta charset='utf-8'><title>送信完了</title></head><body><p>お問い合わせありがとうございました。送信が完了しました。</p></body></html>");
       });
@@ -123,6 +152,7 @@ function startServer() {
 
 // ---- api/submit-form.js(DBだけ偽物) ----
 const inserts = [];
+const resultUpdates = {}; // フォーム名 → [confirm_step, result_url]
 let currentFixture = null;
 function fakeSql(strings, ...values) {
   const text = strings.join("?").replace(/\s+/g, " ").trim();
@@ -140,6 +170,10 @@ function fakeSql(strings, ...values) {
   if (text.includes("INSERT INTO send_logs")) {
     inserts.push({ fixture: currentFixture, values });
     return Promise.resolve([{ id: inserts.length }]);
+  }
+  if (text.startsWith("UPDATE send_logs SET confirm_step")) {
+    resultUpdates[currentFixture] = values.slice(0, 2);
+    return Promise.resolve([{ confirm_step: values[0], result_url: values[1] }]);
   }
   return Promise.resolve([]);
 }
@@ -189,6 +223,19 @@ test("ラベルなしのふりがな欄はカタカナ", { timeout: 90000 }, asy
   assert.equal(v.name, "松崎流空");
 });
 
+test("確認画面のあるフォーム: 最終送信ボタンまで押して、確認画面の値が送信される", { timeout: 90000 }, async () => {
+  const r = await submit("confirm");
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.submitStatus, "sent");
+  assert.equal(r.body.log.confirm_step, true);
+  const [v] = received.confirm;
+  assert.equal(v.name, "松崎流空");
+  assert.equal(v.kana, "マツザキリュウト");
+  assert.equal(v.company, "株式会社LOCLE");
+  assert.equal(v.email, "matsuzaki9283@gmail.com");
+  assert.equal(v.tel, "027-212-2117");
+});
+
 test("電話番号: 数値の欄・最大文字数11・pattern・3分割", { timeout: 90000 }, async () => {
   const r = await submit("phone");
   assert.equal(r.status, 200, JSON.stringify(r.body));
@@ -217,4 +264,11 @@ test("send_logsに送信者の写しと実際の入力値が記録される", ()
   const phoneSplit = filled("phone").find(f => f.role === "phone_split");
   assert.equal(phoneSplit.value, "027 / 212 / 2117");
   console.log(JSON.stringify(Object.fromEntries(Object.keys(FIXTURES).map(f => [f, filled(f)])), null, 1));
+});
+
+test("送信結果(確認画面を最後まで進めたか・結果のURL)が記録される", () => {
+  for (const fixture of ["basic", "katakana", "nolabel", "phone"]) {
+    assert.deepEqual(resultUpdates[fixture], [false, `${baseUrl}/done/${fixture}`], fixture);
+  }
+  assert.deepEqual(resultUpdates.confirm, [true, `${baseUrl}/done/confirm`]);
 });

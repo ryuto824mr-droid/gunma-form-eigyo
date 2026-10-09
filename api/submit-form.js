@@ -192,7 +192,11 @@ module.exports = async function handler(req, res) {
     if (result.status === "rejection_checkbox") rejectionText = result.rejectionText;
     // "success" → "sent" / "uncertain" → "uncertain" / throw → "failed"
     logStatus = result.status === "success" ? "sent" : "uncertain";
-    logExtra  = { resultUrl: result.resultUrl, resultTitle: result.resultTitle, submitStatus: result.status, filledFields: result.filledFields || null };
+    logExtra  = {
+      resultUrl: result.resultUrl, resultTitle: result.resultTitle, submitStatus: result.status,
+      filledFields: result.filledFields || null,
+      confirmStep: typeof result.confirmStep === "boolean" ? result.confirmStep : null,
+    };
   } catch (err) {
     if (err.message === SUBMIT_TIMEOUT_SENTINEL) {
       logExtra = { error: "送信処理がタイムアウトしました", timedOut: true };
@@ -228,6 +232,22 @@ module.exports = async function handler(req, res) {
             ${senderProfileRow.id}, ${JSON.stringify(senderSnapshot)}, ${logExtra.filledFields ? JSON.stringify(logExtra.filledFields) : null})
     RETURNING *
   `;
+
+  // 送信結果(確認画面を最後まで進めたか・結果のURL)を記録する(送信の判定には使わない)。
+  // confirm_step/result_url列はdb-setupで追加するため、db-setup前のデプロイでも送信記録そのものが
+  // 失われないよう、INSERTとは別のUPDATEにして失敗は無視する(列はNULLのまま残る)
+  if (logStatus !== "failed") {
+    try {
+      const [updated] = await sql`
+        UPDATE send_logs SET confirm_step = ${logExtra.confirmStep}, result_url = ${logExtra.resultUrl || null}
+        WHERE id = ${logEntry.id}
+        RETURNING confirm_step, result_url
+      `;
+      if (updated) Object.assign(logEntry, updated);
+    } catch {
+      // 列が未作成(db-setup前)など。送信自体は完了しているため応答は変えない
+    }
+  }
 
   if (logStatus === "failed") {
     return res.status(500).json({

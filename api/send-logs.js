@@ -2,6 +2,24 @@ const { sql } = require("../lib/db");
 
 module.exports = async function handler(req, res) {
   if (req.method === "GET") {
+    // ?id=<ID>: 1件の詳細(送信者プロフィールの写し・実際の入力値・送信結果を含む)。読み取り専用。
+    // 列の追加(db-setup)の前後どちらでも動くよう、send_logsは sl.* でそのまま返す
+    if (req.query.id !== undefined) {
+      const id = parseInt(req.query.id, 10);
+      if (!(id > 0) || String(id) !== String(req.query.id).trim()) {
+        return res.status(400).json({ error: "idは正の整数で指定してください" });
+      }
+      const [log] = await sql`
+        SELECT sl.*, c.name AS company_name, mv.name AS variant_name
+        FROM send_logs sl
+        LEFT JOIN companies c        ON c.id  = sl.company_id
+        LEFT JOIN message_variants mv ON mv.id = sl.variant_id
+        WHERE sl.id = ${id}
+      `;
+      if (!log) return res.status(404).json({ error: "送信記録が見つかりません" });
+      return res.status(200).json(log);
+    }
+
     const project = req.query.project;
     const hasProjectFilter = project === "locle" || project === "ozukanzukan";
 

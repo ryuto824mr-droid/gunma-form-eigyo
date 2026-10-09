@@ -553,6 +553,10 @@ async function handleDbSetup(req, res) {
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS sender_profile_id INTEGER REFERENCES sender_profiles(id)");
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS sender_snapshot JSONB");
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS filled_fields JSONB");
+    // send_logs.confirm_step/result_url追加（フォーム送信の結果として、確認画面を最後まで進めたか
+    // (確認画面が無いフォームはfalse)と送信後のページURLを記録する。失敗時・既存の行はNULLのまま）
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS confirm_step BOOLEAN");
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS result_url TEXT");
 
     // ==================== セットアップ後の存在確認 ====================
     // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
