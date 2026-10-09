@@ -17,6 +17,8 @@ module.exports = async function handler(req, res) {
             sl.status,
             sl.trigger_mode,
             sl.sent_at,
+            sl.sender_snapshot->>'person_name'  AS sender_person_name,
+            sl.sender_snapshot->>'company_name' AS sender_company_name,
             (
               SELECT classification FROM responses
               WHERE send_log_id = sl.id
@@ -39,6 +41,8 @@ module.exports = async function handler(req, res) {
             sl.status,
             sl.trigger_mode,
             sl.sent_at,
+            sl.sender_snapshot->>'person_name'  AS sender_person_name,
+            sl.sender_snapshot->>'company_name' AS sender_company_name,
             (
               SELECT classification FROM responses
               WHERE send_log_id = sl.id

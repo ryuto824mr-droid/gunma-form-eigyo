@@ -127,6 +127,8 @@
   .select-group select:disabled { background: var(--gray-50); color: var(--gray-500); cursor: not-allowed; }
   .sender-locked-note { font-size: 11px; color: var(--gray-400); margin: 2px 0 0; }
   .sender-locked-note.sender-note-warning { color: #dc2626; font-weight: 600; }
+  .variant-name-warning { font-size: 11px; color: #b45309; font-weight: 600; margin: 2px 0 0; line-height: 1.5; }
+  .log-sender { display: block; font-size: 11px; color: var(--gray-400); margin-top: 2px; }
   .btn-generate {
     padding: 8px 16px;
     background: linear-gradient(135deg, var(--green-500), var(--green-700));
@@ -852,6 +854,7 @@
       <div class="select-group">
         <label for="variantSelect">バリアント</label>
         <select id="variantSelect" onchange="onVariantSelectChange()"><option value="">読み込み中...</option></select>
+        <p class="variant-name-warning" id="variantNameWarning" hidden></p>
       </div>
       <div class="select-group">
         <label for="senderSelect">送信者</label>
@@ -1315,6 +1318,8 @@
 <script>
   let companies = [];
   let variants  = [];
+  // バリアントID → 本文の署名と送信者プロフィールの照合結果(api/crm.js?action=sender-profiles&check_variants=1)
+  let variantNameChecks = {};
   let attachments = [];
   let senderAccounts = [];
   let allSenderAccounts = [];
@@ -1366,6 +1371,7 @@
         fetch("/api/crm?action=sender-accounts"),
         fetch("/api/crm?action=settings"),
       ]);
+      await loadVariantNameChecks();
       const rawCompanies = await cRes.json();
       companies      = Array.isArray(rawCompanies) ? rawCompanies : [];
       variants       = await vRes.json();
@@ -1461,6 +1467,7 @@
   function onVariantSelectChange() {
     const variantId = parseInt(document.getElementById("variantSelect").value);
     const variant = variants.find(v => v.id === variantId);
+    updateVariantNameWarning(variantId);
     const senderEl = document.getElementById("senderSelect");
     const noteEl   = document.getElementById("senderLockedNote");
 
@@ -1488,6 +1495,43 @@
     }
     senderEl.disabled = false;
     noteEl.hidden = true;
+  }
+
+  // 照合結果の取得に失敗しても画面の他の機能は止めない(警告が出ないだけ)
+  async function loadVariantNameChecks() {
+    try {
+      const res = await fetch("/api/crm?action=sender-profiles&check_variants=1");
+      const data = await res.json();
+      variantNameChecks = {};
+      if (res.ok && Array.isArray(data.variant_checks)) {
+        data.variant_checks.forEach(c => { variantNameChecks[c.variant_id] = c; });
+      }
+    } catch {
+      variantNameChecks = {};
+    }
+  }
+
+  // 本文の署名とフォームの「お名前」欄に入る送信者名が一致しない場合の警告(送信は止めない)
+  function updateVariantNameWarning(variantId) {
+    const el = document.getElementById("variantNameWarning");
+    const c = variantNameChecks[variantId];
+    if (c && c.result === "mismatch") {
+      el.textContent = `⚠ 本文の署名と送信者名（${c.person_name}）が一致しません。フォームの「お名前」欄には${c.person_name}が入ります`;
+      el.hidden = false;
+    } else if (c && c.result === "no_profile") {
+      el.textContent = "⚠ このプロジェクトの送信者プロフィールが未登録です。設定画面で登録するまでフォーム送信はできません";
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  }
+
+  // 送信履歴の「送信者」表示。フォーム送信はsend_logs.sender_snapshotの名前・会社名を表示し、
+  // 記録が無い行(送信者プロフィール導入前の環境変数時代)は「記録なし(旧方式)」と表示する
+  function logSenderLabel(log) {
+    if (log.channel !== "form") return "";
+    if (!log.sender_person_name) return "記録なし（旧方式）";
+    return `${log.sender_person_name} / ${log.sender_company_name || ""}`;
   }
 
   function generateDraft() {
@@ -2379,14 +2423,15 @@
   function exportLogsCSV() {
     const filtered = getFilteredLogs();
     const bom = String.fromCharCode(0xFEFF);
-    const header = "送信日時,企業名,バリアント名,チャネル,ステータス,反応\n";
+    const header = "送信日時,企業名,バリアント名,チャネル,ステータス,反応,送信者\n";
     const rows = filtered.map(log => [
       log.sent_at ? new Date(log.sent_at).toLocaleString("ja-JP") : "",
       log.company_name || "",
       log.variant_name || "",
       log.channel || "",
       log.status || "",
-      log.latest_response?.classification || log.latest_response || ""
+      log.latest_response?.classification || log.latest_response || "",
+      logSenderLabel(log)
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([bom + header + rows], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -2529,7 +2574,7 @@
     const dataRow = `
       <tr id="lr-${log.id}">
         <td style="font-weight:500;color:var(--gray-900)">${esc(log.company_name)}</td>
-        <td style="color:var(--gray-500)">${esc(log.variant_name)}</td>
+        <td style="color:var(--gray-500)">${esc(log.variant_name)}${log.channel === "form" ? `<span class="log-sender">送信者: ${esc(logSenderLabel(log))}</span>` : ""}</td>
         <td style="white-space:nowrap;font-size:12px;color:var(--gray-400)">${sentAt}</td>
         <td style="font-size:12px;color:var(--gray-400)">${statusHtml}</td>
         <td id="rb-${log.id}">${respHtml}</td>

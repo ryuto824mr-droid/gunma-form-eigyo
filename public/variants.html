@@ -247,6 +247,7 @@
   }
   .card-sender { font-size: 11px; color: var(--gray-400); margin: 0; }
   .card-sender-inactive { color: #dc2626; font-weight: 600; }
+  .card-name-warning { font-size: 11px; color: #b45309; font-weight: 600; margin: 0; line-height: 1.5; }
   .list-empty { font-size: 13px; color: var(--gray-400); padding: 20px 0; margin: 0; }
   .list-count { font-size: 12px; color: var(--gray-400); font-weight: 400; margin-left: 8px; }
   .btn-preview {
@@ -688,6 +689,8 @@
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
   let variants = [];
+  // バリアントID → 本文の署名と送信者プロフィールの照合結果(api/crm.js?action=sender-profiles&check_variants=1)
+  let variantNameChecks = {};
   let attachments = [];
   let senderAccounts = [];
   let allSenderAccounts = [];
@@ -824,11 +827,38 @@
       const res = await fetch("/api/variants?project=" + encodeURIComponent(getCurrentProject()));
       if (!res.ok) throw new Error("取得失敗");
       variants = await res.json();
+      await loadVariantNameChecks();
       renderVariants();
     } catch (err) {
       document.getElementById("variantList").innerHTML =
         `<p class="list-empty">読み込みエラー: ${esc(err.message)}</p>`;
     }
+  }
+
+  // 照合結果の取得に失敗しても一覧表示は続ける(警告が出ないだけ)
+  async function loadVariantNameChecks() {
+    try {
+      const res = await fetch("/api/crm?action=sender-profiles&check_variants=1");
+      const data = await res.json();
+      variantNameChecks = {};
+      if (res.ok && Array.isArray(data.variant_checks)) {
+        data.variant_checks.forEach(c => { variantNameChecks[c.variant_id] = c; });
+      }
+    } catch {
+      variantNameChecks = {};
+    }
+  }
+
+  function variantNameWarningHtml(v) {
+    const c = variantNameChecks[v.id];
+    if (!c) return "";
+    if (c.result === "no_profile") {
+      return '<p class="card-name-warning">⚠ このプロジェクトの送信者プロフィールが未登録です（フォーム送信できません）</p>';
+    }
+    if (c.result === "mismatch") {
+      return `<p class="card-name-warning">⚠ 本文の署名と送信者名（${esc(c.person_name)}）が一致しません。フォームの「お名前」欄には${esc(c.person_name)}が入ります</p>`;
+    }
+    return "";
   }
 
   function renderVariants() {
@@ -894,6 +924,7 @@
         </div>
         ${tagsHtml}
         ${senderHtml}
+        ${variantNameWarningHtml(v)}
         <p class="card-body-preview">${esc(preview)}</p>
       </div>`;
   }

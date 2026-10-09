@@ -17,7 +17,7 @@ const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-mes
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
-const { PROJECTS, validateProfile } = require("../lib/sender-profile");
+const { PROJECTS, validateProfile, checkBodyName } = require("../lib/sender-profile");
 const { buildFormPreview } = require("../lib/sender-format");
 
 module.exports = async function handler(req, res) {
@@ -3205,7 +3205,26 @@ async function handleSenderProfiles(req, res) {
           email_matches_sender_account: senderEmails.includes(validation.profile.email.toLowerCase()),
         };
       });
-      return res.status(200).json(result);
+      if (!req.query.check_variants) return res.status(200).json(result);
+
+      // ?check_variants=1: バリアントごとに、本文の署名とプロジェクトの送信者名が一致するか
+      // (警告表示用。variants.html・send.htmlが使う)。チャネルに関係なく全バリアントを対象にする
+      // (メール用バリアントをフォーム送信に使うこともあるため)
+      const variantRows = await sql`
+        SELECT id, name, project, channel, subject_template, body_template
+        FROM message_variants ORDER BY id
+      `;
+      const variantChecks = variantRows.map(v => {
+        const sp = result.find(r => r.project === v.project);
+        const base = { variant_id: v.id, name: v.name, project: v.project, channel: v.channel };
+        if (!sp || !sp.registered) return { ...base, result: "no_profile" };
+        return {
+          ...base,
+          result: checkBodyName(`${v.subject_template || ""}\n${v.body_template || ""}`, sp.profile),
+          person_name: sp.profile.person_name,
+        };
+      });
+      return res.status(200).json({ profiles: result, variant_checks: variantChecks });
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
     }

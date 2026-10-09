@@ -67,3 +67,18 @@ test("normalizeProfileは余計な項目を含めない", () => {
   assert.deepEqual(Object.keys(normalizeProfile({ ...PROFILE, project: "locle", id: 1 })),
     ["person_name", "person_name_kana", "company_name", "email", "phone"]);
 });
+
+const { checkBodyName } = require("../lib/sender-profile");
+
+test("本文の署名と送信者名の照合", () => {
+  const p = { person_name: "松崎流空" };
+  assert.equal(checkBodyName("編集部の松崎と申します。\n\nぐんまお仕事図鑑編集部　松崎流空", p), "ok");
+  assert.equal(checkBodyName("署名: 松崎 流空", p), "ok", "本文側の空白は無視");
+  assert.equal(checkBodyName("編集部の松崎と申します。", p), "mismatch", "姓だけでは一致としない(氏名が空白区切りでないため)");
+  assert.equal(checkBodyName("LOCLEについて\n○○担当者\n\nLOCLE　山田", p), "mismatch");
+  assert.equal(checkBodyName("LOCLEと申します。どうぞよろしくお願いいたします。", p), "mismatch");
+  assert.equal(checkBodyName("松崎と申します", { person_name: "松崎 流空" }), "ok", "空白区切りなら姓だけで一致");
+  assert.equal(checkBodyName("松崎流空", { person_name: "" }), "mismatch");
+  assert.equal(checkBodyName("", p), "mismatch");
+  assert.equal(checkBodyName("松崎流空", null), "mismatch");
+});

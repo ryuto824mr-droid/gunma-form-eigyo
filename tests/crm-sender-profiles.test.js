@@ -135,3 +135,48 @@ test("DELETEは受け付けない", async () => {
   assert.equal(r.status, 405);
   assert.equal(calls.length, 0);
 });
+
+test("GET check_variants=1: バリアントごとに署名と送信者名を照合する", async () => {
+  reset((text) => {
+    if (text.includes("FROM sender_accounts")) return [];
+    if (text.includes("FROM message_variants")) {
+      return [
+        { id: 1, name: "LOCLE 山田", project: "locle", channel: "email", subject_template: "LOCLEについて", body_template: "LOCLE　山田" },
+        { id: 3, name: "初回挨拶", project: "locle", channel: "form", subject_template: null, body_template: "LOCLEと申します。" },
+        { id: 7, name: "動画付き", project: "ozukanzukan", channel: "email", subject_template: "件名", body_template: "編集部の松崎と申します。\nぐんまお仕事図鑑編集部　松崎流空" },
+      ];
+    }
+    return [{ id: 1, project: "ozukanzukan", ...PROFILE, updated_at: "2026-10-09T00:00:00Z" }];
+  });
+  const res = await new Promise((resolve) => {
+    const r = {
+      statusCode: 200,
+      status(c) { this.statusCode = c; return this; },
+      json(d) { resolve({ status: this.statusCode, body: d }); return this; },
+    };
+    handler({ method: "GET", query: { action: "sender-profiles", check_variants: "1" }, headers: {} }, r);
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.profiles.length, 2);
+  const byId = Object.fromEntries(res.body.variant_checks.map(c => [c.variant_id, c.result]));
+  assert.deepEqual(byId, { 1: "no_profile", 3: "no_profile", 7: "ok" }, "locleは未登録扱い");
+});
+
+test("GET check_variants=1: 登録済みプロジェクトで署名が無ければmismatch", async () => {
+  reset((text) => {
+    if (text.includes("FROM sender_accounts")) return [];
+    if (text.includes("FROM message_variants")) {
+      return [
+        { id: 1, name: "LOCLE 山田", project: "locle", channel: "email", subject_template: "", body_template: "LOCLE　山田" },
+        { id: 3, name: "初回挨拶", project: "locle", channel: "form", subject_template: null, body_template: "LOCLEと申します。" },
+      ];
+    }
+    return [{ id: 2, project: "locle", ...PROFILE, updated_at: "2026-10-09T00:00:00Z" }];
+  });
+  const res = await new Promise((resolve) => {
+    const r = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(d) { resolve({ status: this.statusCode, body: d }); return this; } };
+    handler({ method: "GET", query: { action: "sender-profiles", check_variants: "1" }, headers: {} }, r);
+  });
+  assert.deepEqual(res.body.variant_checks.map(c => [c.variant_id, c.result, c.person_name]),
+    [[1, "mismatch", "松崎流空"], [3, "mismatch", "松崎流空"]]);
+});
