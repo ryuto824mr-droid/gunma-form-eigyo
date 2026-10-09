@@ -2380,6 +2380,7 @@
     btn.disabled = true;
 
     let success = 0, failure = 0;
+    let stoppedMessage = null;
     const total = checkedIds.length;
     for (let i = 0; i < checkedIds.length; i++) {
       const id = checkedIds[i];
@@ -2394,6 +2395,8 @@
           body: JSON.stringify({ company_id: item.company_id, variant_id: item.variant_id, trigger_source: "manual" }),
         });
         const data = await res.json();
+        // 送信者プロフィールが未登録・不完全: 何も送信されていないため、残りも送らずに中断する
+        if (!res.ok && data.type === "sender_profile_missing") { stoppedMessage = data.error; break; }
         if (!res.ok) throw new Error(data.error || "送信エラー");
         await fetch("/api/crm?action=send-queue", {
           method: "PATCH",
@@ -2406,7 +2409,10 @@
       }
     }
 
-    progress.textContent = `完了: 成功${success}件 / 失敗${failure}件`;
+    progress.textContent = stoppedMessage
+      ? `中断: ${stoppedMessage}（成功${success}件 / 失敗${failure}件。未送信の分はキューに残っています）`
+      : `完了: 成功${success}件 / 失敗${failure}件`;
+    if (stoppedMessage) showToast(esc(stoppedMessage), "error", 8000);
     btn.disabled = false;
     showToast(`送信が完了しました（成功${success}件 / 失敗${failure}件）`, failure === 0 ? "success" : "error");
 

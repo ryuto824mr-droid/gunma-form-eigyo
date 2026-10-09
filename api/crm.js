@@ -2201,6 +2201,7 @@ async function runScheduledSendsBatch(settings, skipReason, deadline) {
     let success = 0;
     let failed = 0;
     let processed = 0;
+    let stoppedReason = null;
 
     for (const item of due) {
       // 残り時間予算が尽きた場合、このアイテムはpendingのまま残し次回の実行に持ち越す
@@ -2223,6 +2224,12 @@ async function runScheduledSendsBatch(settings, skipReason, deadline) {
           });
         }
 
+        if (result.body?.type === "sender_profile_missing") {
+          // 送信者プロフィールが未登録・不完全: 何も送信していないため、この行も残りもpendingのまま中断する
+          processed--;
+          stoppedReason = { type: "sender_profile_missing", message: result.body.error };
+          break;
+        }
         if (result.ok) {
           await sql`UPDATE scheduled_sends SET status = 'sent', error_message = NULL WHERE id = ${item.id}`;
           success++;
@@ -2237,7 +2244,7 @@ async function runScheduledSendsBatch(settings, skipReason, deadline) {
       }
     }
 
-    return { processed, success, failed, remaining: due.length - processed };
+    return { processed, success, failed, remaining: due.length - processed, ...(stoppedReason ? { stopped_reason: stoppedReason } : {}) };
   } catch (err) {
     return { error: `実行エラー: ${err.message}` };
   }
@@ -2288,6 +2295,7 @@ async function processSendQueueBatch(deadline, skipReason) {
     let success = 0;
     let failed = 0;
     let processed = 0;
+    let stoppedReason = null;
 
     for (const item of pending) {
       // 残り時間が尽きた場合、このアイテムはpendingのまま残し次回の実行に持ち越す
@@ -2317,6 +2325,14 @@ async function processSendQueueBatch(deadline, skipReason) {
           });
         }
 
+        if (result.body?.type === "sender_profile_missing") {
+          // 送信者プロフィールが未登録・不完全: 何も送信していないため、ロックを外してpendingに戻し、
+          // 残りもpendingのまま中断する(設定画面で登録すれば次回の実行で再開される)
+          await sql`UPDATE send_queue SET status = 'pending', updated_at = NOW() WHERE id = ${item.id}`;
+          processed--;
+          stoppedReason = { type: "sender_profile_missing", message: result.body.error };
+          break;
+        }
         if (result.ok) {
           await sql`UPDATE send_queue SET status = 'sent', updated_at = NOW(), error_message = NULL WHERE id = ${item.id}`;
           success++;
@@ -2331,7 +2347,7 @@ async function processSendQueueBatch(deadline, skipReason) {
       }
     }
 
-    return { processed, success, failed, remaining: pending.length - processed };
+    return { processed, success, failed, remaining: pending.length - processed, ...(stoppedReason ? { stopped_reason: stoppedReason } : {}) };
   } catch (err) {
     return { error: `実行エラー: ${err.message}` };
   }

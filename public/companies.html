@@ -3424,6 +3424,7 @@
     const progress = document.getElementById("addSelectedProgress");
     const total = targets.length;
     let success = 0, skipped = 0, error = 0;
+    let stoppedForSenderProfile = false;
 
     for (let i = 0; i < targets.length; i++) {
       const { name, url } = targets[i];
@@ -3477,6 +3478,12 @@
           body: JSON.stringify({ company_id: company.id, variant_id: variantId, tags: lastSearchAutoTags, trigger_source: "manual" }),
         });
         const data = await res.json();
+        // 送信者プロフィールが未登録・不完全: 何も送信されていないため、残りの企業にも送らずに中断する
+        if (!res.ok && data.type === "sender_profile_missing") {
+          resultList.insertAdjacentHTML("beforeend", `<li class="bulk-result-item error">⛔ 中断: ${esc(data.error)}</li>`);
+          stoppedForSenderProfile = true;
+          break;
+        }
         if (!res.ok) throw new Error(data.error || "送信エラー");
         resultList.insertAdjacentHTML("beforeend",
           `<li class="bulk-result-item success">✓ ${esc(name)} → ${channel === "email" ? "メール" : "フォーム"}送信完了</li>`);
@@ -3490,9 +3497,13 @@
     }
 
     progress.textContent = "";
-    summaryEl.textContent = `成功${success}社 / スキップ${skipped}社 / エラー${error}社`;
+    summaryEl.textContent = `${stoppedForSenderProfile ? "中断（送信者プロフィール未登録・不完全）: " : ""}成功${success}社 / スキップ${skipped}社 / エラー${error}社`;
     summaryEl.hidden = false;
-    showToast(`一括送信が完了しました（成功${success}社 / スキップ${skipped}社 / エラー${error}社）`, "success");
+    if (stoppedForSenderProfile) {
+      showToast("送信者プロフィールが未登録・不完全のため一括送信を中断しました。CRMの設定画面で登録してください", "error", 8000);
+    } else {
+      showToast(`一括送信が完了しました（成功${success}社 / スキップ${skipped}社 / エラー${error}社）`, "success");
+    }
     setSearchActionButtonsDisabled(false);
   }
 
