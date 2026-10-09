@@ -267,6 +267,32 @@
     background: var(--gray-50); border-radius: var(--radius-sm); padding: 10px 12px;
   }
 
+  /* 送信者プロフィール */
+  .sender-profiles-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .sender-profile-card {
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  }
+  .sender-profile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .sender-profile-head h3 { margin: 0; font-size: 15px; }
+  .sender-profile-meta { font-size: 11px; color: var(--gray-500); }
+  .sender-profile-fields { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .sender-profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sender-profile-actions button {
+    padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm); font-family: inherit; cursor: pointer;
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+  }
+  .sender-profile-actions button.primary { background: var(--green-600); border-color: var(--green-600); color: #fff; }
+  .sender-profile-actions button:disabled { opacity: .45; cursor: not-allowed; }
+  .sender-profile-preview-title { font-size: 12px; font-weight: 600; color: var(--gray-500); margin: 0; }
+  .sender-profile-preview td:first-child { color: var(--gray-500); width: 55%; }
+  .sender-profile-preview td:last-child { font-weight: 600; word-break: break-all; }
+  .sender-profile-msg { font-size: 12px; line-height: 1.6; margin: 0; }
+  .sender-profile-msg.error { color: #dc2626; }
+  .sender-profile-msg.warn  { color: #b45309; }
+  .sender-profile-msg.ok    { color: var(--green-700); }
+  .sender-status-badge.missing { background: #fef2f2; color: #dc2626; }
+
   /* 送信者アカウント */
   .sender-status-badge {
     display: inline-block; padding: 2px 8px; border-radius: 4px;
@@ -472,6 +498,7 @@
     .toast-container { top: auto; bottom: 16px; right: 8px; left: 8px; max-width: 100%; }
     .container { padding: 16px 8px; }
     .modal-form-grid { grid-template-columns: 1fr; }
+    .sender-profiles-wrap { grid-template-columns: 1fr; }
     .modal-form-grid .full { grid-column: 1; }
     .form-group input, .form-group select, .form-group textarea { font-size: 16px; }
     .kanban-column { flex-basis: 220px; }
@@ -729,6 +756,16 @@
       1日の送信上限・送信間隔・自動送信の実行時刻・土日祝日スキップなどの自動送信関連の設定は
       <a href="send.html">送信ページ</a>の「⚙️ 自動送信の設定」に移動しました。
     </p>
+
+    <div class="panel-toolbar" style="margin-top:20px;">
+      <div>
+        <h2>送信者プロフィール（フォーム送信）</h2>
+        <p class="panel-desc">フォーム送信で「お名前」「会社名」等の欄に入力する値です。プロジェクトごとに登録してください。未登録・不備のあるプロジェクトのフォーム送信は止まります</p>
+      </div>
+    </div>
+    <div id="senderProfilesWrap" class="sender-profiles-wrap">
+      <p class="settings-note">読み込み中...</p>
+    </div>
 
     <div class="panel-toolbar" style="margin-top:20px;">
       <div>
@@ -1036,7 +1073,7 @@
     await loadCompanies();
     await Promise.all([
       loadDeals(), loadContacts(), loadActivities(), loadExcludedDomains(), loadTasks(), loadPipelineStats(),
-      loadVariants(), loadAbTests(), loadAttachments(), loadSenderAccounts(),
+      loadVariants(), loadAbTests(), loadAttachments(), loadSenderAccounts(), loadSenderProfiles(),
     ]);
     lucide.createIcons();
     initScrollReveal();
@@ -1934,6 +1971,158 @@
 
   function closeAbTestDetailModal() {
     document.getElementById("abTestDetailModal").classList.remove("open");
+  }
+
+  // ==================== 送信者プロフィール（フォーム送信） ====================
+  // 値の入力ミスを目で確認できるよう、「プレビュー」でフォームに実際に入る値(サーバー側で
+  // 計算)を表示してからでないと保存できない。プレビュー後に入力を変えると保存ボタンは無効に戻る
+
+  const SENDER_PROFILE_FIELDS = [
+    { key: "person_name",      label: "氏名",           placeholder: "例: 松崎流空" },
+    { key: "person_name_kana", label: "ふりがな",       placeholder: "例: まつざきりゅうと（ひらがな・カタカナ）" },
+    { key: "company_name",     label: "会社名",         placeholder: "例: 株式会社LOCLE" },
+    { key: "email",            label: "メールアドレス", placeholder: "例: name@example.com" },
+    { key: "phone",            label: "電話番号",       placeholder: "例: 027-000-0000（半角）" },
+  ];
+  let senderProfiles = [];
+  const senderProfilePreviewed = {}; // project → プレビュー済みの入力値(JSON文字列)
+
+  async function loadSenderProfiles() {
+    const wrap = document.getElementById("senderProfilesWrap");
+    try {
+      const res = await fetch("/api/crm?action=sender-profiles");
+      const data = await res.json();
+      if (!res.ok) {
+        wrap.innerHTML = `<p class="settings-note">${esc(data.error || "読み込みエラー")}</p>`;
+        return;
+      }
+      senderProfiles = Array.isArray(data) ? data : [];
+      renderSenderProfiles();
+    } catch (err) {
+      wrap.innerHTML = `<p class="settings-note">読み込みエラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function senderProfileInputs(project) {
+    const values = {};
+    SENDER_PROFILE_FIELDS.forEach(f => {
+      values[f.key] = document.getElementById(`sp-${project}-${f.key}`).value;
+    });
+    return values;
+  }
+
+  function senderProfilePreviewHtml(title, preview) {
+    return `
+      <p class="sender-profile-preview-title">${esc(title)}</p>
+      <div class="crm-table-wrap">
+        <table class="crm-table sender-profile-preview">
+          <tbody>${preview.map(r => `<tr><td>${esc(r.field)}</td><td>${esc(r.value)}</td></tr>`).join("")}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderSenderProfiles() {
+    const wrap = document.getElementById("senderProfilesWrap");
+    wrap.innerHTML = senderProfiles.map(sp => {
+      const label = (typeof PROJECT_LABELS !== "undefined" && PROJECT_LABELS[sp.project]) || sp.project;
+      const p = sp.profile || {};
+      let badge;
+      if (!sp.registered) badge = '<span class="sender-status-badge missing">未登録（送信停止）</span>';
+      else if (!sp.valid) badge = '<span class="sender-status-badge missing">不備あり（送信停止）</span>';
+      else badge = '<span class="sender-status-badge active">登録済み</span>';
+      const meta = sp.registered ? `最終更新: ${esc(new Date(p.updated_at).toLocaleString("ja-JP"))}` : "";
+      const problems = sp.registered && !sp.valid
+        ? `<p class="sender-profile-msg error">${esc([...sp.missing.map(m => `${m}が未入力です`), ...sp.invalid.map(i => `${i.field}: ${i.reason}`)].join(" / "))}</p>`
+        : "";
+      const emailWarn = sp.registered && sp.valid && !sp.email_matches_sender_account
+        ? '<p class="sender-profile-msg warn">⚠ メールアドレスが、有効な送信者アカウントのどれとも一致しません</p>'
+        : "";
+      return `
+        <div class="sender-profile-card">
+          <div class="sender-profile-head">
+            <h3>${esc(label)}</h3>
+            ${badge}
+          </div>
+          ${meta ? `<div class="sender-profile-meta">${meta}</div>` : ""}
+          <div class="sender-profile-fields">
+            ${SENDER_PROFILE_FIELDS.map(f => `
+              <div class="form-group">
+                <label for="sp-${sp.project}-${f.key}">${esc(f.label)} <span style="color:#dc2626">*</span></label>
+                <input type="text" id="sp-${sp.project}-${f.key}" value="${esc(p[f.key] || "")}"
+                  placeholder="${esc(f.placeholder)}" oninput="onSenderProfileInput('${sp.project}')" />
+              </div>`).join("")}
+          </div>
+          <div class="sender-profile-actions">
+            <button type="button" onclick="previewSenderProfile('${sp.project}')">プレビュー</button>
+            <button type="button" class="primary" id="sp-${sp.project}-save" onclick="saveSenderProfile('${sp.project}')" disabled>この内容で保存</button>
+          </div>
+          <div id="sp-${sp.project}-msg">${problems}${emailWarn}</div>
+          <div id="sp-${sp.project}-preview">${sp.registered ? senderProfilePreviewHtml("現在の登録内容でフォームに入る値", sp.preview) : ""}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function onSenderProfileInput(project) {
+    if (!senderProfilePreviewed[project]) return;
+    delete senderProfilePreviewed[project];
+    document.getElementById(`sp-${project}-save`).disabled = true;
+    document.getElementById(`sp-${project}-msg`).innerHTML =
+      '<p class="sender-profile-msg warn">入力が変わりました。もう一度「プレビュー」で確認してから保存してください</p>';
+  }
+
+  async function putSenderProfile(project, values, previewOnly) {
+    const res = await fetch("/api/crm?action=sender-profiles", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, ...values, preview_only: previewOnly }),
+    });
+    return { ok: res.ok, data: await res.json() };
+  }
+
+  async function previewSenderProfile(project) {
+    const values = senderProfileInputs(project);
+    const msg = document.getElementById(`sp-${project}-msg`);
+    const saveBtn = document.getElementById(`sp-${project}-save`);
+    saveBtn.disabled = true;
+    delete senderProfilePreviewed[project];
+    try {
+      const { ok, data } = await putSenderProfile(project, values, true);
+      if (!ok) {
+        msg.innerHTML = `<p class="sender-profile-msg error">${esc(data.error || "確認エラー")}</p>`;
+        return;
+      }
+      senderProfilePreviewed[project] = JSON.stringify(values);
+      saveBtn.disabled = false;
+      msg.innerHTML = '<p class="sender-profile-msg ok">下の表がフォームに実際に入る値です。内容を確認して「この内容で保存」を押してください（まだ保存されていません）</p>'
+        + (data.email_matches_sender_account ? "" : '<p class="sender-profile-msg warn">⚠ メールアドレスが、有効な送信者アカウントのどれとも一致しません</p>');
+      document.getElementById(`sp-${project}-preview`).innerHTML = senderProfilePreviewHtml("プレビュー（未保存）", data.preview);
+    } catch (err) {
+      msg.innerHTML = `<p class="sender-profile-msg error">確認エラー: ${esc(err.message)}</p>`;
+    }
+  }
+
+  async function saveSenderProfile(project) {
+    const values = senderProfileInputs(project);
+    if (senderProfilePreviewed[project] !== JSON.stringify(values)) {
+      showToast("保存する前に「プレビュー」で確認してください", "error");
+      return;
+    }
+    const saveBtn = document.getElementById(`sp-${project}-save`);
+    saveBtn.disabled = true;
+    try {
+      const { ok, data } = await putSenderProfile(project, values, false);
+      if (!ok) {
+        document.getElementById(`sp-${project}-msg`).innerHTML = `<p class="sender-profile-msg error">${esc(data.error || "保存エラー")}</p>`;
+        saveBtn.disabled = false;
+        return;
+      }
+      delete senderProfilePreviewed[project];
+      showToast("送信者プロフィールを保存しました", "success");
+      await loadSenderProfiles();
+    } catch (err) {
+      showToast("保存エラー: " + esc(err.message), "error");
+      saveBtn.disabled = false;
+    }
   }
 
   // ==================== 送信者アカウント ====================

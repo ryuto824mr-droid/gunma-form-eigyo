@@ -17,6 +17,8 @@ const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-mes
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
+const { PROJECTS, validateProfile } = require("../lib/sender-profile");
+const { buildFormPreview } = require("../lib/sender-format");
 
 module.exports = async function handler(req, res) {
   const action = req.query?.action;
@@ -47,6 +49,7 @@ module.exports = async function handler(req, res) {
     case "generate-content": return handleGenerateContent(req, res);
     case "saved-content": return handleSavedContent(req, res);
     case "sender-accounts": return handleSenderAccounts(req, res);
+    case "sender-profiles": return handleSenderProfiles(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
     case "work-sessions":    return handleWorkSessions(req, res);
     case "work-session-edits": return handleWorkSessionEdits(req, res);
@@ -61,7 +64,7 @@ module.exports = async function handler(req, res) {
     case "send-logs":        return handleSendLogsList(req, res);
     case "track-click":      return handleTrackClick(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
   }
 };
 
@@ -529,6 +532,27 @@ async function handleDbSetup(req, res) {
         searched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // sender_profilesテーブル追加（フォーム送信で名乗る送信者情報をプロジェクトごとに管理する。
+    // 以前の環境変数1組(SENDER_PERSON_NAME等)を置き換える。初期データは入れず、設定画面から登録する）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS sender_profiles (
+        id               SERIAL PRIMARY KEY,
+        project          TEXT NOT NULL UNIQUE
+                            CONSTRAINT sender_profiles_project_check CHECK (project IN ('ozukanzukan', 'locle')),
+        person_name      TEXT NOT NULL,
+        person_name_kana TEXT NOT NULL,
+        company_name     TEXT NOT NULL,
+        email            TEXT NOT NULL,
+        phone            TEXT NOT NULL,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // send_logs.sender_profile_id/sender_snapshot/filled_fields追加（フォーム送信時に使った送信者
+    // プロフィールと、その時点の値の写し・フォームに実際に入力した値を記録し、後から検証できるようにする）
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS sender_profile_id INTEGER REFERENCES sender_profiles(id)");
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS sender_snapshot JSONB");
+    await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS filled_fields JSONB");
 
     // ==================== セットアップ後の存在確認 ====================
     // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
@@ -551,7 +575,7 @@ async function handleDbSetup(req, res) {
       "generated_content", "sender_accounts", "meeting_notes",
       "auto_pipeline_config", "auto_pipeline_logs", "send_queue",
       "production_tasks", "production_task_history", "link_clicks",
-      "search_history",
+      "search_history", "sender_profiles",
     ];
     const expectedTables = [...schemaTables, ...additionalTables];
 
@@ -3135,6 +3159,104 @@ async function handleSenderAccounts(req, res) {
   }
 
   return res.status(405).json({ error: "GET / POST / PATCH / DELETE のみ対応しています" });
+}
+
+// ==================== sender-profiles ====================
+// フォーム送信で名乗る送信者情報(プロジェクトごとに1件)。GETは全プロジェクト分を返し、
+// 未登録のプロジェクトもregistered:falseとして含める。PUTはpreview_only:trueなら保存せずに
+// 検証結果とプレビュー(フォームに実際に入る値)だけを返す。削除すると送信が止まるためDELETEは無い
+
+async function activeSenderEmails() {
+  const rows = await sql`SELECT email FROM sender_accounts WHERE is_active = TRUE`;
+  return rows.map(r => r.email.trim().toLowerCase());
+}
+
+async function handleSenderProfiles(req, res) {
+  if (req.method === "GET") {
+    let rows;
+    try {
+      rows = await sql`
+        SELECT id, project, person_name, person_name_kana, company_name, email, phone, created_at, updated_at
+        FROM sender_profiles
+      `;
+    } catch (err) {
+      if (/sender_profiles/.test(err.message) && /does not exist/.test(err.message)) {
+        return res.status(503).json({
+          error: "sender_profilesテーブルがまだありません。db-setupを実行してください",
+          type: "table_missing",
+        });
+      }
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+    try {
+      const senderEmails = await activeSenderEmails();
+      const result = PROJECTS.map(project => {
+        const row = rows.find(r => r.project === project);
+        if (!row) return { project, registered: false };
+        const validation = validateProfile(row);
+        return {
+          project,
+          registered: true,
+          profile: row,
+          valid: validation.ok,
+          missing: validation.missing,
+          invalid: validation.invalid,
+          preview: buildFormPreview(validation.profile),
+          email_matches_sender_account: senderEmails.includes(validation.profile.email.toLowerCase()),
+        };
+      });
+      return res.status(200).json(result);
+    } catch (err) {
+      return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+    }
+  }
+
+  if (req.method === "PUT") {
+    const body = req.body || {};
+    if (!PROJECTS.includes(body.project)) {
+      return res.status(400).json({ error: `projectは ${PROJECTS.join(" / ")} のいずれかを指定してください` });
+    }
+    const validation = validateProfile(body);
+    if (!validation.ok) {
+      const messages = [
+        ...validation.missing.map(label => `${label}が未入力です`),
+        ...validation.invalid.map(i => `${i.field}: ${i.reason}`),
+      ];
+      return res.status(400).json({
+        error: messages.join(" / "),
+        missing: validation.missing,
+        invalid: validation.invalid,
+      });
+    }
+    const p = validation.profile;
+    try {
+      const senderEmails = await activeSenderEmails();
+      const extra = {
+        preview: buildFormPreview(p),
+        email_matches_sender_account: senderEmails.includes(p.email.toLowerCase()),
+      };
+      if (body.preview_only) {
+        return res.status(200).json({ project: body.project, profile: p, saved: false, ...extra });
+      }
+      const [saved] = await sql`
+        INSERT INTO sender_profiles (project, person_name, person_name_kana, company_name, email, phone)
+        VALUES (${body.project}, ${p.person_name}, ${p.person_name_kana}, ${p.company_name}, ${p.email}, ${p.phone})
+        ON CONFLICT (project) DO UPDATE SET
+          person_name      = EXCLUDED.person_name,
+          person_name_kana = EXCLUDED.person_name_kana,
+          company_name     = EXCLUDED.company_name,
+          email            = EXCLUDED.email,
+          phone            = EXCLUDED.phone,
+          updated_at       = NOW()
+        RETURNING id, project, person_name, person_name_kana, company_name, email, phone, created_at, updated_at
+      `;
+      return res.status(200).json({ project: body.project, profile: saved, saved: true, ...extra });
+    } catch (err) {
+      return res.status(500).json({ error: `DB保存エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET / PUT のみ対応しています" });
 }
 
 // ==================== work-logs (1日1件の作業内容: プロジェクト非依存) ====================

@@ -4,7 +4,8 @@
   "private": true,
   "description": "企業の問い合わせフォームを自動発見・解析し、フォーム営業の自動化可否を判定するツール (Phase 1)",
   "scripts": {
-    "dev": "vercel dev"
+    "dev": "vercel dev",
+    "test": "node --test \"tests/*.test.js\""
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
