@@ -144,6 +144,8 @@
   .hint-badge { display: inline-block; margin-top: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; border: 1px solid var(--gray-200); color: var(--gray-700); }
   .hint-good   { border-color: var(--green-300); color: var(--green-700); background: var(--green-50); }
   .hint-bad    { border-color: var(--danger-border); color: var(--danger-text); }
+  .state-email_followup { background: #ecfeff; color: #0e7490; }
+  html.dark .state-email_followup { background: #083344; color: #a5f3fc; }
 
   .warn { display: block; font-size: 11px; line-height: 1.5; border-radius: 4px; padding: 2px 6px; margin-bottom: 3px; }
   .warn-warn   { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
@@ -233,6 +235,7 @@
     <span>で</span>
     <button type="button" class="btn primary" id="bulkHoldBtn" onclick="addSelectedToHold()">保留に追加</button>
     <span id="bulkCount" class="sub"></span>
+    <span class="note" id="followupNote" hidden>「メール後のフォーム」は、メールを送った企業にフォームでも送るためのものです。メール送信から14日以上経ち、人からの反応が無い企業(区分「対象」)だけ選べます。メールと同じバリアントは選べません(フォローアップ用の別の文面を選んでください)。</span>
     <span class="note">保留に追加した企業は、毎日の自動送信では送られません。送るときは「保留中」タブで「再開」を押してください。「選別の目安」は機械的な目安です。企業名・失敗理由を見て判断してください。</span>
   </div>
 
@@ -264,6 +267,7 @@
     { key: "queued",    label: "キュー待ち" },
     { key: "on_hold",   label: "保留中" },
     { key: "scheduled", label: "予約済み" },
+    { key: "email_followup", label: "メール後のフォーム" },
     { key: "unsent",    label: "未送信" },
     { key: "stopped",   label: "停止中" },
   ];
@@ -319,8 +323,9 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "取得に失敗しました");
       laterData = data;
-      // 選択中の企業のうち、もう未送信でないものは選択を外す
-      const unsentIds = new Set(data.items.filter(it => it.state === "unsent").map(it => it.company_id));
+      // 選択中の企業のうち、もう選べないもの(未送信・「メール後のフォーム」の対象でない)は選択を外す
+      const unsentIds = new Set(data.items.filter(it => it.state === "unsent" ||
+        (it.state === "email_followup" && it.followup && it.followup.status === "ready")).map(it => it.company_id));
       for (const id of [...selectedCompanies]) if (!unsentIds.has(id)) selectedCompanies.delete(id);
       document.getElementById("senderProfileBanner").hidden = data.sender_profile_valid !== false;
       renderVariantOptions();
@@ -365,7 +370,8 @@
       return `<button type="button" class="state-tab${t.key === activeTab ? " active" : ""}" data-tab="${t.key}" onclick="selectTab('${t.key}')">${esc(t.label)} <span class="count">${n}</span></button>`;
     }).join("");
     document.getElementById("hintFilter").hidden = activeTab !== "unsent";
-    document.getElementById("bulkBar").hidden = activeTab !== "unsent";
+    document.getElementById("bulkBar").hidden = activeTab !== "unsent" && activeTab !== "email_followup";
+    document.getElementById("followupNote").hidden = activeTab !== "email_followup";
   }
 
   function selectTab(key) {
@@ -404,12 +410,19 @@
           <button type="button" class="btn" onclick="changeScheduledVariant(${it.source_id}, '${esc(it.key)}')">変更</button>
         </div>`;
     }
-    if (it.state === "unsent") {
+    if (it.state === "unsent" || (it.state === "email_followup" && it.followup && it.followup.status === "ready")) {
       const checked = selectedCompanies.has(it.company_id) ? " checked" : "";
       return `<label class="row-actions"><input type="checkbox" class="unsent-check" value="${esc(it.company_id)}"${checked} onchange="toggleCompany(${it.company_id}, this.checked)" /> 保留に追加する</label>`;
     }
+    if (it.state === "email_followup") {
+      const waiting = it.followup && it.followup.status === "waiting";
+      return `<span class="no-warn">${waiting ? `あと${esc(it.followup.days_left)}日で選べます` : "選べません"}</span>`;
+    }
     return '<span class="no-warn">-</span>';
   }
+
+  // 「メール後のフォーム」の区分の表示(対象 / 待機中 / 除外)
+  const FOLLOWUP_LABELS = { ready: ["対象", "hint-good"], waiting: ["待機中", ""], excluded: ["除外", "hint-bad"] };
 
   function rowHtml(it) {
     const url = safeUrl(it.company_url);
@@ -419,9 +432,13 @@
     const detail = it.raw_status && RAW_STATUS_LABELS[it.raw_status] && it.state !== "queued" && it.state !== "scheduled"
       ? `<span class="sub">${esc(SOURCE_LABELS[it.source])}: ${esc(RAW_STATUS_LABELS[it.raw_status])}</span>`
       : `<span class="sub">${esc(SOURCE_LABELS[it.source])}${it.raw_status === "sending" ? ": 送信中" : ""}</span>`;
+    const fu = it.followup ? FOLLOWUP_LABELS[it.followup.status] : null;
     const hintHtml = it.selection_hint
       ? `<span class="hint-badge ${HINT_CLASS[it.selection_hint.code] || ""}">目安: ${esc(it.selection_hint.label)}</span>`
-      : "";
+      : fu
+        ? `<span class="hint-badge ${fu[1]}">${esc(fu[0])}${it.followup.status === "waiting" ? `(あと${esc(it.followup.days_left)}日)` : ""}</span>` +
+          (it.followup.reason ? `<span class="sub">${esc(it.followup.reason)}</span>` : "")
+        : "";
     const variantHtml = it.variant_name
       ? `${esc(it.variant_name)}<span class="sub">ID ${esc(it.variant_id)}・${it.channel === "email" ? "メール" : "フォーム"}</span>`
       : '<span class="no-warn">(未指定)</span>';
@@ -552,12 +569,14 @@
     const variantId = Number(document.getElementById("bulkVariant").value);
     if (!ids.length || !variantId) return;
     const name = (laterData.variants.find(v => Number(v.id) === variantId) || {}).name || variantId;
-    if (!confirm(`選択した${ids.length}社を、バリアント「${name}」で保留に追加しますか？\n(保留中は送信されません)`)) return;
+    const followupCount = ids.filter(id => laterData.items.some(x => x.state === "email_followup" && x.company_id === id)).length;
+    const followupNote = followupCount ? `\nうち${followupCount}社はメール送信済みの企業です(フォームで2回目の連絡になります)。` : "";
+    if (!confirm(`選択した${ids.length}社を、バリアント「${name}」で保留に追加しますか？\n(保留中は送信されません)${followupNote}`)) return;
     runAction(async () => {
       const lines = [];
       let added = 0;
       for (const companyId of ids) {
-        const it = laterData.items.find(x => x.state === "unsent" && x.company_id === companyId);
+        const it = laterData.items.find(x => (x.state === "unsent" || x.state === "email_followup") && x.company_id === companyId);
         const r = await callApi("/api/crm?action=send-queue", "POST", {
           hold: true, company_id: companyId, variant_id: variantId, project: getCurrentProject(),
         });

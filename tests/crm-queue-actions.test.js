@@ -21,7 +21,16 @@ function fakeSql(strings, ...v) {
     return ok(c ? [{ ...c, research_result: { automatable: c.automatable === "true" } }] : []);
   }
   if (text.includes("FROM companies WHERE id = ?")) return ok(db.companies[v[0]] ? [db.companies[v[0]]] : []);
-  if (text.includes("FROM send_logs WHERE company_id = ?")) return ok(db.records.has(v[0]) ? [{ found: 1 }] : []);
+  // loadSendRecords: 送信記録の集計(フォーム・メール別)と反応
+  if (text.includes("FROM send_logs WHERE company_id = ? AND status IN ('sent', 'uncertain') GROUP BY")) {
+    if (db.emailRecords && db.emailRecords[v[0]]) return ok(db.emailRecords[v[0]]);
+    return ok(db.records.has(v[0])
+      ? [{ company_id: v[0], channel: "form", status: "sent", count: 1, last_sent_at: "2026-10-01T00:00:00Z", variant_ids: [7] }]
+      : []);
+  }
+  if (text.includes("FROM responses r JOIN send_logs sl ON sl.id = r.send_log_id WHERE sl.company_id = ?")) {
+    return ok((db.responses && db.responses[v[0]]) || []);
+  }
   if (text.includes("FROM message_variants WHERE id = ?")) return ok(db.variants[v[0]] ? [db.variants[v[0]]] : []);
   if (text.includes("FROM send_queue WHERE company_id = ? AND status IN ('pending', 'sending', 'on_hold')")) {
     return ok(q.filter((r) => r.company_id === v[0] && ["pending", "sending", "on_hold"].includes(r.status)));
@@ -242,4 +251,83 @@ test("どの操作でも送信API(submit-form/send-email)は呼ばれない", as
   await call("POST", { hold: true, company_id: 61, project: "ozukanzukan", variant_id: 7 });
   // 偽の送信APIは呼ばれると例外を投げるため、ここまで到達すれば呼ばれていない
   assert.ok(true);
+});
+
+// ---- メール送信済み・フォーム未送信の企業(A) ----
+const daysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString();
+const emailSummary = (id, days, variant = 7) => [{ company_id: id, channel: "email", status: "sent", count: 1, last_sent_at: daysAgo(days), variant_ids: [variant] }];
+
+test("保留への追加: メール送信済み企業は14日以上・反応なし・別バリアントなら追加できる", async () => {
+  reset();
+  db.companies[307] = company(307);
+  db.emailRecords = { 307: emailSummary(307, 35) };
+  let r = await call("POST", { hold: true, company_id: 307, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.status, "on_hold");
+
+  db.companies[308] = company(308);
+  db.emailRecords[308] = emailSummary(308, 9);
+  r = await call("POST", { hold: true, company_id: 308, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.status, r.body.type], [409, "email_too_recent"]);
+
+  db.companies[309] = company(309);
+  db.emailRecords[309] = emailSummary(309, 30);
+  r = await call("POST", { hold: true, company_id: 309, project: "ozukanzukan", variant_id: 7 });
+  assert.deepEqual([r.status, r.body.type], [400, "same_variant_as_email"]);
+
+  db.companies[310] = company(310);
+  db.emailRecords[310] = emailSummary(310, 30);
+  db.responses = { 310: [{ company_id: 310, classification: "declined", raw_excerpt: "見送ります", message_id: "<x>", received_at: daysAgo(20), sent_at: daysAgo(30) }] };
+  r = await call("POST", { hold: true, company_id: 310, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.status, r.body.type], [409, "has_response"]);
+
+  // リンククリックの自動記録だけなら追加できる
+  db.companies[311] = company(311);
+  db.emailRecords[311] = emailSummary(311, 30);
+  db.responses[311] = [{ company_id: 311, classification: "interested", raw_excerpt: "リンククリックによる自動記録", message_id: null, received_at: daysAgo(30), sent_at: daysAgo(30) }];
+  r = await call("POST", { hold: true, company_id: 311, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.status, 201);
+});
+
+test("送信待ちに積む処理(companies.html・自動パイプライン)も同じ判定: メールから14日未満は積まない", async () => {
+  reset();
+  db.companies[320] = company(320);
+  db.emailRecords = { 320: emailSummary(320, 3) };
+  let r = await call("POST", { company_id: 320, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.body.queued, r.body.reason], [false, "email_too_recent"]);
+  assert.match(r.body.detail, /あと11日/);
+  assert.equal(db.queue.filter((x) => x.company_id === 320).length, 0);
+
+  // 同じバリアントも積まない
+  db.companies[321] = company(321);
+  db.emailRecords[321] = emailSummary(321, 30, 8);
+  r = await call("POST", { company_id: 321, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.body.queued, r.body.reason], [false, "same_variant_as_email"]);
+
+  // 14日以上・別のバリアントなら従来どおり積む
+  db.companies[322] = company(322);
+  db.emailRecords[322] = emailSummary(322, 30, 7);
+  r = await call("POST", { company_id: 322, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.body.queued, true);
+});
+
+test("送信待ちに積む処理: 入力例のメールアドレスは「メール無し」として扱う(abc.jp は対象外)", async () => {
+  reset();
+  db.companies[330] = company(330, { automatable: "false", status: "no_form", email: "sample@gku.co.jp" });
+  let r = await call("POST", { company_id: 330, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.body.queued, r.body.reason], [false, "no_channel"]);
+  db.companies[331] = company(331, { automatable: "false", status: "no_form", email: "bandotaro@abc.jp" });
+  r = await call("POST", { company_id: 331, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.body.queued, r.body.channel], [true, "email"]);
+});
+
+test("再開: メール送信済み企業は、保留中に反応が来ていれば再開できない", async () => {
+  reset();
+  db.companies[340] = company(340);
+  db.emailRecords = { 340: emailSummary(340, 30) };
+  db.queue.push({ id: 440, project: "ozukanzukan", company_id: 340, variant_id: 8, channel: "form", status: "on_hold" });
+  db.responses = { 340: [{ company_id: 340, classification: "interested", raw_excerpt: "お話を聞きたいです", message_id: "<y>", received_at: daysAgo(2), sent_at: daysAgo(30) }] };
+  const r = await call("PATCH", { id: 440, status: "pending", confirm_has_record: true });
+  assert.deepEqual([r.status, r.body.type], [409, "has_response"]);
+  assert.equal(rowOf(440).status, "on_hold");
 });

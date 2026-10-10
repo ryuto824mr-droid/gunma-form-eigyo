@@ -18,8 +18,11 @@ const { generateReelsScript, generateSocialPost, generateInterviewQA } = require
 const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
 const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
-const { buildLaterList } = require("../lib/later-status");
+const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
+const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
+const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
+const { isPlaceholderEmail } = require("../lib/email-placeholder");
 const { buildFormPreview } = require("../lib/sender-format");
 
 module.exports = async function handler(req, res) {
@@ -2612,12 +2615,22 @@ async function queueCompanyForSend(company, project, variantId) {
   let channel;
   if (company?.research_result?.automatable === true) {
     channel = "form";
-  } else if (company?.email) {
+  } else if (company?.email && !isPlaceholderEmail(company.email).placeholder) {
+    // 入力例・仮のアドレス(sample@〜、info@mysite.com 等)はメール無しとして扱う
     channel = "email";
   } else {
     return { ok: false, reason: "no_channel" };
   }
   try {
+    // メール送信済み・フォーム未送信の企業にフォームで送る場合は、「あとで送る」画面の保留追加と
+    // 同じ判定(lib/email-followup.js: メールから14日以上・人からの反応なし・メールと別のバリアント)を通す
+    if (channel === "form") {
+      const records = await loadSendRecords(company.id);
+      if (hasEmailRecord(records) && !hasFormRecord(records)) {
+        const followup = checkEmailFollowup({ records, variantId, now: Date.now() });
+        if (!followup.ok) return { ok: false, reason: followup.type, detail: followup.error };
+      }
+    }
     // status='sending'(送信処理中)の行も重複チェック対象に含める。処理中に新たな
     // キュー登録を許してしまうと、処理中の行が完了する前にもう1件同じ企業宛の行が
     // 積まれ、後日それが実行されて二重送信になり得るため
@@ -2763,12 +2776,29 @@ async function loadCompanyForLater(companyId) {
   return company || null;
 }
 
-async function companyHasSendRecord(companyId) {
-  const [row] = await sql`
-    SELECT 1 AS found FROM send_logs
-    WHERE company_id = ${companyId} AND status IN ('sent', 'uncertain') LIMIT 1
-  `;
-  return !!row;
+// 企業の送信記録(フォーム・メール別)と反応(人からの反応・リンククリックの自動記録)を読み込む。
+// 形は lib/email-followup.js の records を参照
+async function loadSendRecords(companyId) {
+  const [summary, responses] = await Promise.all([
+    sql`
+      SELECT company_id, channel, status, COUNT(*)::int AS count, MAX(sent_at) AS last_sent_at,
+             array_agg(DISTINCT variant_id) AS variant_ids
+      FROM send_logs
+      WHERE company_id = ${companyId} AND status IN ('sent', 'uncertain')
+      GROUP BY company_id, channel, status
+    `,
+    sql`
+      SELECT sl.company_id, r.classification, r.raw_excerpt, r.message_id, r.received_at, sl.sent_at
+      FROM responses r JOIN send_logs sl ON sl.id = r.send_log_id
+      WHERE sl.company_id = ${companyId}
+    `,
+  ]);
+  const { records } = buildRecords(summary, responses);
+  return records.get(companyId) || {
+    form: { sent: 0, uncertain: 0 },
+    email: { sent: 0, uncertain: 0, last_at: null, variant_ids: [] },
+    responses: { human: [], auto_clicks: [] },
+  };
 }
 
 // 同じ企業の送信待ちリストの行のうち、これから送られる(pending・sending)か保留中(on_hold)のもの
@@ -2794,8 +2824,8 @@ async function handleQueueHoldAdd(req, res) {
     const company = await loadCompanyForLater(companyId);
     const [variant] = await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`;
     const check = checkHoldAdd({
-      company, project, variant,
-      hasRecord: company ? await companyHasSendRecord(companyId) : false,
+      company, project, variant, now: Date.now(),
+      records: company ? await loadSendRecords(companyId) : null,
       activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
     });
     if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
@@ -2826,7 +2856,7 @@ async function handleSendQueue(req, res) {
       const [company] = await sql`SELECT * FROM companies WHERE id = ${companyId}`;
       if (!company) return res.status(404).json({ error: "企業が見つかりません" });
       const result = await queueCompanyForSend(company, project, variantId);
-      return res.status(200).json({ queued: result.ok, channel: result.channel || null, reason: result.reason || null });
+      return res.status(200).json({ queued: result.ok, channel: result.channel || null, reason: result.reason || null, detail: result.detail || null });
     } catch (err) {
       return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
     }
@@ -2892,7 +2922,9 @@ async function handleSendQueue(req, res) {
         const [variant] = variantId
           ? await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`
           : [];
-        const check = checkQueueVariantChange({ row, variant, company, otherActiveRows });
+        const check = checkQueueVariantChange({
+          row, variant, company, otherActiveRows, records: await loadSendRecords(row.company_id),
+        });
         if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
         // 送信処理が同時にこの行をsendingにした場合に書き換えないよう、状態を条件に含めて更新する
         const [updated] = await sql`
@@ -2905,8 +2937,8 @@ async function handleSendQueue(req, res) {
       }
 
       const check = checkQueueStatusChange({
-        row, nextStatus: status, company, otherActiveRows,
-        hasRecord: await companyHasSendRecord(row.company_id),
+        row, nextStatus: status, company, otherActiveRows, now: Date.now(),
+        records: await loadSendRecords(row.company_id),
         confirmHasRecord: confirm_has_record === true,
       });
       if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
@@ -3421,18 +3453,19 @@ async function handleLaterList(req, res) {
     return res.status(400).json({ error: `projectは ${PROJECTS.join(" / ")} のいずれかを指定してください` });
   }
   try {
-    const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures] = await Promise.all([
+    const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
       sql`
-        SELECT id, name, url, contact_form_url, status, archived, action_status, project,
+        SELECT id, name, url, contact_form_url, email, status, archived, action_status, project,
                research_result->>'automatable'        AS automatable,
                research_result->>'rejection_detected' AS rejection_detected
         FROM companies WHERE project = ${project}
       `,
       sql`
-        SELECT sl.company_id, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at
+        SELECT sl.company_id, sl.channel, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at,
+               array_agg(DISTINCT sl.variant_id) AS variant_ids
         FROM send_logs sl JOIN companies c ON c.id = sl.company_id
         WHERE c.project = ${project}
-        GROUP BY sl.company_id, sl.status
+        GROUP BY sl.company_id, sl.channel, sl.status
       `,
       sql`
         SELECT sq.id, sq.company_id, sq.variant_id, mv.name AS variant_name, mv.project AS variant_project,
@@ -3459,6 +3492,14 @@ async function handleLaterList(req, res) {
         WHERE project = ${project} AND status = 'failed' AND error_message IS NOT NULL
         ORDER BY company_id, updated_at DESC NULLS LAST, id DESC
       `,
+      // 反応(人からの返信・手動の記録と、リンククリックの自動記録を lib/response-kind.js で区別する)
+      sql`
+        SELECT sl.company_id, r.classification, r.raw_excerpt, r.message_id, r.received_at, sl.sent_at
+        FROM responses r
+        JOIN send_logs sl ON sl.id = r.send_log_id
+        JOIN companies c ON c.id = sl.company_id
+        WHERE c.project = ${project}
+      `,
     ]);
 
     // 送信者プロフィール(未登録・不完全ならフォーム送信は止まるため警告に使う)
@@ -3471,7 +3512,7 @@ async function handleLaterList(req, res) {
     }
 
     const { items, counts } = buildLaterList({
-      companies, sendLogSummary, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
+      companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
     });
     return res.status(200).json({
       project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid,
@@ -4425,7 +4466,7 @@ async function handleTrackClick(req, res) {
         if (!existingResponse) {
           await sql`
             INSERT INTO responses (send_log_id, classification, raw_excerpt, received_at)
-            VALUES (${sendLogId}, 'interested', 'リンククリックによる自動記録', NOW())
+            VALUES (${sendLogId}, 'interested', ${AUTO_CLICK_EXCERPT}, NOW())
           `;
         }
       }

@@ -2963,6 +2963,12 @@
           alreadyQueued++;
           resultList.insertAdjacentHTML("beforeend",
             `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 既にキュー登録済みです</li>`);
+        } else if (["email_too_recent", "has_response", "same_variant_as_email"].includes(data.reason)) {
+          // メール送信済みの企業へのフォーム送信の決まり(メールから14日空ける・反応がある企業には送らない・
+          // メールと別のバリアント)で登録しなかった
+          alreadyQueued++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item skip">✉ ${esc(company.name)} → 登録しませんでした（${esc(data.detail || "メール送信済みの企業の決まりに合いません")}）</li>`);
         } else if (data.reason === "on_hold") {
           alreadyQueued++;
           resultList.insertAdjacentHTML("beforeend",

@@ -167,7 +167,7 @@ test("並び順は 期限切れ→キュー待ち→保留中→予約済み→�
     scheduledRows: [sched(1, 4, "pending", FUTURE), sched(2, 5, "pending", PAST)],
   });
   assert.deepEqual(r.items.map((it) => it.state), ["overdue", "queued", "on_hold", "scheduled", "unsent", "unsent", "stopped"]);
-  assert.deepEqual(r.counts, { unsent: 2, scheduled: 1, overdue: 1, queued: 1, on_hold: 1, stopped: 1, total: 7, with_warnings: 1 });
+  assert.deepEqual(r.counts, { unsent: 2, email_followup: 0, scheduled: 1, overdue: 1, queued: 1, on_hold: 1, stopped: 1, total: 7, email_followup_ready: 0, with_warnings: 1 });
 });
 
 test("企業一覧に無い企業の行も落とさずに出す", () => {
@@ -245,4 +245,105 @@ test("直近の失敗理由を参考情報として付け、未送信の行に�
   assert.ok(k["company-292"].warnings.some((w) => w.code === "last_failure" && w.level === "info" && /送信上限/.test(w.message)));
   assert.deepEqual(k["company-292"].selection_hint, { code: "limit_only", label: "送信上限で止まっただけ(有力)" });
   assert.deepEqual(k["company-1"].selection_hint, { code: "no_failure", label: "失敗なし" });
+});
+
+// ---- 「メール後のフォーム」(A) ----
+const followupCompanies = () => [
+  company(307, { url: "http://www.sankomentex.com/", contact_form_url: "http://www.sankomentex.com/" }),
+  company(38, { url: "https://wabika.com/", contact_form_url: "https://wabika.com/consultation" }),
+  company(142, { url: "https://japoncompany.business/shibukawa/548181-", contact_form_url: "https://towheree.com/contact" }),
+  company(500),   // メールから9日
+  company(501),   // 人からの反応あり
+  company(502),   // リンククリックの自動記録だけ
+];
+const emailLog = (company_id, days, variant = 7) => ({
+  company_id, channel: "email", status: "sent", count: 1,
+  last_sent_at: new Date(NOW - days * 86400000).toISOString(), variant_ids: [variant],
+});
+
+test("メール後のフォーム: メール済み・フォーム未送信の企業を区分付きで出す(対象・待機中・除外)", () => {
+  const r = build({
+    companies: followupCompanies(),
+    sendLogSummary: [emailLog(307, 35), emailLog(38, 54), emailLog(142, 52), emailLog(500, 9), emailLog(501, 30), emailLog(502, 20)],
+    responses: [
+      { company_id: 501, classification: "declined", raw_excerpt: "今回は見送ります", message_id: "<m1>", received_at: PAST, sent_at: PAST },
+      { company_id: 502, classification: "interested", raw_excerpt: "リンククリックによる自動記録", message_id: null,
+        received_at: new Date(NOW - 20 * 86400000 + 93000).toISOString(), sent_at: new Date(NOW - 20 * 86400000).toISOString() },
+    ],
+  });
+  const k = byKey(r);
+  assert.deepEqual(r.items.filter((it) => it.state === "email_followup").map((it) => it.company_id).sort((a, b) => a - b), [38, 142, 307, 500, 501, 502]);
+  assert.equal(r.items.filter((it) => it.state === "unsent").length, 0, "メール済みの企業は未送信には出ない");
+  assert.equal(k["followup-307"].followup.status, "ready");
+  assert.equal(k["followup-307"].followup.days_since_email, 35);
+  assert.deepEqual([k["followup-500"].followup.status, k["followup-500"].followup.days_left], ["waiting", 5]);
+  assert.equal(k["followup-501"].followup.status, "excluded");
+  assert.match(k["followup-501"].followup.reason, /辞退/);
+  assert.equal(k["followup-502"].followup.status, "ready", "自動クリックだけなら除外しない");
+  assert.equal(r.counts.email_followup, 6);
+  assert.equal(r.counts.email_followup_ready, 4);
+});
+
+test("メール後のフォーム: フォームのドメイン違い(掲載サイトのフォーム)を警告する(142)", () => {
+  const r = build({ companies: followupCompanies(), sendLogSummary: [emailLog(307, 35), emailLog(38, 54), emailLog(142, 52)] });
+  const k = byKey(r);
+  const w142 = k["followup-142"].warnings.find((w) => w.code === "form_domain_mismatch");
+  assert.equal(w142.level, "danger");
+  assert.match(w142.message, /towheree\.com/);
+  assert.ok(!k["followup-307"].warnings.some((w) => w.code === "form_domain_mismatch"), "同じドメイン");
+  assert.ok(!k["followup-38"].warnings.some((w) => w.code === "form_domain_mismatch"), "wabika.com と wabika.com/consultation");
+  // 区分は対象のまま(警告のみで止めない)
+  assert.equal(k["followup-142"].followup.status, "ready");
+});
+
+test("反応の区別: 人の反応は警告、リンククリックの自動記録は参考情報(送信直後は自動確認の可能性を添える)", () => {
+  const r = build({
+    companies: followupCompanies(),
+    sendLogSummary: [emailLog(501, 30), emailLog(502, 20)],
+    responses: [
+      { company_id: 501, classification: "question", raw_excerpt: "詳しく教えてください", message_id: null, received_at: PAST, sent_at: PAST },
+      { company_id: 502, classification: "interested", raw_excerpt: "リンククリックによる自動記録", message_id: null,
+        received_at: "2026-09-21T04:31:36Z", sent_at: "2026-09-21T04:30:03Z" },
+    ],
+  });
+  const k = byKey(r);
+  const human = k["followup-501"].warnings.find((w) => w.code === "human_response");
+  assert.deepEqual([human.level, human.message], ["warn", "人からの反応あり(質問)"]);
+  const auto = k["followup-502"].warnings.find((w) => w.code === "auto_click");
+  assert.equal(auto.level, "info");
+  assert.match(auto.message, /送信から93秒後/);
+  assert.match(auto.message, /自動確認の可能性/);
+  assert.ok(!k["followup-502"].warnings.some((w) => w.code === "human_response"));
+});
+
+test("メール送信済みの企業へのフォームの送信待ちは、14日未満なら赤い警告", () => {
+  const r = build({
+    companies: [company(600), company(601)],
+    sendLogSummary: [emailLog(600, 5), emailLog(601, 30)],
+    queueRows: [queue(1, 600, "on_hold"), queue(2, 601, "on_hold")],
+  });
+  const k = byKey(r);
+  const w600 = k["queue-1"].warnings.find((w) => w.code === "email_sent");
+  assert.equal(w600.level, "danger");
+  assert.match(w600.message, /5日前.*14日空ける/);
+  assert.equal(k["queue-2"].warnings.find((w) => w.code === "email_sent").level, "warn");
+});
+
+test("メールで送る予定の行で、登録アドレスが入力例なら警告(送信時に止まる)", () => {
+  const r = build({
+    companies: [company(700, { email: "sample@gku.co.jp", automatable: "false", status: "no_form" }), company(701, { email: "bandotaro@abc.jp" })],
+    queueRows: [queue(1, 700, "pending", { channel: "email" }), queue(2, 701, "pending", { channel: "email" })],
+  });
+  const k = byKey(r);
+  assert.ok(k["queue-1"].warnings.some((w) => w.code === "placeholder_email" && w.level === "danger"));
+  assert.ok(!k["queue-2"].warnings.some((w) => w.code === "placeholder_email"), "abc.jp は判定から除外");
+});
+
+test("選別の目安: 「〇選【」形式のまとめ記事は企業サイトではない疑い(1716)", () => {
+  const { selectionHint } = require("../lib/later-status");
+  const hint = (name) => selectionHint({ name, url: "https://imitsu.jp/list/web-system/gumma/" }, 0, false, "").code;
+  assert.equal(hint("群馬県のおすすめシステム開発会社12選【2024年最新版】｜PRONIアイミツ"), "not_company");
+  assert.equal(hint("製造業のホームページ参考事例14選！作成のポイント"), "no_failure", "「選！」は対象外(他の語で判定)");
+  assert.equal(hint("おすすめ業者３選【群馬】"), "not_company", "全角数字");
+  assert.equal(hint("株式会社選抜工業"), "no_failure", "数字が無い「選」は対象外");
 });

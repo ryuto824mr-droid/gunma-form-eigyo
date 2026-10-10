@@ -15,6 +15,7 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(data.profile ? [data.profile] : []);
   }
   if (text.includes("FROM companies WHERE project")) return Promise.resolve(data.companies || []);
+  if (text.includes("FROM responses r")) return Promise.resolve(data.responses || []);
   if (text.includes("FROM send_logs sl")) return Promise.resolve(data.logs || []);
   if (text.includes("FROM send_queue sq")) return Promise.resolve(data.queue || []);
   if (text.includes("FROM scheduled_sends ss")) return Promise.resolve(data.scheduled || []);
@@ -64,7 +65,7 @@ test("状態別に振り分けた一覧と件数を返す", async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.project, "ozukanzukan");
   assert.equal(r.body.sender_profile_valid, true);
-  assert.deepEqual(r.body.counts, { unsent: 0, scheduled: 0, overdue: 0, queued: 1, on_hold: 0, stopped: 2, total: 3, with_warnings: 2 });
+  assert.deepEqual(r.body.counts, { unsent: 0, email_followup: 0, scheduled: 0, overdue: 0, queued: 1, on_hold: 0, stopped: 2, total: 3, email_followup_ready: 0, with_warnings: 2 });
   const keys = Object.fromEntries(r.body.items.map((it) => [it.key, it]));
   assert.equal(keys["queue-339"].state, "queued");
   assert.equal(keys["queue-347"].state, "stopped");
@@ -112,4 +113,33 @@ test("送信者プロフィールが未登録・テーブル無しなら sender_
   r = await call("GET", { project: "ozukanzukan" });
   assert.equal(r.status, 200);
   assert.equal(r.body.sender_profile_valid, false);
+});
+
+test("メール後のフォーム: チャネル別の集計と反応を使って、メール済み・フォーム未送信の企業を出す", async () => {
+  reset({
+    companies: [
+      { id: 307, name: "三晃メンテクス", url: "http://www.sankomentex.com/", contact_form_url: "http://www.sankomentex.com/", email: "info@sanko-mtx.co.jp", status: "researched", archived: false, action_status: "none", project: "ozukanzukan", automatable: "true", rejection_detected: "false" },
+      { id: 1722, name: "Joetsu Company", url: "https://www.joetsu-p.co.jp/", contact_form_url: "https://www.joetsu-p.co.jp/", email: "x@joetsu-p.co.jp", status: "researched", archived: false, action_status: "none", project: "ozukanzukan", automatable: "true", rejection_detected: "false" },
+    ],
+    logs: [
+      { company_id: 307, channel: "email", status: "sent", count: 1, last_sent_at: "2026-09-05T00:00:00Z", variant_ids: [7] },
+      { company_id: 1722, channel: "email", status: "sent", count: 1, last_sent_at: "2026-09-21T04:32:57Z", variant_ids: [8] },
+    ],
+    responses: [
+      { company_id: 1722, classification: "interested", raw_excerpt: "リンククリックによる自動記録", message_id: null, received_at: "2026-09-21T04:33:02Z", sent_at: "2026-09-21T04:32:57Z" },
+    ],
+    queue: [],
+    scheduled: [],
+  });
+  const r = await call("GET", { project: "ozukanzukan" });
+  assert.equal(r.status, 200);
+  const k = Object.fromEntries(r.body.items.map((it) => [it.key, it]));
+  assert.equal(k["followup-307"].state, "email_followup");
+  assert.equal(k["followup-307"].followup.status, "ready");
+  assert.equal(k["followup-1722"].followup.status, "ready", "自動クリックだけなので除外しない");
+  assert.ok(k["followup-1722"].warnings.some((w) => w.code === "auto_click" && /5秒後/.test(w.message)));
+  assert.equal(r.body.counts.email_followup, 2);
+  // 集計クエリはチャネル別、反応も読む
+  assert.ok(calls.some((c) => /GROUP BY sl.company_id, sl.channel, sl.status/.test(c.text)));
+  assert.ok(calls.some((c) => /FROM responses r/.test(c.text)));
 });

@@ -1,5 +1,6 @@
 const { sql, isExcludedDomain, getSettings } = require("../lib/db");
 const { sendEmail, ensureLabel, addLabelToMessage } = require("../lib/gmail-sender");
+const { isPlaceholderEmail } = require("../lib/email-placeholder");
 
 const SENT_LABEL_NAME = "LOCLE営業/送信済み";
 
@@ -103,6 +104,17 @@ module.exports = async function handler(req, res) {
   const toEmail = company.email;
   if (!toEmail) {
     return res.status(400).json({ error: "この企業にメールアドレスが登録されていません。企業リストから編集して追加してください。" });
+  }
+
+  // リサーチがフォームの入力例(sample@〜、xxx@〜)やサイトのひな形の仮アドレス(info@mysite.com)を
+  // 拾って登録してしまった企業がある(2026-10時点で18件、うち2件に実際に送信していた)。
+  // そうしたアドレスには送らず、送信記録も作らずに止める(判定は lib/email-placeholder.js)
+  const placeholder = isPlaceholderEmail(toEmail);
+  if (placeholder.placeholder) {
+    return res.status(400).json({
+      error: `登録されているメールアドレスが入力例・仮のアドレスのため送信しません(${placeholder.reason})。企業リストで正しいアドレスに直してください`,
+      type: "placeholder_email",
+    });
   }
 
   // バリアント取得
