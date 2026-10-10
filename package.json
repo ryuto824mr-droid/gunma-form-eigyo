@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vercel dev",
     "test": "node --test \"tests/*.test.js\"",
-    "test:e2e": "node --test tests/e2e/local-form.e2e.js tests/e2e/email-extract.e2e.js"
+    "test:e2e": "node --test tests/e2e/local-form.e2e.js tests/e2e/email-extract.e2e.js tests/e2e/search-form.e2e.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
