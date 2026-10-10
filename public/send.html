@@ -944,6 +944,7 @@
 
   <section class="schedule-section reveal-on-scroll">
     <h2>スケジュール一覧</h2>
+    <p class="send-queue-note">送信予定(pending)の予約だけを表示しています。停止・失敗した予約や期限切れの状況は<a href="later.html">「あとで送る」画面</a>で確認できます</p>
     <ul class="schedule-list" id="scheduleList"><li class="schedule-empty">読み込み中...</li></ul>
   </section>
 
@@ -2026,13 +2027,17 @@
     }
   }
 
+  // 送信予定(status='pending')の予約だけを表示する。停止(cancelled)・失敗・送信済みの予約まで
+  // 並べると「まだ予約中」に見えてしまうため(2026-10-10に期限切れの予約248件をcancelledにした)。
+  // それらの状況はlater.html(「あとで送る」画面)で確認する
   function renderScheduleList() {
     const el = document.getElementById("scheduleList");
-    if (!scheduledSends.length) {
+    const pendingSchedules = scheduledSends.filter(s => s.status === "pending");
+    if (!pendingSchedules.length) {
       el.innerHTML = '<li class="schedule-empty">スケジュールされた送信はありません</li>';
       return;
     }
-    el.innerHTML = scheduledSends.map(s => {
+    el.innerHTML = pendingSchedules.map(s => {
       const dt = s.scheduled_at ? new Date(s.scheduled_at).toLocaleString("ja-JP") : "-";
       const channelLabel = s.channel === "email" ? "メール" : "フォーム";
       return `

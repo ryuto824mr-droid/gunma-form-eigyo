@@ -17,7 +17,8 @@ const { generateMessageDraft, generateFollowUpMessage } = require("../lib/ai-mes
 const { generateReelsScript, generateSocialPost, generateInterviewQA } = require("../lib/content-generator");
 const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
-const { PROJECTS, validateProfile, checkBodyName } = require("../lib/sender-profile");
+const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
+const { buildLaterList } = require("../lib/later-status");
 const { buildFormPreview } = require("../lib/sender-format");
 
 module.exports = async function handler(req, res) {
@@ -50,6 +51,7 @@ module.exports = async function handler(req, res) {
     case "saved-content": return handleSavedContent(req, res);
     case "sender-accounts": return handleSenderAccounts(req, res);
     case "sender-profiles": return handleSenderProfiles(req, res);
+    case "later-list":      return handleLaterList(req, res);
     case "work-logs":        return handleWorkLogs(req, res);
     case "work-sessions":    return handleWorkSessions(req, res);
     case "work-session-edits": return handleWorkSessionEdits(req, res);
@@ -64,7 +66,7 @@ module.exports = async function handler(req, res) {
     case "send-logs":        return handleSendLogsList(req, res);
     case "track-click":      return handleTrackClick(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, later-list, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
   }
 };
 
@@ -3296,6 +3298,69 @@ async function handleSenderProfiles(req, res) {
   }
 
   return res.status(405).json({ error: "GET / PUT のみ対応しています" });
+}
+
+// ==================== later-list ====================
+// 「あとで送る」画面(public/later.html)用の読み取り専用の一覧。送信待ちリスト・予約・未送信の企業を
+// lib/later-status.jsで状態別(未送信・予約済み・期限切れ・キュー待ち・保留中・停止中)に振り分け、
+// 送信記録あり・送信対象外・重複などの警告を付けて返す。何も書き換えない
+
+async function handleLaterList(req, res) {
+  if (req.method !== "GET") {
+    return res.status(405).json({ error: "GETのみ対応しています(この一覧は読み取り専用です)" });
+  }
+  const project = req.query?.project;
+  if (!PROJECTS.includes(project)) {
+    return res.status(400).json({ error: `projectは ${PROJECTS.join(" / ")} のいずれかを指定してください` });
+  }
+  try {
+    const [companies, sendLogSummary, queueRows, scheduledRows] = await Promise.all([
+      sql`
+        SELECT id, name, url, contact_form_url, status, archived, action_status, project,
+               research_result->>'automatable'        AS automatable,
+               research_result->>'rejection_detected' AS rejection_detected
+        FROM companies WHERE project = ${project}
+      `,
+      sql`
+        SELECT sl.company_id, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at
+        FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+        WHERE c.project = ${project}
+        GROUP BY sl.company_id, sl.status
+      `,
+      sql`
+        SELECT sq.id, sq.company_id, sq.variant_id, mv.name AS variant_name, mv.project AS variant_project,
+               sq.channel, sq.status, sq.created_at, sq.updated_at, sq.error_message
+        FROM send_queue sq LEFT JOIN message_variants mv ON mv.id = sq.variant_id
+        WHERE sq.project = ${project}
+      `,
+      sql`
+        SELECT ss.id, ss.company_id, ss.variant_id, mv.name AS variant_name, mv.project AS variant_project,
+               ss.channel, ss.status, ss.scheduled_at, ss.created_at, ss.error_message
+        FROM scheduled_sends ss
+        JOIN companies c ON c.id = ss.company_id
+        LEFT JOIN message_variants mv ON mv.id = ss.variant_id
+        WHERE c.project = ${project}
+      `,
+    ]);
+
+    // 送信者プロフィール(未登録・不完全ならフォーム送信は止まるため警告に使う)
+    let senderProfileValid = false;
+    try {
+      const row = await loadSenderProfile(sql, project);
+      senderProfileValid = !!row && validateProfile(row).ok;
+    } catch {
+      senderProfileValid = false;
+    }
+
+    const { items, counts } = buildLaterList({
+      companies, sendLogSummary, queueRows, scheduledRows, senderProfileValid, now: Date.now(),
+    });
+    return res.status(200).json({
+      project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid, counts, items,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
+  }
 }
 
 // ==================== work-logs (1日1件の作業内容: プロジェクト非依存) ====================

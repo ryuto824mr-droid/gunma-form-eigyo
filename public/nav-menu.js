@@ -16,6 +16,7 @@ var NAV_SECONDARY_ITEMS = [
   { key: "companies",       href: "/companies.html",       label: "企業リスト" },
   { key: "variants",        href: "/variants.html",        label: "メッセージ管理" },
   { key: "send",              href: "/send.html",              label: "送信管理" },
+  { key: "later",             href: "/later.html",             label: "あとで送る" },
   { key: "crm",               href: "/crm.html",               label: "CRM" },
   { key: "analytics",        href: "/analytics.html",        label: "分析" },
   { key: "reports",           href: "/reports.html",          label: "レポート" },

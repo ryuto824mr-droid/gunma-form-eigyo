@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>あとで送る - LOCLE営業ツール</title>
+<script>
+  (function() {
+    try {
+      var saved = localStorage.getItem("theme");
+      var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (saved ? saved === "dark" : prefersDark) document.documentElement.classList.add("dark");
+    } catch (e) {}
+  })();
+</script>
+<script src="/project-context.js"></script>
+<script>applyProjectTheme();</script>
+<script src="/nav-menu.js"></script>
+<link rel="stylesheet" href="/nav-menu.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green-900: #1a5c17; --green-800: #277025; --green-700: #2F8A2A; --green-600: #3da038;
+    --green-500: #44B13F; --green-400: #5BC952; --green-300: #86efac;
+    --green-200: #b7e4b0; --green-100: #d8f0d8; --green-50: #f0faf0;
+    --green-500-rgb: 68,177,63; --green-700-rgb: 47,138,42; --green-900-rgb: 26,92,23;
+    --gray-50: #f8fafc;   --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;  --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;  --gray-500: #64748b;
+    --gray-700: #334155;  --gray-900: #0f172a;
+    --white: #ffffff;
+    --warn-bg: #fffbeb; --warn-border: #fcd34d; --warn-text: #92400e;
+    --danger-bg: #fef2f2; --danger-border: #fca5a5; --danger-text: #b91c1c;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+    --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
+
+  .page-header {
+    background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+    box-shadow: 0 2px 8px rgba(var(--green-700-rgb), 0.3);
+    padding: 0 24px; display: flex; align-items: center; gap: 16px;
+    height: 56px; position: sticky; top: 0; z-index: 100;
+  }
+  .page-header.scrolled { box-shadow: 0 4px 16px rgba(var(--green-700-rgb), 0.45); }
+  .page-header h1 { margin: 0; display: flex; align-items: center; }
+  .logo-img { background: white; padding: 3px 8px; }
+  .page-nav { display: flex; gap: 2px; margin-left: auto; align-items: center; }
+  .page-nav a {
+    color: rgba(255,255,255,0.75); font-size: 13px; font-weight: 500;
+    text-decoration: none; white-space: nowrap;
+    padding: 6px 10px; border-radius: var(--radius-sm); transition: all 150ms;
+  }
+  .page-nav a:hover { color: white; background: rgba(255,255,255,0.15); }
+  .project-badge-nav {
+    border: none; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+    color: white; cursor: pointer; font-family: inherit; white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  }
+  .btn-theme-toggle {
+    background: rgba(255,255,255,0.15); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    font-size: 14px; display: flex; align-items: center; justify-content: center; margin-left: 6px;
+  }
+
+  .container { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+  .later-header h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .later-header p { font-size: 13px; color: var(--gray-500); margin: 0 0 18px; }
+  .list-project-label {
+    display: inline-block; font-size: 11px; font-weight: 700; color: white;
+    padding: 2px 8px; border-radius: 999px; margin-left: 8px; vertical-align: middle;
+    border: none; cursor: pointer; font-family: inherit;
+  }
+
+  .banner {
+    border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
+    background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text);
+  }
+
+  .state-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .state-tab {
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    border-radius: 999px; padding: 6px 12px; font-size: 13px; font-family: inherit; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .state-tab .count { font-weight: 700; color: var(--gray-900); }
+  .state-tab.active { background: var(--green-600); border-color: var(--green-600); color: #fff; }
+  .state-tab.active .count { color: #fff; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+  .toolbar input[type="search"] {
+    flex: 1 1 220px; min-width: 0; padding: 8px 12px; font-size: 14px; font-family: inherit;
+    border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
+    background: var(--white); color: var(--gray-900);
+  }
+  .toolbar label { font-size: 13px; color: var(--gray-700); display: inline-flex; gap: 6px; align-items: center; }
+  .toolbar .result-count { font-size: 12px; color: var(--gray-500); margin-left: auto; }
+
+  .table-wrap {
+    background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm); overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; }
+  thead { background: var(--gray-50); }
+  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--gray-500); padding: 10px 12px; white-space: nowrap; }
+  td { padding: 10px 12px; border-top: 1px solid var(--gray-100); vertical-align: top; }
+  td.company a { color: var(--gray-900); font-weight: 600; text-decoration: none; }
+  td.company a:hover { text-decoration: underline; }
+  td .sub { display: block; font-size: 11px; color: var(--gray-500); }
+  td.reason { font-size: 12px; color: var(--gray-700); max-width: 280px; word-break: break-word; }
+  .empty-row td { text-align: center; color: var(--gray-400); padding: 28px; }
+
+  .state-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .state-overdue   { background: var(--danger-bg); color: var(--danger-text); }
+  .state-queued    { background: #eff6ff; color: #1d4ed8; }
+  .state-on_hold   { background: #f5f3ff; color: #6d28d9; }
+  .state-scheduled { background: var(--green-50); color: var(--green-700); }
+  .state-unsent    { background: var(--gray-100); color: var(--gray-700); }
+  .state-stopped   { background: var(--gray-200); color: var(--gray-700); }
+
+  .warn { display: block; font-size: 11px; line-height: 1.5; border-radius: 4px; padding: 2px 6px; margin-bottom: 3px; }
+  .warn-warn   { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
+  .warn-danger { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); font-weight: 600; }
+  .warn-info   { background: var(--gray-100); color: var(--gray-500); border: 1px solid var(--gray-200); }
+  .no-warn { color: var(--gray-400); }
+
+  @media (max-width: 700px) {
+    .page-header { padding: 0 12px; }
+    .container { padding: 16px 16px 40px; }
+    /* スマートフォンでは横スクロールさせず、1行を縦並びのカードにする */
+    table { min-width: 0; }
+    thead { display: none; }
+    tbody tr { display: block; border-top: 1px solid var(--gray-100); padding: 8px 0; }
+    tbody tr:first-child { border-top: none; }
+    td { display: flex; gap: 10px; border-top: none; padding: 4px 14px; }
+    td::before {
+      content: attr(data-label); flex: 0 0 72px; font-size: 11px; font-weight: 600; color: var(--gray-500);
+    }
+    td > .cell { flex: 1; min-width: 0; }
+    td.reason { max-width: none; }
+    .empty-row td { display: block; }
+    .empty-row td::before { content: none; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+      --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+      --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+      --warn-bg: #3a2a0a; --warn-border: #a16207; --warn-text: #fde68a;
+      --danger-bg: #3b1212; --danger-border: #b91c1c; --danger-text: #fecaca;
+    }
+    body { background: #0f172a; }
+  }
+  html.dark {
+    --gray-50:  #0f172a; --gray-100: #1e293b; --gray-200: #334155;
+    --gray-300: #475569; --gray-400: #64748b; --gray-500: #94a3b8;
+    --gray-700: #cbd5e1; --gray-900: #f1f5f9; --white: #1e293b;
+    --warn-bg: #3a2a0a; --warn-border: #a16207; --warn-text: #fde68a;
+    --danger-bg: #3b1212; --danger-border: #b91c1c; --danger-text: #fecaca;
+  }
+  html.dark body { background: #0f172a; }
+  html.dark .logo-img { background: rgba(255,255,255,0.08) !important; padding: 4px 10px; }
+  html.dark .state-queued  { background: #172554; color: #bfdbfe; }
+  html.dark .state-on_hold { background: #2e1065; color: #ddd6fe; }
+  html.dark .state-scheduled { background: #14301a; color: #bbf7d0; }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1><a href="/app.html" style="display:flex; align-items:center; gap:10px; text-decoration:none;">
+    <img src="/logo.jpg" alt="LOCLE" class="logo-img" id="headerLogo" style="height:28px; width:auto; object-fit:contain; border-radius:6px;">
+  </a></h1>
+  <button class="project-badge-nav" id="projectBadge" title="クリックしてプロジェクトを切り替え"></button>
+  <nav class="page-nav">
+    <button class="btn-theme-toggle" id="themeToggleBtn" onclick="toggleTheme()" aria-label="ダークモード切替" title="ダークモード切替">🌙</button>
+  </nav>
+</header>
+
+<div class="container">
+  <div class="later-header">
+    <h1>あとで送る<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h1>
+    <p>送信待ちリスト・予約・まだ送っていない企業を、状態別に1つの一覧で表示します。この画面は表示のみで、ここから送信・変更はできません。</p>
+  </div>
+
+  <div class="banner" id="senderProfileBanner" hidden>
+    このプロジェクトの送信者プロフィールが未登録・不完全です。登録するまでフォーム送信は止まります(<a href="crm.html">CRMの設定</a>)。
+  </div>
+
+  <div class="state-tabs" id="stateTabs"></div>
+
+  <div class="toolbar">
+    <input type="search" id="searchInput" placeholder="企業名で絞り込み" oninput="renderTable()" />
+    <label><input type="checkbox" id="warningsOnly" onchange="renderTable()" /> 警告ありのみ(参考情報は除く)</label>
+    <span class="result-count" id="resultCount"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>状態</th>
+          <th>企業</th>
+          <th>バリアント</th>
+          <th>日時</th>
+          <th>理由・メモ</th>
+          <th>警告</th>
+        </tr>
+      </thead>
+      <tbody id="laterBody">
+        <tr class="empty-row"><td colspan="6">読み込み中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // 状態タブの並び(「すべて」の次は、対応が必要なものから)
+  const TABS = [
+    { key: "all",       label: "すべて" },
+    { key: "overdue",   label: "期限切れ" },
+    { key: "queued",    label: "キュー待ち" },
+    { key: "on_hold",   label: "保留中" },
+    { key: "scheduled", label: "予約済み" },
+    { key: "unsent",    label: "未送信" },
+    { key: "stopped",   label: "停止中" },
+  ];
+  const SOURCE_LABELS = { queue: "送信待ちリスト", scheduled: "予約", company: "企業" };
+  const RAW_STATUS_LABELS = {
+    pending: "pending", sending: "送信中", on_hold: "保留",
+    failed: "失敗", dismissed: "却下", skipped: "スキップ", cancelled: "停止",
+  };
+
+  let laterData = null;
+  let activeTab = "all";
+
+  function esc(s) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function formatDate(v) {
+    if (!v) return "";
+    const d = new Date(v);
+    return isNaN(d) ? "" : d.toLocaleString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // 会社のサイトURLは http/https のときだけリンクにする
+  function safeUrl(u) {
+    return /^https?:\/\//i.test(u || "") ? u : null;
+  }
+
+  function updateProjectDisplay() {
+    const project = getCurrentProject();
+    const el = document.getElementById("listProjectLabel");
+    el.textContent = `(${getProjectLabel(project)})`;
+    el.style.background = getProjectColor(project);
+    el.onclick = () => { window.location.href = "/app.html#project-select"; };
+  }
+
+  async function loadLaterList() {
+    try {
+      const res = await fetch("/api/crm?action=later-list&project=" + encodeURIComponent(getCurrentProject()));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "取得に失敗しました");
+      laterData = data;
+      document.getElementById("senderProfileBanner").hidden = data.sender_profile_valid !== false;
+      renderTabs();
+      renderTable();
+    } catch (err) {
+      document.getElementById("laterBody").innerHTML =
+        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+    }
+  }
+
+  function renderTabs() {
+    const counts = laterData ? laterData.counts : {};
+    document.getElementById("stateTabs").innerHTML = TABS.map(t => {
+      const n = t.key === "all" ? (counts.total || 0) : (counts[t.key] || 0);
+      return `<button type="button" class="state-tab${t.key === activeTab ? " active" : ""}" data-tab="${t.key}" onclick="selectTab('${t.key}')">${esc(t.label)} <span class="count">${n}</span></button>`;
+    }).join("");
+  }
+
+  function selectTab(key) {
+    activeTab = key;
+    renderTabs();
+    renderTable();
+  }
+
+  function filteredItems() {
+    if (!laterData) return [];
+    const q = document.getElementById("searchInput").value.trim().toLowerCase();
+    const warningsOnly = document.getElementById("warningsOnly").checked;
+    return laterData.items.filter(it =>
+      (activeTab === "all" || it.state === activeTab) &&
+      (!q || String(it.company_name || "").toLowerCase().includes(q)) &&
+      (!warningsOnly || it.warnings.some(w => w.level !== "info")));
+  }
+
+  function rowHtml(it) {
+    const url = safeUrl(it.company_url);
+    const companyHtml = url
+      ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(it.company_name)}</a>`
+      : esc(it.company_name);
+    const detail = it.raw_status && RAW_STATUS_LABELS[it.raw_status] && it.state !== "queued" && it.state !== "scheduled"
+      ? `<span class="sub">${esc(SOURCE_LABELS[it.source])}: ${esc(RAW_STATUS_LABELS[it.raw_status])}</span>`
+      : `<span class="sub">${esc(SOURCE_LABELS[it.source])}${it.raw_status === "sending" ? ": 送信中" : ""}</span>`;
+    const variantHtml = it.variant_name
+      ? `${esc(it.variant_name)}<span class="sub">ID ${esc(it.variant_id)}・${it.channel === "email" ? "メール" : "フォーム"}</span>`
+      : '<span class="no-warn">(未指定)</span>';
+    const dateHtml = it.date
+      ? `${esc(formatDate(it.date))}<span class="sub">${esc(it.date_label)}</span>`
+      : '<span class="no-warn">-</span>';
+    const warningsHtml = it.warnings.length
+      ? it.warnings.map(w => `<span class="warn warn-${esc(w.level)}">${esc(w.message)}</span>`).join("")
+      : '<span class="no-warn">-</span>';
+    return `
+      <tr data-key="${esc(it.key)}" data-state="${esc(it.state)}">
+        <td data-label="状態"><div class="cell"><span class="state-badge state-${esc(it.state)}">${esc(it.state_label)}</span>${detail}</div></td>
+        <td data-label="企業" class="company"><div class="cell">${companyHtml}<span class="sub">企業ID ${esc(it.company_id)}</span></div></td>
+        <td data-label="バリアント"><div class="cell">${variantHtml}</div></td>
+        <td data-label="日時"><div class="cell">${dateHtml}</div></td>
+        <td data-label="理由・メモ" class="reason"><div class="cell">${it.error_message ? esc(it.error_message) : '<span class="no-warn">-</span>'}</div></td>
+        <td data-label="警告"><div class="cell">${warningsHtml}</div></td>
+      </tr>`;
+  }
+
+  function renderTable() {
+    const items = filteredItems();
+    document.getElementById("resultCount").textContent = laterData ? `${items.length}件を表示` : "";
+    document.getElementById("laterBody").innerHTML = items.length
+      ? items.map(rowHtml).join("")
+      : '<tr class="empty-row"><td colspan="6">該当する行はありません</td></tr>';
+  }
+
+  function toggleTheme() {
+    document.documentElement.classList.toggle("dark");
+    const isDark = document.documentElement.classList.contains("dark");
+    try { localStorage.setItem("theme", isDark ? "dark" : "light"); } catch (e) {}
+    updateThemeIcon();
+  }
+  function updateThemeIcon() {
+    document.getElementById("themeToggleBtn").textContent =
+      document.documentElement.classList.contains("dark") ? "☀️" : "🌙";
+  }
+
+  updateThemeIcon();
+  initNavMenu("later");
+  updateProjectDisplay();
+  loadLaterList();
+</script>
+</body>
+</html>
