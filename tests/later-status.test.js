@@ -192,3 +192,57 @@ test("参考情報: 過去の失敗回数と、停止・却下の履歴(停止�
   assert.deepEqual(k["queue-348"].warnings, []);
   assert.equal(r.counts.with_warnings, 0);
 });
+
+test("未送信の一覧にアーカイブ済みの企業は混ざらない(送信記録なし・停止中の行だけの企業でも)", () => {
+  const r = build({
+    companies: [
+      company(1),
+      company(2, { archived: true }),                          // 送信記録も行もない
+      company(3, { archived: true }),                          // 停止中の行だけ
+      company(4, { archived: true, automatable: "true" }),     // 失敗の記録だけ
+    ],
+    sendLogSummary: [{ company_id: 4, status: "failed", count: 2, last_sent_at: PAST }],
+    queueRows: [queue(10, 3, "dismissed")],
+    scheduledRows: [sched(11, 3, "cancelled", PAST)],
+  });
+  const unsent = r.items.filter((it) => it.state === "unsent").map((it) => it.company_id);
+  assert.deepEqual(unsent, [1]);
+  // アーカイブ済み企業の停止中の行は、停止中としては見える
+  assert.deepEqual(r.items.filter((it) => it.company_id === 3).map((it) => it.state), ["stopped", "stopped"]);
+});
+
+test("選別の目安: 「公式ホームページ」付きの実在企業は企業サイトではない疑いにしない", () => {
+  const { selectionHint } = require("../lib/later-status");
+  const hint = (name, url, failed = 0, dismissed = false, last = "") => selectionHint({ name, url }, failed, dismissed, last).code;
+  assert.equal(hint("株式会社グンエイ（公式ホームページ）", "https://www.gunei-web.co.jp/", 3), "failed_3plus");
+  assert.equal(hint("株式会社ダイアキ（公式ホームページ）", "https://www.daiaki.com/", 3), "failed_3plus");
+  assert.equal(hint("前橋青果株式会社（公式ホームページ）", "https://maebashiseika.com/", 1), "failed_1_2");
+  assert.equal(hint("〇〇工業 公式サイト", "https://example.co.jp/"), "no_failure");
+  // 自治体・ポータル・団体・海外法人は「企業サイトではない疑い」
+  assert.equal(hint("館林市公式ホームページ", "https://warp.da.ndl.go.jp/"), "not_company");
+  assert.equal(hint("市内製造業企業ガイド | 羽村市公式サイト", "https://www.city.hamura.tokyo.jp/"), "not_company");
+  assert.equal(hint("Maebashi City Hall", "https://www.city.maebashi.gunma.jp/"), "not_company");
+  assert.equal(hint("藤岡市（群馬県）のリフォーム会社情報【SUUMO】", "https://suumo.jp/"), "not_company");
+  assert.equal(hint("Rio Bravo", "https://www.hotpepper.jp/x/"), "not_company");
+  assert.equal(hint("東毛漁業協同組合", "https://www.tohmohgyokyo.com/"), "not_company");
+  assert.equal(hint("Yaskawa America, Inc", "https://www.yaskawa.co.jp/"), "not_company");
+  assert.equal(hint("All Market Japan Co., Ltd.", "https://www.allmarketjapan.com/", 5), "failed_3plus", "Co., Ltd. は海外法人扱いしない");
+  // 支店・工場、却下済み、送信できたか不明、上限で止まっただけ
+  assert.equal(hint("日本ケロッグ 高崎工場", "https://www.kelloggs.jp/", 1, false, "本日の送信上限(100件)に達しました"), "branch");
+  assert.equal(hint("株式会社秋山建設", "https://akiyamakensetu.com/", 8, true), "dismissed_before");
+  assert.equal(hint("System", "https://system-tsd.co.jp/", 1, false, "送信中に強制終了され、実際に送信できたかは不明です"), "maybe_sent");
+  assert.equal(hint("杜丸不動産", "https://www.morimaru.jp/", 1, false, "本日の送信上限(100件)に達しました"), "limit_only");
+  assert.equal(hint("杜丸不動産", "https://www.morimaru.jp/", 3, false, "本日の送信上限(100件)に達しました"), "failed_3plus", "上限でも3回以上失敗していれば失敗3回以上");
+});
+
+test("直近の失敗理由を参考情報として付け、未送信の行に選別の目安を付ける", () => {
+  const r = build({
+    companies: [company(292), company(1)],
+    sendLogSummary: [{ company_id: 292, status: "failed", count: 1, last_sent_at: PAST }],
+    lastFailures: [{ company_id: 292, error_message: "本日の送信上限(100件)に達しました", updated_at: PAST }],
+  });
+  const k = byKey(r);
+  assert.ok(k["company-292"].warnings.some((w) => w.code === "last_failure" && w.level === "info" && /送信上限/.test(w.message)));
+  assert.deepEqual(k["company-292"].selection_hint, { code: "limit_only", label: "送信上限で止まっただけ(有力)" });
+  assert.deepEqual(k["company-1"].selection_hint, { code: "no_failure", label: "失敗なし" });
+});

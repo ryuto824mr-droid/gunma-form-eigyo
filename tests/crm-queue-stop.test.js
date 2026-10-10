@@ -12,7 +12,10 @@ function fakeSql(strings, ...values) {
   const text = strings.join("?").replace(/\s+/g, " ").trim();
   calls.push({ text, values });
   if (text.startsWith("SELECT * FROM scheduled_sends")) return Promise.resolve(scheduledItems);
-  if (text.startsWith("SELECT * FROM send_queue WHERE status = 'pending'")) return Promise.resolve(queueItems);
+  // 実際のSQLと同じく、status='pending'の行だけを返す(statusが無い行はpending扱い)
+  if (text.startsWith("SELECT * FROM send_queue WHERE status = 'pending'")) {
+    return Promise.resolve(queueItems.filter((i) => (i.status || "pending") === "pending"));
+  }
   return Promise.resolve([]);
 }
 fakeSql.query = async () => [];
@@ -128,4 +131,20 @@ test("他のエラー(フォーム送信失敗など)は従来どおりfailedに
   assert.equal(r.body.send_queue.failed, 1);
   assert.equal(r.body.send_queue.success, 1);
   assert.equal(r.body.send_queue.stopped_reason, undefined);
+});
+
+test("保留中(on_hold)の行は毎日の送信処理で送られない", async () => {
+  reset();
+  scheduledItems = [];
+  queueItems = [
+    { id: 61, channel: "form", company_id: 11, variant_id: 7, status: "on_hold" },
+    { id: 62, channel: "form", company_id: 12, variant_id: 7, status: "pending" },
+    { id: 63, channel: "form", company_id: 13, variant_id: 7, status: "on_hold" },
+  ];
+  responses = [{ status: 200, body: { success: true } }];
+  const r = await runCron();
+  assert.equal(r.body.send_queue.processed, 1);
+  assert.deepEqual(submitCalls.map((b) => b.company_id), [12], "送られたのはpendingの行だけ");
+  const touched = calls.filter((c) => c.text.startsWith("UPDATE send_queue SET status") && (c.values.includes(61) || c.values.includes(63)));
+  assert.deepEqual(touched, [], "保留中の行は更新もしない");
 });

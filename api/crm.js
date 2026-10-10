@@ -19,6 +19,7 @@ const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
 const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
 const { buildLaterList } = require("../lib/later-status");
+const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
 const { buildFormPreview } = require("../lib/sender-format");
 
 module.exports = async function handler(req, res) {
@@ -2626,6 +2627,12 @@ async function queueCompanyForSend(company, project, variantId) {
       LIMIT 1
     `;
     if (existing) return { ok: false, reason: "already_queued" };
+    // 保留中(on_hold)の企業には、バリアントが違っても新しく積まない(「あとで送る」画面で保留にした
+    // 企業に、自動パイプライン等がpendingの行を足して保留を素通りして送ってしまうのを防ぐ)
+    const [onHold] = await sql`
+      SELECT id FROM send_queue WHERE company_id = ${company.id} AND status = 'on_hold' LIMIT 1
+    `;
+    if (onHold) return { ok: false, reason: "on_hold" };
 
     await sql`
       INSERT INTO send_queue (project, company_id, variant_id, channel, status)
@@ -2742,9 +2749,70 @@ async function handleRunAutoPipeline(req, res) {
 // 自動パイプラインがqueueCompanyForSend()で登録した送信待ちキュー。
 // GET: pending状態の一覧(企業名・バリアント名をJOINして返す) / PATCH: ステータス更新 / DELETE: 削除
 
-const SEND_QUEUE_STATUSES = ["pending", "sending", "sent", "failed", "skipped", "dismissed"];
+// on_hold: 「あとで送る」画面で保留にした行。毎日の送信処理はpendingしか拾わないため送られない
+const SEND_QUEUE_STATUSES = ["pending", "sending", "sent", "failed", "skipped", "dismissed", "on_hold"];
+
+// 「あとで送る」画面の判定(lib/later-actions.js)に渡す形で企業を読み込む
+async function loadCompanyForLater(companyId) {
+  const [company] = await sql`
+    SELECT id, name, project, status, archived, action_status,
+           research_result->>'automatable'        AS automatable,
+           research_result->>'rejection_detected' AS rejection_detected
+    FROM companies WHERE id = ${companyId}
+  `;
+  return company || null;
+}
+
+async function companyHasSendRecord(companyId) {
+  const [row] = await sql`
+    SELECT 1 AS found FROM send_logs
+    WHERE company_id = ${companyId} AND status IN ('sent', 'uncertain') LIMIT 1
+  `;
+  return !!row;
+}
+
+// 同じ企業の送信待ちリストの行のうち、これから送られる(pending・sending)か保留中(on_hold)のもの
+async function activeQueueRowsForCompany(companyId, excludeId) {
+  const rows = await sql`
+    SELECT id, variant_id, status FROM send_queue
+    WHERE company_id = ${companyId} AND status IN ('pending', 'sending', 'on_hold')
+  `;
+  return rows.filter(r => r.id !== excludeId);
+}
+
+const isUniqueViolation = (err) => /duplicate key|unique/i.test(err?.message || "");
+
+// 未送信の企業を保留(on_hold)として送信待ちリストに追加する(「あとで送る」画面の「保留に追加」)
+async function handleQueueHoldAdd(req, res) {
+  const { company_id, project, variant_id } = req.body || {};
+  const companyId = parseInt(company_id, 10);
+  const variantId = parseInt(variant_id, 10);
+  if (!companyId || !variantId || !PROJECTS.includes(project)) {
+    return res.status(400).json({ error: "有効なcompany_id, variant_id, project（locleまたはozukanzukan）が必要です" });
+  }
+  try {
+    const company = await loadCompanyForLater(companyId);
+    const [variant] = await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`;
+    const check = checkHoldAdd({
+      company, project, variant,
+      hasRecord: company ? await companyHasSendRecord(companyId) : false,
+      activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
+    });
+    if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
+    const [created] = await sql`
+      INSERT INTO send_queue (project, company_id, variant_id, channel, status, error_message)
+      VALUES (${project}, ${companyId}, ${variantId}, 'form', 'on_hold', '[保留] 「あとで送る」画面から追加')
+      RETURNING *
+    `;
+    return res.status(201).json(created);
+  } catch (err) {
+    return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+  }
+}
 
 async function handleSendQueue(req, res) {
+  if (req.method === "POST" && req.body?.hold === true) return handleQueueHoldAdd(req, res);
+
   if (req.method === "POST") {
     // companies.htmlの一括「キューに登録」から、選択企業を1社ずつキューに追加するために呼ばれる。
     // チャネル判定・重複防止はqueueCompanyForSend()(自動パイプラインと共通)にそのまま委譲する
@@ -2805,16 +2873,55 @@ async function handleSendQueue(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const { id, status } = req.body || {};
+    // { id, status } : 状態の切り替え(send.htmlの既存の操作と、「あとで送る」画面の保留・再開・却下)
+    // { id, variant_id } : バリアントの変更(「あとで送る」画面。送信待ち・保留中の行だけ)
+    const { id, status, variant_id, confirm_has_record } = req.body || {};
     const queueId = parseInt(id, 10);
-    if (!queueId || !SEND_QUEUE_STATUSES.includes(status)) {
-      return res.status(400).json({ error: `有効なid, status(${SEND_QUEUE_STATUSES.join("/")})を指定してください` });
+    const hasVariant = variant_id !== undefined && variant_id !== null && variant_id !== "";
+    if (!queueId || (hasVariant && status !== undefined) || (!hasVariant && !SEND_QUEUE_STATUSES.includes(status))) {
+      return res.status(400).json({ error: `有効なidと、status(${SEND_QUEUE_STATUSES.join("/")})かvariant_idのどちらか一方を指定してください` });
     }
     try {
-      const [updated] = await sql`UPDATE send_queue SET status = ${status}, updated_at = NOW() WHERE id = ${queueId} RETURNING *`;
-      if (!updated) return res.status(404).json({ error: "キュー項目が見つかりません" });
+      const [row] = await sql`SELECT * FROM send_queue WHERE id = ${queueId}`;
+      if (!row) return res.status(404).json({ error: "キュー項目が見つかりません" });
+      const company = await loadCompanyForLater(row.company_id);
+      const otherActiveRows = await activeQueueRowsForCompany(row.company_id, row.id);
+
+      if (hasVariant) {
+        const variantId = parseInt(variant_id, 10);
+        const [variant] = variantId
+          ? await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`
+          : [];
+        const check = checkQueueVariantChange({ row, variant, company, otherActiveRows });
+        if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
+        // 送信処理が同時にこの行をsendingにした場合に書き換えないよう、状態を条件に含めて更新する
+        const [updated] = await sql`
+          UPDATE send_queue SET variant_id = ${variant.id}, updated_at = NOW()
+          WHERE id = ${queueId} AND status IN ('pending', 'on_hold')
+          RETURNING *
+        `;
+        if (!updated) return res.status(409).json({ error: "送信中・送信済みになったため変更できませんでした" });
+        return res.status(200).json(updated);
+      }
+
+      const check = checkQueueStatusChange({
+        row, nextStatus: status, company, otherActiveRows,
+        hasRecord: await companyHasSendRecord(row.company_id),
+        confirmHasRecord: confirm_has_record === true,
+      });
+      if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
+      // 読み込んだ時点の状態のままの場合だけ更新する(送信処理が同時にsendingにした行は変えない)
+      const [updated] = await sql`
+        UPDATE send_queue SET status = ${status}, updated_at = NOW()
+        WHERE id = ${queueId} AND status = ${row.status}
+        RETURNING *
+      `;
+      if (!updated) return res.status(409).json({ error: "状態が変わったため変更できませんでした。画面を再読み込みしてください" });
       return res.status(200).json(updated);
     } catch (err) {
+      if (isUniqueViolation(err)) {
+        return res.status(409).json({ error: "同じ企業・同じバリアントの送信待ちがすでにあります", type: "duplicate" });
+      }
       return res.status(500).json({ error: `DB更新エラー: ${err.message}` });
     }
   }
@@ -3314,7 +3421,7 @@ async function handleLaterList(req, res) {
     return res.status(400).json({ error: `projectは ${PROJECTS.join(" / ")} のいずれかを指定してください` });
   }
   try {
-    const [companies, sendLogSummary, queueRows, scheduledRows] = await Promise.all([
+    const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures] = await Promise.all([
       sql`
         SELECT id, name, url, contact_form_url, status, archived, action_status, project,
                research_result->>'automatable'        AS automatable,
@@ -3341,6 +3448,17 @@ async function handleLaterList(req, res) {
         LEFT JOIN message_variants mv ON mv.id = ss.variant_id
         WHERE c.project = ${project}
       `,
+      sql`
+        SELECT id, name, channel, project FROM message_variants
+        WHERE project = ${project} ORDER BY created_at DESC
+      `,
+      // 企業ごとの直近の失敗理由(送信待ちリストのfailedの行に残っているエラー内容)
+      sql`
+        SELECT DISTINCT ON (company_id) company_id, error_message, updated_at
+        FROM send_queue
+        WHERE project = ${project} AND status = 'failed' AND error_message IS NOT NULL
+        ORDER BY company_id, updated_at DESC NULLS LAST, id DESC
+      `,
     ]);
 
     // 送信者プロフィール(未登録・不完全ならフォーム送信は止まるため警告に使う)
@@ -3353,10 +3471,11 @@ async function handleLaterList(req, res) {
     }
 
     const { items, counts } = buildLaterList({
-      companies, sendLogSummary, queueRows, scheduledRows, senderProfileValid, now: Date.now(),
+      companies, sendLogSummary, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
     });
     return res.status(200).json({
-      project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid, counts, items,
+      project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid,
+      counts, items, variants,
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });

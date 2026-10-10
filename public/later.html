@@ -65,7 +65,7 @@
     font-size: 14px; display: flex; align-items: center; justify-content: center; margin-left: 6px;
   }
 
-  .container { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+  .container { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
   .later-header h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
   .later-header p { font-size: 13px; color: var(--gray-500); margin: 0 0 18px; }
   .list-project-label {
@@ -78,6 +78,9 @@
     border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
     background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text);
   }
+  .action-msg { border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 12px; white-space: pre-line; }
+  .action-msg.ok    { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
+  .action-msg.error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text); }
 
   .state-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .state-tab {
@@ -90,26 +93,45 @@
   .state-tab.active .count { color: #fff; }
 
   .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
-  .toolbar input[type="search"] {
-    flex: 1 1 220px; min-width: 0; padding: 8px 12px; font-size: 14px; font-family: inherit;
+  .toolbar input[type="search"], .toolbar select, .bulk-bar select, td select {
+    padding: 7px 10px; font-size: 13px; font-family: inherit;
     border: 1px solid var(--gray-200); border-radius: var(--radius-sm);
-    background: var(--white); color: var(--gray-900);
+    background: var(--white); color: var(--gray-900); max-width: 100%;
   }
+  .toolbar input[type="search"] { flex: 1 1 220px; min-width: 0; font-size: 14px; }
   .toolbar label { font-size: 13px; color: var(--gray-700); display: inline-flex; gap: 6px; align-items: center; }
   .toolbar .result-count { font-size: 12px; color: var(--gray-500); margin-left: auto; }
+
+  .bulk-bar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px;
+    background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-md); padding: 10px 12px;
+    font-size: 13px;
+  }
+  .bulk-bar .note { font-size: 12px; color: var(--gray-500); flex-basis: 100%; }
+
+  button.btn {
+    padding: 5px 10px; font-size: 12px; font-family: inherit; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--gray-200); background: var(--white); color: var(--gray-700); border-radius: var(--radius-sm);
+  }
+  button.btn:hover:not(:disabled) { border-color: var(--gray-400); }
+  button.btn.primary { background: var(--green-600); border-color: var(--green-600); color: #fff; }
+  button.btn.danger { color: var(--danger-text); border-color: var(--danger-border); }
+  button.btn:disabled { opacity: .45; cursor: not-allowed; }
 
   .table-wrap {
     background: var(--white); border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm); overflow-x: auto;
   }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
   thead { background: var(--gray-50); }
   th { text-align: left; font-size: 11px; font-weight: 600; color: var(--gray-500); padding: 10px 12px; white-space: nowrap; }
   td { padding: 10px 12px; border-top: 1px solid var(--gray-100); vertical-align: top; }
   td.company a { color: var(--gray-900); font-weight: 600; text-decoration: none; }
   td.company a:hover { text-decoration: underline; }
   td .sub { display: block; font-size: 11px; color: var(--gray-500); }
-  td.reason { font-size: 12px; color: var(--gray-700); max-width: 280px; word-break: break-word; }
+  td.reason { font-size: 12px; color: var(--gray-700); max-width: 240px; word-break: break-word; }
+  td.actions .row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  td.actions select { max-width: 180px; }
   .empty-row td { text-align: center; color: var(--gray-400); padding: 28px; }
 
   .state-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; }
@@ -119,6 +141,9 @@
   .state-scheduled { background: var(--green-50); color: var(--green-700); }
   .state-unsent    { background: var(--gray-100); color: var(--gray-700); }
   .state-stopped   { background: var(--gray-200); color: var(--gray-700); }
+  .hint-badge { display: inline-block; margin-top: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; border: 1px solid var(--gray-200); color: var(--gray-700); }
+  .hint-good   { border-color: var(--green-300); color: var(--green-700); background: var(--green-50); }
+  .hint-bad    { border-color: var(--danger-border); color: var(--danger-text); }
 
   .warn { display: block; font-size: 11px; line-height: 1.5; border-radius: 4px; padding: 2px 6px; margin-bottom: 3px; }
   .warn-warn   { background: var(--warn-bg); color: var(--warn-text); border: 1px solid var(--warn-border); }
@@ -166,6 +191,7 @@
   html.dark .state-queued  { background: #172554; color: #bfdbfe; }
   html.dark .state-on_hold { background: #2e1065; color: #ddd6fe; }
   html.dark .state-scheduled { background: #14301a; color: #bbf7d0; }
+  html.dark .hint-good { background: #14301a; color: #bbf7d0; border-color: #166534; }
 </style>
 </head>
 <body>
@@ -183,19 +209,31 @@
 <div class="container">
   <div class="later-header">
     <h1>あとで送る<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h1>
-    <p>送信待ちリスト・予約・まだ送っていない企業を、状態別に1つの一覧で表示します。この画面は表示のみで、ここから送信・変更はできません。</p>
+    <p>送信待ちリスト・予約・まだ送っていない企業を、状態別に1つの一覧で表示します。ここでは送信はしません。送信待ち・保留の行のバリアント変更、保留・再開・却下、未送信の企業の保留への追加ができます(保留中の行は毎日の自動送信では送られません)。</p>
   </div>
 
   <div class="banner" id="senderProfileBanner" hidden>
     このプロジェクトの送信者プロフィールが未登録・不完全です。登録するまでフォーム送信は止まります(<a href="crm.html">CRMの設定</a>)。
   </div>
 
+  <div class="action-msg" id="actionMsg" hidden></div>
+
   <div class="state-tabs" id="stateTabs"></div>
 
   <div class="toolbar">
     <input type="search" id="searchInput" placeholder="企業名で絞り込み" oninput="renderTable()" />
+    <select id="hintFilter" onchange="renderTable()" hidden aria-label="選別の目安で絞り込み"></select>
     <label><input type="checkbox" id="warningsOnly" onchange="renderTable()" /> 警告ありのみ(参考情報は除く)</label>
     <span class="result-count" id="resultCount"></span>
+  </div>
+
+  <div class="bulk-bar" id="bulkBar" hidden>
+    <span>選択した企業を</span>
+    <select id="bulkVariant" aria-label="保留に追加するときのバリアント"></select>
+    <span>で</span>
+    <button type="button" class="btn primary" id="bulkHoldBtn" onclick="addSelectedToHold()">保留に追加</button>
+    <span id="bulkCount" class="sub"></span>
+    <span class="note">保留に追加した企業は、毎日の自動送信では送られません。送るときは「保留中」タブで「再開」を押してください。「選別の目安」は機械的な目安です。企業名・失敗理由を見て判断してください。</span>
   </div>
 
   <div class="table-wrap">
@@ -208,10 +246,11 @@
           <th>日時</th>
           <th>理由・メモ</th>
           <th>警告</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody id="laterBody">
-        <tr class="empty-row"><td colspan="6">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="7">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -233,9 +272,14 @@
     pending: "pending", sending: "送信中", on_hold: "保留",
     failed: "失敗", dismissed: "却下", skipped: "スキップ", cancelled: "停止",
   };
+  // 選別の目安の表示順と色分け(good = 保留に移す候補として有力、bad = 移さない方がよい)
+  const HINT_ORDER = ["limit_only", "no_failure", "failed_1_2", "branch", "maybe_sent", "failed_3plus", "not_company", "dismissed_before"];
+  const HINT_CLASS = { limit_only: "hint-good", no_failure: "hint-good", maybe_sent: "hint-bad", failed_3plus: "hint-bad", not_company: "hint-bad", dismissed_before: "hint-bad" };
 
   let laterData = null;
   let activeTab = "all";
+  const selectedCompanies = new Set();
+  let busy = false;
 
   function esc(s) {
     return String(s ?? "")
@@ -254,6 +298,13 @@
     return /^https?:\/\//i.test(u || "") ? u : null;
   }
 
+  function showMsg(text, kind) {
+    const el = document.getElementById("actionMsg");
+    el.textContent = text;
+    el.className = `action-msg ${kind}`;
+    el.hidden = !text;
+  }
+
   function updateProjectDisplay() {
     const project = getCurrentProject();
     const el = document.getElementById("listProjectLabel");
@@ -268,13 +319,43 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "取得に失敗しました");
       laterData = data;
+      // 選択中の企業のうち、もう未送信でないものは選択を外す
+      const unsentIds = new Set(data.items.filter(it => it.state === "unsent").map(it => it.company_id));
+      for (const id of [...selectedCompanies]) if (!unsentIds.has(id)) selectedCompanies.delete(id);
       document.getElementById("senderProfileBanner").hidden = data.sender_profile_valid !== false;
+      renderVariantOptions();
+      renderHintFilter();
       renderTabs();
       renderTable();
     } catch (err) {
       document.getElementById("laterBody").innerHTML =
-        `<tr class="empty-row"><td colspan="6">読み込みエラー: ${esc(err.message)}</td></tr>`;
+        `<tr class="empty-row"><td colspan="7">読み込みエラー: ${esc(err.message)}</td></tr>`;
     }
+  }
+
+  function variantOptionsHtml(selectedId) {
+    const variants = (laterData && laterData.variants) || [];
+    return variants.map(v =>
+      `<option value="${esc(v.id)}"${Number(v.id) === Number(selectedId) ? " selected" : ""}>${esc(v.name)}(ID ${esc(v.id)})</option>`
+    ).join("");
+  }
+
+  function renderVariantOptions() {
+    const sel = document.getElementById("bulkVariant");
+    const prev = sel.value;
+    sel.innerHTML = variantOptionsHtml(prev || (laterData.variants[0] && laterData.variants[0].id));
+  }
+
+  function renderHintFilter() {
+    const sel = document.getElementById("hintFilter");
+    const prev = sel.value;
+    const counts = {};
+    for (const it of laterData.items) if (it.selection_hint) counts[it.selection_hint.code] = (counts[it.selection_hint.code] || 0) + 1;
+    const labels = {};
+    for (const it of laterData.items) if (it.selection_hint) labels[it.selection_hint.code] = it.selection_hint.label;
+    sel.innerHTML = '<option value="">選別の目安: すべて</option>' +
+      HINT_ORDER.filter(c => counts[c]).map(c => `<option value="${c}">${esc(labels[c])} (${counts[c]})</option>`).join("");
+    sel.value = prev && counts[prev] ? prev : "";
   }
 
   function renderTabs() {
@@ -283,6 +364,8 @@
       const n = t.key === "all" ? (counts.total || 0) : (counts[t.key] || 0);
       return `<button type="button" class="state-tab${t.key === activeTab ? " active" : ""}" data-tab="${t.key}" onclick="selectTab('${t.key}')">${esc(t.label)} <span class="count">${n}</span></button>`;
     }).join("");
+    document.getElementById("hintFilter").hidden = activeTab !== "unsent";
+    document.getElementById("bulkBar").hidden = activeTab !== "unsent";
   }
 
   function selectTab(key) {
@@ -295,10 +378,37 @@
     if (!laterData) return [];
     const q = document.getElementById("searchInput").value.trim().toLowerCase();
     const warningsOnly = document.getElementById("warningsOnly").checked;
+    const hint = activeTab === "unsent" ? document.getElementById("hintFilter").value : "";
     return laterData.items.filter(it =>
       (activeTab === "all" || it.state === activeTab) &&
       (!q || String(it.company_name || "").toLowerCase().includes(q)) &&
-      (!warningsOnly || it.warnings.some(w => w.level !== "info")));
+      (!warningsOnly || it.warnings.some(w => w.level !== "info")) &&
+      (!hint || (it.selection_hint && it.selection_hint.code === hint)));
+  }
+
+  function actionsHtml(it) {
+    if (it.source === "queue" && (it.raw_status === "pending" || it.raw_status === "on_hold")) {
+      const toggle = it.raw_status === "pending"
+        ? `<button type="button" class="btn" onclick="setQueueStatus(${it.source_id}, 'on_hold')">保留にする</button>`
+        : `<button type="button" class="btn primary" onclick="setQueueStatus(${it.source_id}, 'pending')">再開する</button>`;
+      return `<div class="row-actions">
+          <select id="variant-${esc(it.key)}" aria-label="バリアント">${variantOptionsHtml(it.variant_id)}</select>
+          <button type="button" class="btn" onclick="changeQueueVariant(${it.source_id}, '${esc(it.key)}')">変更</button>
+          ${toggle}
+          <button type="button" class="btn danger" onclick="setQueueStatus(${it.source_id}, 'dismissed')">却下</button>
+        </div>`;
+    }
+    if (it.source === "scheduled" && it.raw_status === "pending") {
+      return `<div class="row-actions">
+          <select id="variant-${esc(it.key)}" aria-label="バリアント">${variantOptionsHtml(it.variant_id)}</select>
+          <button type="button" class="btn" onclick="changeScheduledVariant(${it.source_id}, '${esc(it.key)}')">変更</button>
+        </div>`;
+    }
+    if (it.state === "unsent") {
+      const checked = selectedCompanies.has(it.company_id) ? " checked" : "";
+      return `<label class="row-actions"><input type="checkbox" class="unsent-check" value="${esc(it.company_id)}"${checked} onchange="toggleCompany(${it.company_id}, this.checked)" /> 保留に追加する</label>`;
+    }
+    return '<span class="no-warn">-</span>';
   }
 
   function rowHtml(it) {
@@ -309,23 +419,30 @@
     const detail = it.raw_status && RAW_STATUS_LABELS[it.raw_status] && it.state !== "queued" && it.state !== "scheduled"
       ? `<span class="sub">${esc(SOURCE_LABELS[it.source])}: ${esc(RAW_STATUS_LABELS[it.raw_status])}</span>`
       : `<span class="sub">${esc(SOURCE_LABELS[it.source])}${it.raw_status === "sending" ? ": 送信中" : ""}</span>`;
+    const hintHtml = it.selection_hint
+      ? `<span class="hint-badge ${HINT_CLASS[it.selection_hint.code] || ""}">目安: ${esc(it.selection_hint.label)}</span>`
+      : "";
     const variantHtml = it.variant_name
       ? `${esc(it.variant_name)}<span class="sub">ID ${esc(it.variant_id)}・${it.channel === "email" ? "メール" : "フォーム"}</span>`
       : '<span class="no-warn">(未指定)</span>';
     const dateHtml = it.date
       ? `${esc(formatDate(it.date))}<span class="sub">${esc(it.date_label)}</span>`
       : '<span class="no-warn">-</span>';
-    const warningsHtml = it.warnings.length
-      ? it.warnings.map(w => `<span class="warn warn-${esc(w.level)}">${esc(w.message)}</span>`).join("")
+    const scheduledNote = it.source === "scheduled" && (it.state === "scheduled" || it.state === "overdue")
+      ? '<span class="warn warn-info">予約送信は今の設定(実行時刻)では実行されません</span>'
+      : "";
+    const warningsHtml = it.warnings.length || scheduledNote
+      ? it.warnings.map(w => `<span class="warn warn-${esc(w.level)}">${esc(w.message)}</span>`).join("") + scheduledNote
       : '<span class="no-warn">-</span>';
     return `
       <tr data-key="${esc(it.key)}" data-state="${esc(it.state)}">
-        <td data-label="状態"><div class="cell"><span class="state-badge state-${esc(it.state)}">${esc(it.state_label)}</span>${detail}</div></td>
+        <td data-label="状態"><div class="cell"><span class="state-badge state-${esc(it.state)}">${esc(it.state_label)}</span>${detail}${hintHtml}</div></td>
         <td data-label="企業" class="company"><div class="cell">${companyHtml}<span class="sub">企業ID ${esc(it.company_id)}</span></div></td>
         <td data-label="バリアント"><div class="cell">${variantHtml}</div></td>
         <td data-label="日時"><div class="cell">${dateHtml}</div></td>
         <td data-label="理由・メモ" class="reason"><div class="cell">${it.error_message ? esc(it.error_message) : '<span class="no-warn">-</span>'}</div></td>
         <td data-label="警告"><div class="cell">${warningsHtml}</div></td>
+        <td data-label="操作" class="actions"><div class="cell">${actionsHtml(it)}</div></td>
       </tr>`;
   }
 
@@ -334,7 +451,121 @@
     document.getElementById("resultCount").textContent = laterData ? `${items.length}件を表示` : "";
     document.getElementById("laterBody").innerHTML = items.length
       ? items.map(rowHtml).join("")
-      : '<tr class="empty-row"><td colspan="6">該当する行はありません</td></tr>';
+      : '<tr class="empty-row"><td colspan="7">該当する行はありません</td></tr>';
+    updateBulkCount();
+  }
+
+  function toggleCompany(companyId, checked) {
+    if (checked) selectedCompanies.add(companyId); else selectedCompanies.delete(companyId);
+    updateBulkCount();
+  }
+
+  function updateBulkCount() {
+    document.getElementById("bulkCount").textContent = `${selectedCompanies.size}社を選択中`;
+    document.getElementById("bulkHoldBtn").disabled = busy || selectedCompanies.size === 0;
+  }
+
+  // ---- 操作(送信はしない。送信待ちリスト・予約の行を書き換えるだけ) ----
+
+  async function callApi(url, method, body) {
+    const res = await fetch(url, {
+      method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    let data = {};
+    try { data = await res.json(); } catch (e) {}
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  async function runAction(fn) {
+    if (busy) return;
+    busy = true;
+    updateBulkCount();
+    try {
+      await fn();
+    } catch (err) {
+      showMsg(`エラー: ${err.message}`, "error");
+    } finally {
+      busy = false;
+      await loadLaterList();
+    }
+  }
+
+  function itemByKey(key) {
+    return laterData.items.find(it => it.key === key);
+  }
+
+  function changeQueueVariant(id, key) {
+    const it = itemByKey(key);
+    const variantId = Number(document.getElementById(`variant-${key}`).value);
+    if (!it || !variantId || variantId === Number(it.variant_id)) {
+      showMsg("今と同じバリアントです。変更する場合は別のバリアントを選んでください", "error");
+      return;
+    }
+    const name = (laterData.variants.find(v => Number(v.id) === variantId) || {}).name || variantId;
+    if (!confirm(`「${it.company_name}」の送信待ちのバリアントを「${name}」に変更しますか？\n(送信はしません)`)) return;
+    runAction(async () => {
+      const r = await callApi("/api/crm?action=send-queue", "PATCH", { id, variant_id: variantId });
+      showMsg(r.ok ? `バリアントを「${name}」に変更しました: ${it.company_name}` : `変更できませんでした: ${r.data.error || r.status}`, r.ok ? "ok" : "error");
+    });
+  }
+
+  function setQueueStatus(id, status) {
+    const it = laterData.items.find(x => x.source === "queue" && x.source_id === id);
+    const name = it ? it.company_name : id;
+    const questions = {
+      on_hold: `「${name}」を保留にしますか？\n(保留中は毎日の自動送信で送られません)`,
+      pending: `「${name}」を再開しますか？(送信待ちに戻します)\n再開すると、次回の毎日の自動送信(18:00)で送信されます。`,
+      dismissed: `「${name}」を却下しますか？\n(却下すると送信されません)`,
+    };
+    const done = { on_hold: "保留にしました", pending: "再開しました", dismissed: "却下しました" };
+    if (!confirm(questions[status])) return;
+    runAction(async () => {
+      let r = await callApi("/api/crm?action=send-queue", "PATCH", { id, status });
+      if (!r.ok && r.data.type === "needs_confirm_has_record") {
+        if (!confirm(`${r.data.error}\nそれでも再開しますか？`)) {
+          showMsg("再開を取りやめました", "ok");
+          return;
+        }
+        r = await callApi("/api/crm?action=send-queue", "PATCH", { id, status, confirm_has_record: true });
+      }
+      showMsg(r.ok ? `${done[status]}: ${name}` : `変更できませんでした: ${r.data.error || r.status}`, r.ok ? "ok" : "error");
+    });
+  }
+
+  function changeScheduledVariant(id, key) {
+    const it = itemByKey(key);
+    const variantId = Number(document.getElementById(`variant-${key}`).value);
+    if (!it || !variantId || variantId === Number(it.variant_id)) {
+      showMsg("今と同じバリアントです。変更する場合は別のバリアントを選んでください", "error");
+      return;
+    }
+    const name = (laterData.variants.find(v => Number(v.id) === variantId) || {}).name || variantId;
+    if (!confirm(`「${it.company_name}」の予約のバリアントを「${name}」に変更しますか？`)) return;
+    runAction(async () => {
+      const r = await callApi("/api/analytics?action=scheduled-sends", "PATCH", { id, variant_id: variantId });
+      showMsg(r.ok ? `予約のバリアントを「${name}」に変更しました: ${it.company_name}` : `変更できませんでした: ${r.data.error || r.status}`, r.ok ? "ok" : "error");
+    });
+  }
+
+  function addSelectedToHold() {
+    const ids = [...selectedCompanies];
+    const variantId = Number(document.getElementById("bulkVariant").value);
+    if (!ids.length || !variantId) return;
+    const name = (laterData.variants.find(v => Number(v.id) === variantId) || {}).name || variantId;
+    if (!confirm(`選択した${ids.length}社を、バリアント「${name}」で保留に追加しますか？\n(保留中は送信されません)`)) return;
+    runAction(async () => {
+      const lines = [];
+      let added = 0;
+      for (const companyId of ids) {
+        const it = laterData.items.find(x => x.state === "unsent" && x.company_id === companyId);
+        const r = await callApi("/api/crm?action=send-queue", "POST", {
+          hold: true, company_id: companyId, variant_id: variantId, project: getCurrentProject(),
+        });
+        if (r.ok) { added++; selectedCompanies.delete(companyId); }
+        else lines.push(`・${it ? it.company_name : companyId}: ${r.data.error || r.status}`);
+      }
+      showMsg(`${added}社を保留に追加しました` + (lines.length ? `\n追加できなかった企業:\n${lines.join("\n")}` : ""), lines.length ? "error" : "ok");
+    });
   }
 
   function toggleTheme() {

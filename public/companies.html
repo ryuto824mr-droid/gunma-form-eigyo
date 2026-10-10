@@ -2963,6 +2963,10 @@
           alreadyQueued++;
           resultList.insertAdjacentHTML("beforeend",
             `<li class="bulk-result-item skip">⚠ ${esc(company.name)} → 既にキュー登録済みです</li>`);
+        } else if (data.reason === "on_hold") {
+          alreadyQueued++;
+          resultList.insertAdjacentHTML("beforeend",
+            `<li class="bulk-result-item skip">⏸ ${esc(company.name)} → 保留中のため登録しませんでした（「あとで送る」画面で再開できます）</li>`);
         } else {
           noChannel++;
           noChannelCompanyIds.push(company.id);

@@ -1,5 +1,6 @@
 const { sql }          = require("../lib/db");
 const { fetchReplies, testGmailAuth, checkFormConfirmationEmails } = require("../lib/gmail-receiver");
+const { checkScheduledVariantChange } = require("../lib/later-actions");
 
 module.exports = async function handler(req, res) {
   // --- 送信スケジュール（GET/POST/DELETE） ---
@@ -273,7 +274,34 @@ async function handleScheduledSends(req, res) {
     }
   }
 
-  return res.status(405).json({ error: "GET/POST/DELETEのみ対応しています" });
+  // 予約のバリアント変更(「あとで送る」画面から。送信予定(pending)の予約だけ)
+  if (req.method === "PATCH") {
+    const { id, variant_id } = req.body || {};
+    const scheduleId = parseInt(id, 10);
+    const variantId = parseInt(variant_id, 10);
+    if (!scheduleId || !variantId) {
+      return res.status(400).json({ error: "有効なidとvariant_idが必要です" });
+    }
+    try {
+      const [row] = await sql`SELECT * FROM scheduled_sends WHERE id = ${scheduleId}`;
+      const [company] = row ? await sql`SELECT id, project FROM companies WHERE id = ${row.company_id}` : [];
+      const [variant] = await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`;
+      const check = checkScheduledVariantChange({ row, variant, company });
+      if (!check.ok) return res.status(check.status).json({ error: check.error });
+      // 予約の自動処理が同時に送信済み・失敗にした場合に書き換えないよう、pendingを条件に含める
+      const [updated] = await sql`
+        UPDATE scheduled_sends SET variant_id = ${variantId}
+        WHERE id = ${scheduleId} AND status = 'pending'
+        RETURNING *
+      `;
+      if (!updated) return res.status(409).json({ error: "予約の状態が変わったため変更できませんでした" });
+      return res.status(200).json(updated);
+    } catch (err) {
+      return res.status(500).json({ error: `更新エラー: ${err.message}` });
+    }
+  }
+
+  return res.status(405).json({ error: "GET/POST/PATCH/DELETEのみ対応しています" });
 }
 
 // ---------- スケジュール実行ハンドラー（枠のみ） ----------
