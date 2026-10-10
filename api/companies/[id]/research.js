@@ -1,6 +1,7 @@
 const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
 const { classifyAppealPoints } = require("../../../lib/appeal-point-classifier");
+const { shouldRetryResearch } = require("../../../lib/research-retry");
 
 // vercel.jsonでこの関数のmaxDurationは60秒に設定されている。Puppeteerでの解析が
 // 遅いサイト(反応の遅いサーバー、多段階のページ遷移等)でこれを超えると、Vercelに
@@ -16,6 +17,23 @@ const RESEARCH_TIMEOUT_SENTINEL = "__RESEARCH_TIMEOUT__";
 // のかが変わり、対応方針(再試行が有効かどうか等)も異なるため区別して記録する
 const CONNECTION_ERROR_RE = /ERR_NAME_NOT_RESOLVED|ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_ADDRESS_UNREACHABLE|ERR_INTERNET_DISCONNECTED|ERR_SSL_PROTOCOL_ERROR|ERR_CERT_|ERR_EMPTY_RESPONSE|ERR_FAILED/i;
 const SLOW_RESPONSE_RE = /navigation timeout|ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT|timeout of \d+ ?ms exceeded/i;
+
+// ブラウザ側の一時的な失敗(資源不足・遷移中のクラッシュ)で終わった場合、残り時間が十分あれば
+// 1回だけやり直す(判定は lib/research-retry.js)。やり直した場合は結果の警告にその旨を残す
+async function analyzeFormWithRetry(url, deadline) {
+  try {
+    return await analyzeForm(url);
+  } catch (err) {
+    if (!shouldRetryResearch(err, deadline - Date.now())) throw err;
+    await new Promise((r) => setTimeout(r, 1500));
+    const result = await analyzeForm(url);
+    result.analysisWarnings = [
+      ...(result.analysisWarnings || []),
+      `1回目がブラウザ側の失敗で終わったため再試行しました: ${String(err.message).slice(0, 200)}`,
+    ];
+    return result;
+  }
+}
 
 function classifyErrorType(message) {
   if (!message) return "error";
@@ -44,8 +62,9 @@ module.exports = async function handler(req, res) {
   let timedOut = false;
 
   try {
+    const deadline = Date.now() + RESEARCH_TIMEOUT_MS;
     result = await Promise.race([
-      analyzeForm(company.url),
+      analyzeFormWithRetry(company.url, deadline),
       new Promise((_, reject) => {
         setTimeout(() => reject(new Error(RESEARCH_TIMEOUT_SENTINEL)), RESEARCH_TIMEOUT_MS);
       }),
