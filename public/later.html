@@ -78,6 +78,7 @@
     border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 16px;
     background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text);
   }
+  .banner.banner-recovered { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
   .action-msg { border-radius: var(--radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 12px; white-space: pre-line; }
   .action-msg.ok    { background: var(--green-50); border: 1px solid var(--green-200); color: var(--green-700); }
   .action-msg.error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text); }
@@ -218,6 +219,8 @@
     このプロジェクトの送信者プロフィールが未登録・不完全です。登録するまでフォーム送信は止まります(<a href="crm.html">CRMの設定</a>)。
   </div>
 
+  <div class="banner" id="aiStatusBanner" role="status" hidden></div>
+
   <div class="action-msg" id="actionMsg" hidden></div>
 
   <div class="state-tabs" id="stateTabs"></div>
@@ -317,6 +320,36 @@
     el.onclick = () => { window.location.href = "/app.html#project-select"; };
   }
 
+  // リサーチのAI(欄の判定・訴求タグの推定)が直近7日に失敗していれば上部に知らせる。
+  // 今も失敗している(最後の失敗が最後の成功より新しい)なら赤、もう回復していれば黄色
+  const AI_KIND_LABELS = {
+    credit: "クレジット不足", auth: "APIキーの問題", rate: "回数制限・混雑",
+    truncated: "出力が上限で切れた", parse: "出力の形式が不正", network: "通信エラー", other: "その他",
+  };
+  function fmtJst(iso) {
+    if (!iso) return "";
+    return new Date(iso).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+  function renderAIStatus(st) {
+    const el = document.getElementById("aiStatusBanner");
+    if (!st || !st.failed_7d) { el.hidden = true; return; }
+    const kinds = Object.entries(st.by_kind || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${AI_KIND_LABELS[k] || k} ${n}社`).join("・");
+    const last = `最新の失敗: ${st.last_failure_label || "不明"}(${fmtJst(st.last_failure_at)})`;
+    let text;
+    if (st.blocking) {
+      text = `⚠ リサーチのAI判定が止まっています(${last})。直近7日で${st.failed_7d}社が簡易判定・訴求タグなしのままです(${kinds})。AnthropicのクレジットやAPIキーを確認してください。`;
+    } else if (st.failing) {
+      text = `⚠ 直近のリサーチでAI判定に失敗しています(${last})。直近7日で${st.failed_7d}社(${kinds})。`;
+    } else {
+      text = `直近7日で${st.failed_7d}社のAI判定に失敗しました(${kinds})。最新のリサーチ(${fmtJst(st.last_success_at)})ではAI判定は成功しています。`;
+    }
+    el.textContent = text;
+    el.classList.toggle("banner-recovered", !st.failing);
+    el.hidden = false;
+  }
+
   async function loadLaterList() {
     try {
       const res = await fetch("/api/crm?action=later-list&project=" + encodeURIComponent(getCurrentProject()));
@@ -328,6 +361,7 @@
         (it.state === "email_followup" && it.followup && it.followup.status === "ready")).map(it => it.company_id));
       for (const id of [...selectedCompanies]) if (!unsentIds.has(id)) selectedCompanies.delete(id);
       document.getElementById("senderProfileBanner").hidden = data.sender_profile_valid !== false;
+      renderAIStatus(data.ai_status);
       renderVariantOptions();
       renderHintFilter();
       renderTabs();

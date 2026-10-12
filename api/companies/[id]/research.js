@@ -1,6 +1,7 @@
 const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
-const { classifyAppealPoints } = require("../../../lib/appeal-point-classifier");
+const { classifyAppealPointsDetailed } = require("../../../lib/appeal-point-classifier");
+const { classifyAIError } = require("../../../lib/ai-error");
 const { shouldRetryResearch } = require("../../../lib/research-retry");
 
 // vercel.jsonでこの関数のmaxDurationは60秒に設定されている。Puppeteerでの解析が
@@ -124,7 +125,21 @@ module.exports = async function handler(req, res) {
   // 残り時間がほぼ無いため、これ以上時間のかかる処理は行わずすぐ応答を返す）
   if (!timedOut && process.env.ANTHROPIC_API_KEY) {
     try {
-      const appealPoints = await classifyAppealPoints(updated);
+      const { points: appealPoints, error: appealError } = await classifyAppealPointsDetailed(updated);
+      if (appealError) {
+        // 失敗(クレジット不足等)は「該当なし」と区別できるよう、リサーチの記録に目立つ警告として残す
+        const info = classifyAIError(appealError);
+        const saved = typeof updated.research_result === "string"
+          ? JSON.parse(updated.research_result)
+          : { ...(updated.research_result || {}) };
+        saved.appealError = String(appealError).slice(0, 300);
+        saved.appealErrorKind = info.kind;
+        saved.analysisWarnings = [...(saved.analysisWarnings || []), `⚠ 訴求タグの推定に失敗(${info.label})`];
+        const [withWarning] = await sql`
+          UPDATE companies SET research_result = ${JSON.stringify(saved)} WHERE id = ${id} RETURNING *
+        `;
+        return res.status(200).json(withWarning);
+      }
       if (appealPoints.length > 0) {
         const existingTags = Array.isArray(updated.company_tags) ? updated.company_tags : [];
         const mergedTags = Array.from(new Set([...existingTags, ...appealPoints.map(p => `訴求:${p}`)]));

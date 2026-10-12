@@ -143,3 +143,28 @@ test("メール後のフォーム: チャネル別の集計と反応を使って
   assert.ok(calls.some((c) => /GROUP BY sl.company_id, sl.channel, sl.status/.test(c.text)));
   assert.ok(calls.some((c) => /FROM responses r/.test(c.text)));
 });
+
+test("AI判定の状況: 直近7日にAIが失敗した企業を数えて返す(画面上部の警告用)", async () => {
+  const recent = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const older = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const base = { url: "https://x.example/", contact_form_url: "https://x.example/", status: "researched", archived: false, action_status: "none", project: "ozukanzukan", automatable: "true", rejection_detected: "false" };
+  reset({
+    companies: [
+      { ...base, id: 1, name: "A", updated_at: older, mapping_source: "ai", ai_error: null, appeal_error: null },
+      { ...base, id: 2, name: "B", updated_at: recent, mapping_source: "heuristic", ai_error: "Claude APIエラー (status 400): Your credit balance is too low", appeal_error: null },
+    ],
+    logs: [], queue: [], scheduled: [],
+  });
+  let r = await call("GET", { project: "ozukanzukan" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ai_status.failed_7d, 1);
+  assert.deepEqual(r.body.ai_status.by_kind, { credit: 1 });
+  assert.equal(r.body.ai_status.blocking, true);
+  // リサーチの記録からAIの判定の情報も読む
+  assert.ok(calls.some((c) => /research_result->>'aiError'/.test(c.text) && /research_result->>'appealError'/.test(c.text)));
+
+  reset({ logs: [], queue: [], scheduled: [] });
+  r = await call("GET", { project: "ozukanzukan" });
+  assert.equal(r.body.ai_status.failed_7d, 0, "updated_at の無い企業・失敗の無い企業は数えない");
+  assert.equal(r.body.ai_status.failing, false);
+});

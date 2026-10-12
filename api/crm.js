@@ -19,6 +19,7 @@ const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
 const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
 const { buildLaterList, buildRecords } = require("../lib/later-status");
+const { summarizeAIStatus } = require("../lib/ai-error");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
@@ -3455,9 +3456,12 @@ async function handleLaterList(req, res) {
   try {
     const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
       sql`
-        SELECT id, name, url, contact_form_url, email, status, archived, action_status, project,
+        SELECT id, name, url, contact_form_url, email, status, archived, action_status, project, updated_at,
                research_result->>'automatable'        AS automatable,
-               research_result->>'rejection_detected' AS rejection_detected
+               research_result->>'rejection_detected' AS rejection_detected,
+               research_result->>'mappingSource'      AS mapping_source,
+               research_result->>'aiError'            AS ai_error,
+               research_result->>'appealError'        AS appeal_error
         FROM companies WHERE project = ${project}
       `,
       sql`
@@ -3514,9 +3518,11 @@ async function handleLaterList(req, res) {
     const { items, counts } = buildLaterList({
       companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
     });
+    // 直近7日のリサーチでAI(欄の判定・訴求タグの推定)が失敗した状況。画面上部の警告に使う
+    const aiStatus = summarizeAIStatus(companies, Date.now());
     return res.status(200).json({
       project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid,
-      counts, items, variants,
+      ai_status: aiStatus, counts, items, variants,
     });
   } catch (err) {
     return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
