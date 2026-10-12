@@ -30,6 +30,7 @@ async function analyzeFormWithRetry(url, deadline) {
     result.analysisWarnings = [
       ...(result.analysisWarnings || []),
       `1回目がブラウザ側の失敗で終わったため再試行しました: ${String(err.message).slice(0, 200)}`,
+      ...(err.diagnostics || []).map((line) => `1回目の${line}`),
     ];
     return result;
   }
@@ -91,7 +92,8 @@ module.exports = async function handler(req, res) {
       timedOut = true;
       result = { error: "リサーチがタイムアウトしました。再度お試しください", errorType: "slow_response" };
     } else {
-      result = { error: err.message, errorType: classifyErrorType(err.message) };
+      // lib/form-analyzer.js が付けた診断(起動前・終了後の実行環境の状態)も記録に残す
+      result = { error: err.message, errorType: classifyErrorType(err.message), analysisWarnings: err.diagnostics || [] };
     }
     status = "error";
   }

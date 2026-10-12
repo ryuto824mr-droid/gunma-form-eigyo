@@ -106,3 +106,25 @@ test("1回目で成功したらやり直さない", async () => {
   assert.equal(analyzeCalls, 1);
   assert.equal(updates[0].values[2], "researched");
 });
+
+test("エラー時は、リサーチが付けた診断(起動前・終了後)を記録の警告に残す", async () => {
+  const e = err("net::ERR_NAME_NOT_RESOLVED at https://x/");
+  e.diagnostics = ["診断(起動前): Chromiumプロセス=0 …", "診断(終了後): Chromiumプロセス=0 … / ブラウザの終了: 正常に終了・作業用フォルダ削除"];
+  reset([e]);
+  await call();
+  const saved = JSON.parse(updates[0].values[1]);
+  assert.equal(updates[0].values[2], "error");
+  assert.deepEqual(saved.analysisWarnings, e.diagnostics);
+});
+
+test("やり直して成功した場合は、1回目の診断も残す", async () => {
+  const e = err("net::ERR_INSUFFICIENT_RESOURCES at https://x/");
+  e.diagnostics = ["診断(起動前): Chromiumプロセス=3", "診断(終了後): Chromiumプロセス=3 / ブラウザの終了: close失敗・強制終了"];
+  reset([e, { ...FOUND, analysisWarnings: ["診断(起動前): Chromiumプロセス=0"] }]);
+  await call();
+  const saved = JSON.parse(updates[0].values[1]);
+  assert.equal(updates[0].values[2], "researched");
+  assert.ok(saved.analysisWarnings.includes("診断(起動前): Chromiumプロセス=0"));
+  assert.ok(saved.analysisWarnings.includes("1回目の診断(起動前): Chromiumプロセス=3"));
+  assert.ok(saved.analysisWarnings.some((w) => /^1回目の診断\(終了後\).*強制終了/.test(w)));
+});
