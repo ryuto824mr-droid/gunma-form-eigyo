@@ -19,6 +19,7 @@ function fakeSql(strings, ...values) {
   if (text.includes("FROM send_logs sl")) return Promise.resolve(data.logs || []);
   if (text.includes("FROM send_queue sq")) return Promise.resolve(data.queue || []);
   if (text.includes("FROM scheduled_sends ss")) return Promise.resolve(data.scheduled || []);
+  if (text.includes("FROM auto_pipeline_logs")) return Promise.resolve(data.pipelineLogs || []);
   return Promise.resolve([]);
 }
 fakeSql.query = async () => [];
@@ -167,4 +168,20 @@ test("AI判定の状況: 直近7日にAIが失敗した企業を数えて返す(
   r = await call("GET", { project: "ozukanzukan" });
   assert.equal(r.body.ai_status.failed_7d, 0, "updated_at の無い企業・失敗の無い企業は数えない");
   assert.equal(r.body.ai_status.failing, false);
+});
+
+test("AI判定の状況: 企業探しのAIの絞り込みに失敗して登録を止めた日も返す", async () => {
+  reset({
+    logs: [], queue: [], scheduled: [],
+    pipelineLogs: [
+      { run_date: "2026-10-13", created_at: new Date(Date.now() - 3600000).toISOString(),
+        error_message: "企業探しのAIの絞り込みに失敗した(クレジット不足)ため、今日の企業の登録を止めました: Claude APIエラー (status 400): Your credit balance is too low" },
+    ],
+  });
+  const r = await call("GET", { project: "ozukanzukan" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ai_status.discover_stopped_7d, 1);
+  assert.equal(r.body.ai_status.discover_failing, true);
+  assert.equal(r.body.ai_status.discover_last_failure_label, "クレジット不足");
+  assert.ok(calls.some((c) => /FROM auto_pipeline_logs/.test(c.text) && c.values.includes("ozukanzukan")));
 });

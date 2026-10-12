@@ -19,7 +19,7 @@ const { parseWorkLogText } = require("../lib/work-log-parser");
 const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarizer");
 const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
 const { buildLaterList, buildRecords } = require("../lib/later-status");
-const { summarizeAIStatus } = require("../lib/ai-error");
+const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
@@ -2695,6 +2695,10 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
 
         if (!discoverResult.ok) {
           errorMessage = discoverResult.body?.error || "企業検索に失敗しました";
+        } else if (discoverResult.body?.ai_filter_error) {
+          // 企業ではないページを登録しないよう、AIの絞り込みに失敗した日は登録しない
+          const info = classifyAIError(discoverResult.body.ai_filter_error);
+          errorMessage = `${AI_FILTER_STOP_PREFIX}(${info.label})ため、今日の企業の登録を止めました: ${String(discoverResult.body.ai_filter_error).slice(0, 150)}`;
         } else if (discoverResult.body?.configured === false) {
           errorMessage = discoverResult.body?.message || "検索機能が設定されていません";
         } else {
@@ -3518,8 +3522,19 @@ async function handleLaterList(req, res) {
     const { items, counts } = buildLaterList({
       companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
     });
-    // 直近7日のリサーチでAI(欄の判定・訴求タグの推定)が失敗した状況。画面上部の警告に使う
+    // 直近7日のリサーチでAI(欄の判定・訴求タグの推定)が失敗した状況と、企業探しのAIの絞り込みに
+    // 失敗して登録を止めた日。画面上部の警告に使う(記録の読み取りに失敗しても一覧は返す)
     const aiStatus = summarizeAIStatus(companies, Date.now());
+    try {
+      const pipelineLogs = await sql`
+        SELECT run_date, error_message, created_at FROM auto_pipeline_logs
+        WHERE project = ${project} AND created_at >= NOW() - INTERVAL '7 days'
+        ORDER BY created_at DESC
+      `;
+      Object.assign(aiStatus, summarizeDiscoverFailures(pipelineLogs));
+    } catch {
+      Object.assign(aiStatus, summarizeDiscoverFailures([]));
+    }
     return res.status(200).json({
       project, generated_at: new Date().toISOString(), sender_profile_valid: senderProfileValid,
       ai_status: aiStatus, counts, items, variants,

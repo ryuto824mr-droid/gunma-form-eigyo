@@ -332,7 +332,17 @@
   }
   function renderAIStatus(st) {
     const el = document.getElementById("aiStatusBanner");
-    if (!st || !st.failed_7d) { el.hidden = true; return; }
+    if (!st || (!st.failed_7d && !st.discover_stopped_7d)) { el.hidden = true; return; }
+    // 企業探しのAIの絞り込みに失敗して、自動パイプラインが登録を止めた日
+    const discoverText = st.discover_stopped_7d
+      ? `企業探しのAIの絞り込みに失敗し、自動パイプラインが企業の登録を止めた日が直近7日で${st.discover_stopped_7d}日あります(最新: ${st.discover_last_failure_label || "不明"}、${fmtJst(st.discover_last_failure_at)})。`
+      : "";
+    if (!st.failed_7d) {
+      el.textContent = (st.discover_failing ? "⚠ " : "") + discoverText;
+      el.classList.toggle("banner-recovered", !st.discover_failing);
+      el.hidden = false;
+      return;
+    }
     const kinds = Object.entries(st.by_kind || {})
       .sort((a, b) => b[1] - a[1])
       .map(([k, n]) => `${AI_KIND_LABELS[k] || k} ${n}社`).join("・");
@@ -345,8 +355,8 @@
     } else {
       text = `直近7日で${st.failed_7d}社のAI判定に失敗しました(${kinds})。最新のリサーチ(${fmtJst(st.last_success_at)})ではAI判定は成功しています。`;
     }
-    el.textContent = text;
-    el.classList.toggle("banner-recovered", !st.failing);
+    el.textContent = discoverText ? `${text} ${discoverText}` : text;
+    el.classList.toggle("banner-recovered", !st.failing && !st.discover_failing);
     el.hidden = false;
   }
 

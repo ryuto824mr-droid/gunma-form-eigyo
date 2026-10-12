@@ -3252,11 +3252,15 @@
       const data = await res.json();
       if (!res.ok) { resultEl.innerHTML = `<p class="discover-error">エラー: ${esc(data.error || "不明なエラー")}</p>`; return; }
       if (!data.configured) { resultEl.innerHTML = `<p class="discover-unconfigured">Brave Search APIキーの設定が必要です。</p>`; return; }
+      // AIによる絞り込みに失敗した場合は、企業ではないページ(ポータル・自治体等)が混ざっている可能性を知らせる
+      const aiFilterWarnHtml = data.ai_filter_error
+        ? `<p class="discover-error">⚠ AIによる絞り込みに失敗したため、検索結果をそのまま表示しています。ポータル・自治体などの企業ではないページが混ざっている可能性があります(${esc(String(data.ai_filter_error).slice(0, 120))})</p>`
+        : "";
       if (!data.results || data.results.length === 0) {
         const dupMsg = data.excluded_duplicate_count > 0
           ? `（候補${data.excluded_duplicate_count}件は既存企業または過去の検索結果と重複のため除外されました）`
           : "";
-        resultEl.innerHTML = `<p class="discover-status">検索結果が見つかりませんでした。${esc(dupMsg)}</p>`;
+        resultEl.innerHTML = `${aiFilterWarnHtml}<p class="discover-status">検索結果が見つかりませんでした。${esc(dupMsg)}</p>`;
         return;
       }
 
@@ -3273,6 +3277,7 @@
         : "";
 
       resultEl.innerHTML = `
+        ${aiFilterWarnHtml}
         <p class="discover-count">${data.results.length}件見つかりました${dupNoteHtml}</p>
         ${tagsPreviewHtml}
         <div class="search-send-controls">

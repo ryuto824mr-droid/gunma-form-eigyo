@@ -1,4 +1,4 @@
-const { filterResultsWithAI } = require("../lib/discover-ai-filter");
+const { filterResultsWithAIDetailed } = require("../lib/discover-ai-filter");
 const { searchPlacesAPI } = require("../lib/places-search");
 const { sql, getSettings } = require("../lib/db");
 
@@ -41,7 +41,17 @@ const EXCLUDE_DOMAINS = [
   // まとめサイト・ポータルサイト(藤岡市の検索結果に混入)
   "suumo.jp", "tsukulink.jp", "homepro.jp", "map.goo.ne.jp",
   "hapisumu.jp", "house.goo.ne.jp", "myhome.nifty.com", "gunmadekurasu.com",
+  // 企業ではないページ(2026-10にアーカイブしたもの): 企業情報・地図・口コミ・不動産のポータル、
+  // 百科事典・データベース、地域情報サイト、記事・解説サイト、政府機関(go.jp)
+  "companyinformation.jp", "e-map.ne.jp", "wikidata.org", "wikimedia.org", "hatomarksite.com",
+  "always-basics.com", "snabi.jp", "teachme.jp", "seizogyo-channel.com", "shopowner-support.net",
+  "canpan.info", "kochi-seizou.jp", "takasaki2shin.com", "e-shops.jp", "mytabi.net", "hotpepper.jp",
+  "ota-iparks.jp", "archinform.net",
+  "go.jp", // 政府機関専用ドメイン(国立国会図書館のアーカイブ warp.da.ndl.go.jp 等)
 ];
+
+// 市区町村・都道府県の公式サイト(city.ota.gunma.jp、town.〜.jp、pref.〜.jp 等。lg.jp 以外の旧来のドメイン)
+const MUNICIPAL_HOST_RE = /^(city|town|vill|village|pref)\.[a-z0-9-]+(\.[a-z0-9-]+)*\.jp$/i;
 
 // 業種を問わず常に除外する人材派遣・求人系のキーワード(企業名/タイトルに含まれる場合)
 const NOISE_NAME_KEYWORDS = [
@@ -106,7 +116,11 @@ function isBranchOrStore(name) {
 // URLのホスト名やパスにこれらの文字列が含まれる場合も求人ページとみなして除外する
 const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリア"];
 
-module.exports = async function handler(req, res) {
+module.exports = handler;
+module.exports.getExclusionReason = getExclusionReason;
+module.exports.EXCLUDE_DOMAINS = EXCLUDE_DOMAINS;
+
+async function handler(req, res) {
   if (req.method === "GET" && req.query.action === "search-history") {
     return handleGetSearchHistory(req, res);
   }
@@ -166,8 +180,15 @@ module.exports = async function handler(req, res) {
     const { results: webResults, stats: braveStats } = await searchViaBrave(params, braveKey, resultCount);
     await logApiUsage("brave_search", "web_search");
 
-    // 2. AI判定フィルタ (ANTHROPIC_API_KEY未設定なら素通り)
-    const filteredResults = await filterResultsWithAI(webResults, locationStr, descStr);
+    // 2. AI判定フィルタ。失敗した場合(クレジット不足・キー未設定等):
+    //    - 自動パイプライン: 企業ではないページを登録しないよう、その日の候補は返さない
+    //      (候補の記録もしないので、翌日以降に改めて検索・判定される)
+    //    - 手動検索: 結果はそのまま返し、失敗したことを警告として返す(画面に表示する)
+    const aiFilter = await filterResultsWithAIDetailed(webResults, locationStr, descStr);
+    const filteredResults = aiFilter.results;
+    if (aiFilter.error && source === "auto_pipeline") {
+      return res.status(200).json({ configured: true, results: [], excluded_duplicate_count: 0, ai_filter_error: aiFilter.error });
+    }
 
     // 3. Places API (GOOGLE_PLACES_API_KEY未設定なら空配列)
     // Brave側と同じEXCLUDE_DOMAINSブロックリストをPlacesの結果(websiteUri)にも適用する
@@ -209,6 +230,7 @@ module.exports = async function handler(req, res) {
     await recordSearchHistory(project, params, merged.length);
 
     const payload = { configured: true, results: merged, excluded_duplicate_count: excludedKnownCount + excludedRecentCount };
+    if (aiFilter.error) payload.ai_filter_error = aiFilter.error;
     if (debugAuthorized) {
       payload.debug = {
         raw_count: braveStats.raw_count,
@@ -229,7 +251,7 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `検索エラー: ${err.message}` });
   }
-};
+}
 
 // Brave/Places (Text Search New) は共に1リクエストあたりの上限が20件
 const MAX_RESULT_COUNT = 20;
@@ -358,6 +380,7 @@ function isJobSiteDomain(hostname) {
 function getExclusionReason(url) {
   const host = getHostname(url);
   if (EXCLUDE_DOMAINS.some(d => host === d || host.endsWith(`.${d}`))) return "domain_match";
+  if (MUNICIPAL_HOST_RE.test(host)) return "domain_match";
   if (isJobSiteDomain(host)) return "punycode_job";
 
   let pathname = "";
