@@ -1,7 +1,8 @@
 // リサーチ(lib/form-analyzer.js の analyzeForm)の通しテスト:
 //   - 営業お断りを、欄の入力例(placeholder)からも検出する(2204の形)
 //   - 「営業部」「営業時間」等の普通の文言だけのフォームは、営業お断りにしない
-//   - ラベルの無い複数行の欄をAIが本文と判定しなかったとき、それを本文とみなして自動送信可にする(1986の形)
+//   - ラベルの無い複数行の欄をAIが本文と判定しなかったとき、それを本文とみなす(1986の形)。
+//     ただし名前・メール等もラベルが無いまま推測なので、自動送信は「要確認」で不可になる
 // 127.0.0.1 にテスト用ページを立て、本物のブラウザでリサーチする。Anthropic APIの呼び出しだけを偽物にし、
 // 外部には一切アクセスしない。
 // 実行: npm run test:e2e
@@ -79,7 +80,7 @@ test("「例）営業部」「営業時間外のお電話はご遠慮くださ�
   assert.equal(r.automatable, true);
 });
 
-test("ラベルの無い複数行の欄: AIには textarea として渡し、AIが本文と判定しなくても本文とみなして自動送信可にする", { timeout: 90000 }, async () => {
+test("ラベルの無い複数行の欄: AIには textarea として渡し、AIが本文と判定しなくても本文とみなす(他の欄の推測は要確認)", { timeout: 90000 }, async () => {
   prompts = [];
   // AIが textarea を「電話」と誤判定した場合(1986で実際に起きた判定)
   reply = ok('[{"i":0,"r":"contact_person_name","c":"m"},{"i":1,"r":"contact_person_name_kana","c":"m"},{"i":2,"r":"other","c":"m"},{"i":3,"r":"email","c":"l"},{"i":4,"r":"phone","c":"l"}]');
@@ -89,5 +90,8 @@ test("ラベルの無い複数行の欄: AIには textarea として渡し、AI�
   const ta = r.fieldMapping.find((m) => m.name === "element-4");
   assert.deepEqual([ta.role, ta.confidence], ["message", "low"]);
   assert.ok(r.analysisWarnings.includes("⚠ AIが本文の欄を判定できなかったため、複数行の欄(element-4)を本文とみなしました"));
-  assert.equal(r.automatable, true);
+  // 名前・ふりがな・メールはラベルが無いまま推測なので要確認(本文の欄は補えている)
+  assert.deepEqual(r.needsReview, ["element-0=名前", "element-1=ふりがな", "element-3=メール"]);
+  assert.equal(r.automatable, false);
+  assert.match(r.automatableBlockedReason, /^要確認: /);
 });
