@@ -2167,6 +2167,12 @@
           size:       document.getElementById("pipelineSize").value,
         };
 
+    // 画面に欄の無い設定(検索条件の順番替え rotation・新しい企業を保留で積むか hold_new_companies)は、
+    // 保存しても消えないよう、読み込んだ設定から引き継ぐ
+    const prevParams = (pipelineConfig && pipelineConfig.search_params) || {};
+    if (prevParams.rotation) searchParams.rotation = prevParams.rotation;
+    if (prevParams.hold_new_companies !== undefined) searchParams.hold_new_companies = prevParams.hold_new_companies;
+
     if (enabled && !variantId) {
       showToast("有効にするにはバリアントを選択してください", "error");
       return;

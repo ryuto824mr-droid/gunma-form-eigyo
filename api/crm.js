@@ -20,6 +20,7 @@ const { summarizeMeeting, identifySpeakers } = require("../lib/meeting-summarize
 const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require("../lib/sender-profile");
 const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
+const { pickSearchCondition } = require("../lib/search-rotation");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
@@ -2445,6 +2446,7 @@ const AUTO_PIPELINE_PROJECTS = ["locle", "ozukanzukan"];
 const AUTO_PIPELINE_HARD_CAP = 15;
 const AUTO_PIPELINE_DEFAULT_DAILY_LIMIT = 12;
 const AUTO_PIPELINE_TIME_BUDGET_MS = 48000; // maxDuration=60秒に対して12秒の余裕を残す
+const AUTO_PIPELINE_RETRY_MIN_MS = 30000; // 新しい候補が0件のとき、次の組み合わせで探し直すのに必要な残り時間
 
 function isValidPipelineProject(p) {
   return p === "locle" || p === "ozukanzukan";
@@ -2612,7 +2614,9 @@ async function registerAndResearchCandidate(candidate, project) {
 // UNIQUEインデックス(send_queue_pending_company_variant_uidx)を張っているため、
 // この事前チェックをすり抜けた場合(同時実行競合等)もINSERT自体がDB制約で失敗し、
 // catchでfalseを返す(=多重登録は起きない)
-async function queueCompanyForSend(company, project, variantId) {
+// options.hold: true なら送信待ち(pending)ではなく保留(on_hold)で積む(人が確認してから再開して送る)。
+// options.note: 保留の行に残すメモ(error_message 欄。「あとで送る」画面に表示される)
+async function queueCompanyForSend(company, project, variantId, options = {}) {
   let channel;
   if (company?.research_result?.automatable === true) {
     channel = "form";
@@ -2648,6 +2652,13 @@ async function queueCompanyForSend(company, project, variantId) {
     `;
     if (onHold) return { ok: false, reason: "on_hold" };
 
+    if (options.hold) {
+      await sql`
+        INSERT INTO send_queue (project, company_id, variant_id, channel, status, error_message)
+        VALUES (${project}, ${company.id}, ${variantId}, ${channel}, 'on_hold', ${options.note || "[保留] 自動パイプラインで追加"})
+      `;
+      return { ok: true, channel, held: true };
+    }
     await sql`
       INSERT INTO send_queue (project, company_id, variant_id, channel, status)
       VALUES (${project}, ${company.id}, ${variantId}, ${channel}, 'pending')
@@ -2671,6 +2682,8 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
 
   let found = 0, researched = 0, queued = 0, skipped = 0, attempted = 0;
   let errorMessage = null;
+  let searchUsed = null;
+  let holdNew = true;
 
   try {
     if (!config.variant_id) {
@@ -2685,13 +2698,51 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
       if (effectiveLimit <= 0) {
         errorMessage = "1日の上限が0以下のため実行をスキップしました";
       } else {
-        const searchParams = (config.search_params && typeof config.search_params === "object") ? config.search_params : {};
-        const discoverResult = await invokeHandlerInternally(discoverHandler, {
+        const rawParams = (config.search_params && typeof config.search_params === "object") ? config.search_params : {};
+        const { rotation, hold_new_companies: holdSetting, ...fixedParams } = rawParams;
+        // 新しく見つけた企業は、設定で明示的に false にしない限り保留(on_hold)で積む(人が確認してから送る)
+        holdNew = holdSetting !== false;
+
+        // 検索条件: rotation があれば「業種×市町村」を日ごとに選ぶ(lib/search-rotation.js。
+        // 過去の検索は search_history を使う)。選べなければ固定の条件で検索する
+        let history = [];
+        if (rotation) {
+          try {
+            history = await sql`
+              SELECT industry, prefecture, city, result_count, searched_at FROM search_history
+              WHERE project = ${project} AND searched_at >= NOW() - INTERVAL '400 days'
+            `;
+          } catch {
+            history = [];
+          }
+        }
+        const tried = [];
+        const nextParams = () => {
+          if (!rotation) return tried.length === 0 ? { ...fixedParams } : null;
+          const picked = pickSearchCondition({ rotation, history, now: Date.now(), exclude: tried });
+          if (!picked) return tried.length === 0 ? { ...fixedParams } : null;
+          tried.push(picked);
+          return { ...fixedParams, industry: picked.industry, prefecture: picked.prefecture, city: picked.city };
+        };
+        const runDiscover = (params) => invokeHandlerInternally(discoverHandler, {
           project,
-          ...searchParams,
+          ...params,
           result_count: 20,
           source: "auto_pipeline",
         });
+
+        searchUsed = nextParams();
+        let discoverResult = await runDiscover(searchUsed);
+        // 新しい候補が0件で時間に余裕があれば、次の組み合わせでもう1回だけ探す
+        if (rotation && discoverResult.ok && !discoverResult.body?.ai_filter_error &&
+            Array.isArray(discoverResult.body?.results) && discoverResult.body.results.length === 0 &&
+            deadline - Date.now() > AUTO_PIPELINE_RETRY_MIN_MS) {
+          const second = nextParams();
+          if (second) {
+            searchUsed = second;
+            discoverResult = await runDiscover(second);
+          }
+        }
 
         if (!discoverResult.ok) {
           errorMessage = discoverResult.body?.error || "企業検索に失敗しました";
@@ -2722,7 +2773,11 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
               continue;
             }
 
-            const queueResult = await queueCompanyForSend(company, project, config.variant_id);
+            const searchLabel = [searchUsed && searchUsed.industry, searchUsed && searchUsed.city].filter(Boolean).join("×") || "固定の条件";
+            const queueResult = await queueCompanyForSend(company, project, config.variant_id, {
+              hold: holdNew,
+              note: `[保留] 自動パイプラインで追加(検索: ${searchLabel})`,
+            });
             if (queueResult.ok) queued++; else skipped++;
           }
         }
@@ -2736,7 +2791,11 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
   await logAutoPipelineRun(project, {
     found_count: found, researched_count: researched, sent_count: queued, skipped_count: skipped, error_message: errorMessage,
   });
-  return { project, enabled: true, found, researched, queued, skipped, error: errorMessage };
+  return {
+    project, enabled: true, found, researched, queued, skipped, error: errorMessage,
+    search: searchUsed ? { industry: searchUsed.industry || null, prefecture: searchUsed.prefecture || null, city: searchUsed.city || null } : null,
+    held: holdNew,
+  };
 }
 
 async function runAutoPipelineAllProjects(settings, skipReason, deadline) {
