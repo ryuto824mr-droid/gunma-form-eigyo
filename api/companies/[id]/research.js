@@ -2,6 +2,7 @@ const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
 const { classifyAppealPointsDetailed } = require("../../../lib/appeal-point-classifier");
 const { classifyAIError } = require("../../../lib/ai-error");
+const { isPlaceholderEmail } = require("../../../lib/email-placeholder");
 const { shouldRetryResearch } = require("../../../lib/research-retry");
 
 // vercel.jsonでこの関数のmaxDurationは60秒に設定されている。Puppeteerでの解析が
@@ -99,8 +100,13 @@ module.exports = async function handler(req, res) {
     status = "error";
   }
 
-  // メールアドレスは自動取得できて、かつ未設定の場合のみ更新する
-  const shouldUpdateEmail = !!(result.extractedEmail && !company.email);
+  // メールアドレスは自動取得できて、かつ未設定の場合のみ更新する。
+  // 登録済みのアドレスが入力例・仮のアドレス(sample@・toiawase@domain.co.jp 等)の場合は未設定と同じに扱い、
+  // 本物が見つかれば置き換える(元の値は research_result.previousEmail に残す。削除はしない)。
+  // 以前は仮のアドレスが入っていると、本物が見つかっても保存されなかった
+  const currentIsPlaceholder = !!company.email && isPlaceholderEmail(company.email).placeholder;
+  const shouldUpdateEmail = !!(result.extractedEmail && (!company.email || currentIsPlaceholder));
+  if (shouldUpdateEmail && currentIsPlaceholder) result.previousEmail = company.email;
   const emailToSet = shouldUpdateEmail ? result.extractedEmail : company.email;
 
   // 会社概要情報が今回取得できた場合のみ更新し、取得できなかった場合は既存の値を維持する
