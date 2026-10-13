@@ -331,3 +331,19 @@ test("再開: メール送信済み企業は、保留中に反応が来ていれ
   assert.deepEqual([r.status, r.body.type], [409, "has_response"]);
   assert.equal(rowOf(440).status, "on_hold");
 });
+
+test("宛名(企業名)が不確かな企業は、保留への追加・送信待ちへの登録をしない", async () => {
+  reset();
+  db.companies[2267] = company(2267, { name: "群馬総合保険株式会社は損害保険・生命保険を幅広く", official_name: "株式会社は損害保険" });
+  let r = await call("POST", { hold: true, company_id: 2267, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.type, "greeting_uncertain");
+  assert.match(r.body.error, /株式会社は損害保険.*法人格の直後が助詞/);
+  r = await call("POST", { company_id: 2267, project: "ozukanzukan", variant_id: 8 });
+  assert.deepEqual([r.body.queued, r.body.reason], [false, "greeting_uncertain"]);
+  assert.equal(db.queue.filter((x) => x.company_id === 2267).length, 0);
+  // 正式名称が壊れていても、登録名が使えれば追加できる
+  db.companies[1941] = company(1941, { name: "株式会社ジーシーシー", official_name: "株式会社" });
+  r = await call("POST", { hold: true, company_id: 1941, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.status, 201);
+});

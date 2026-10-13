@@ -1,3 +1,4 @@
+const { fillCompanyName } = require("../lib/greeting-name");
 const { sql, isExcludedDomain, getSettings } = require("../lib/db");
 const { sendEmail, ensureLabel, addLabelToMessage } = require("../lib/gmail-sender");
 const { isPlaceholderEmail } = require("../lib/email-placeholder");
@@ -135,9 +136,9 @@ module.exports = async function handler(req, res) {
   `;
 
   // テンプレート置換 → 本文中のリンクをクリック計測用URLに置換
-  const replace = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
-  const subject = replace(variant.subject_template);
-  const rawBody = replace(variant.body_template);
+  // 宛名(企業名)は lib/greeting-name.js で判定し、使える名前が無ければ「ご担当者様」等に置き換える
+  const subject = fillCompanyName(variant.subject_template, company, "subject");
+  const rawBody = fillCompanyName(variant.body_template, company, "body");
   const body    = replaceLinksWithTrackingUrls(rawBody, pendingLog.id);
 
   // 添付ファイル取得(指定があれば)

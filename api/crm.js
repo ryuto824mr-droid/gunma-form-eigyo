@@ -21,6 +21,7 @@ const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require(
 const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
 const { pickSearchCondition } = require("../lib/search-rotation");
+const { resolveGreetingName } = require("../lib/greeting-name");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
@@ -2617,6 +2618,8 @@ async function registerAndResearchCandidate(candidate, project) {
 // options.hold: true なら送信待ち(pending)ではなく保留(on_hold)で積む(人が確認してから再開して送る)。
 // options.note: 保留の行に残すメモ(error_message 欄。「あとで送る」画面に表示される)
 async function queueCompanyForSend(company, project, variantId, options = {}) {
+  // 宛名(企業名)が不確かな企業は積まない(企業名を直してから積む)
+  if (!resolveGreetingName(company).name) return { ok: false, reason: "greeting_uncertain" };
   let channel;
   if (company?.research_result?.automatable === true) {
     channel = "form";
@@ -2833,6 +2836,7 @@ const SEND_QUEUE_STATUSES = ["pending", "sending", "sent", "failed", "skipped", 
 async function loadCompanyForLater(companyId) {
   const [company] = await sql`
     SELECT id, name, project, status, archived, action_status,
+           company_info->>'official_name'         AS official_name,
            research_result->>'automatable'        AS automatable,
            research_result->>'rejection_detected' AS rejection_detected
     FROM companies WHERE id = ${companyId}
@@ -2893,6 +2897,15 @@ async function handleQueueHoldAdd(req, res) {
       activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
     });
     if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
+    // 宛名(企業名)が不確かな企業は追加しない(企業名を直してから追加する)。送るときも名前を入れず
+    // 「ご担当者様」だけになるが、確かな宛名で送れるよう先に直してもらう
+    const greeting = resolveGreetingName({ name: company.name, company_info: { official_name: company.official_name } });
+    if (!greeting.name) {
+      return res.status(400).json({
+        error: `宛名(企業名)が不確かなため追加できません(${greeting.rejected.map((r) => `「${r.value.slice(0, 30)}」: ${r.reason}`).join("、")})。企業名を直してから追加してください`,
+        type: "greeting_uncertain",
+      });
+    }
     const [created] = await sql`
       INSERT INTO send_queue (project, company_id, variant_id, channel, status, error_message)
       VALUES (${project}, ${companyId}, ${variantId}, 'form', 'on_hold', '[保留] 「あとで送る」画面から追加')
@@ -3520,6 +3533,7 @@ async function handleLaterList(req, res) {
     const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
       sql`
         SELECT id, name, url, contact_form_url, email, status, archived, action_status, project, updated_at,
+               company_info->>'official_name'         AS official_name,
                research_result->>'automatable'        AS automatable,
                research_result->>'rejection_detected' AS rejection_detected,
                research_result->>'mappingSource'      AS mapping_source,

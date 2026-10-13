@@ -1,4 +1,5 @@
 const { filterResultsWithAIDetailed } = require("../lib/discover-ai-filter");
+const { checkGreetingName } = require("../lib/greeting-name");
 const { searchPlacesAPI } = require("../lib/places-search");
 const { sql, getSettings } = require("../lib/db");
 
@@ -73,11 +74,16 @@ const NOISE_NAME_KEYWORDS = [
   // （販売中・販売予定）」等)。「物件情報」は実在の不動産会社も自社サイトのタイトルに
   // 使うことが多く誤除外が大きいため対象にしない
   "口コミ", "最新情報", "販売中",
+  // 検索結果・ランキング・まとめ記事・比較サイト・導入事例・プレスリリースのページ(2026-10に追加)
+  "検索結果", "ランキング", "おすすめ", "まとめ", "比較", "導入事例", "プレスリリース",
 ];
 
 // 「南牧村のリフォーム会社19選！」のような「数字+選」形式のまとめ記事
 // (「選挙」「選手」「選考」「選抜」等の単語の一部は除く)
-const NOISE_NAME_PATTERNS = [/[0-9０-９]+選(?![挙手考抜択定])/];
+const NOISE_NAME_PATTERNS = [
+  /[0-9０-９]+選(?![挙手考抜択定])/,
+  /【\s*20\d{2}/, // 「【2024年最新版】」のような年付きの記事
+];
 
 // 「銀行」単体では正当な金融法人ヒットもあり誤除外が多いため、
 // 支店・出張所単位の結果(例: "〇〇銀行△△支店")に限定して除外する
@@ -185,7 +191,12 @@ async function handler(req, res) {
     //      (候補の記録もしないので、翌日以降に改めて検索・判定される)
     //    - 手動検索: 結果はそのまま返し、失敗したことを警告として返す(画面に表示する)
     const aiFilter = await filterResultsWithAIDetailed(webResults, locationStr, descStr);
-    const filteredResults = aiFilter.results;
+    // AIが返した正式な会社名が宛名として使える形なら、それを登録名にする(元のタイトルは title_raw に残す)
+    const filteredResults = aiFilter.results.map((r) => (
+      r.company_name && checkGreetingName(r.company_name).ok
+        ? { ...r, name: r.company_name, title_raw: r.name }
+        : r
+    ));
     if (aiFilter.error && source === "auto_pipeline") {
       return res.status(200).json({ configured: true, results: [], excluded_duplicate_count: 0, ai_filter_error: aiFilter.error });
     }

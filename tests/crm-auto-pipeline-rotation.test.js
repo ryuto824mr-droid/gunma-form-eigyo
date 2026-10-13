@@ -27,7 +27,7 @@ stub("api/discover", async (req, res) => {
   return res.status(200).json(discoverReplies.shift() || { configured: true, results: [] });
 });
 stub("api/companies", async (req, res) => res.status(201).json({ id: 9001 }));
-stub("api/companies/[id]/research", async (req, res) => res.status(200).json({ id: 9001, email: null, research_result: { automatable: true } }));
+stub("api/companies/[id]/research", async (req, res) => res.status(200).json({ id: 9001, name: "株式会社テスト", email: null, research_result: { automatable: true } }));
 const handler = require("../api/crm");
 
 function call() {

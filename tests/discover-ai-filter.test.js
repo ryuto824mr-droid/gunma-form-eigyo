@@ -30,7 +30,7 @@ const discover = require("../api/discover");
 
 const WEB = [
   { title: "株式会社テスト製作所", url: "https://www.test-seisakusho.co.jp/" },
-  { title: "群馬の製造業まとめ", url: "https://matome.example.net/gunma" },
+  { title: "群馬製造業ネット", url: "https://portal.example.net/gunma" },
 ];
 let anthropicReply;
 const realFetch = global.fetch;
@@ -76,9 +76,12 @@ test("絞り込み: 失敗(クレジット不足・キー未設定・形式不�
   assert.deepEqual(await filterResultsWithAIDetailed([], "", ""), { results: [], error: null }, "結果が無ければ呼ばない");
 });
 
-test("絞り込み: 成功ならAIが選んだ結果だけを返す", async () => {
-  anthropicReply = ok('[{"name":"A","url":"https://a.example.jp/"}]');
-  assert.deepEqual(await filterResultsWithAIDetailed(R, "", ""), { results: [R[0]], error: null });
+test("絞り込み: 成功ならAIが番号で選んだ結果だけを返し、正式な会社名(分からなければ null)を付ける", async () => {
+  anthropicReply = ok('[{"i":0,"company":"株式会社エー"},{"i":1,"company":null},{"i":7,"company":"存在しない番号"}]');
+  assert.deepEqual(await filterResultsWithAIDetailed(R, "", ""), {
+    results: [{ ...R[0], company_name: "株式会社エー" }, { ...R[1], company_name: null }],
+    error: null,
+  });
 });
 
 function callDiscover(body) {
@@ -106,7 +109,7 @@ test("企業探し: 手動検索で絞り込みに失敗したら、結果はそ
 });
 
 test("企業探し: 絞り込みに成功すれば、従来どおりAIが選んだ結果を返し、警告は付けない", async () => {
-  anthropicReply = ok('[{"name":"株式会社テスト製作所","url":"https://www.test-seisakusho.co.jp/"}]');
+  anthropicReply = ok('[{"i":0,"company":null}]');
   const r = await callDiscover({ source: "auto_pipeline" });
   assert.deepEqual(r.body.results.map((x) => x.url), ["https://www.test-seisakusho.co.jp/"]);
   assert.equal(r.body.ai_filter_error, undefined);
@@ -151,4 +154,35 @@ test("帯: 自動パイプラインが企業探しの失敗で登録を止めた
   assert.equal(s.discover_failing, false, "その後の実行が成功していれば回復済み");
 
   assert.deepEqual(summarizeDiscoverFailures([]), { discover_stopped_7d: 0, discover_last_failure_at: null, discover_last_failure_label: null, discover_failing: false });
+});
+
+test("企業探し: AIが返した正式な会社名が宛名として使える形なら登録名にし、元のタイトルは title_raw に残す", async () => {
+  WEB.splice(0, WEB.length,
+    { title: "群馬総合保険株式会社は損害保険・生命保険を幅広く提供する", url: "https://www.gunma-sougou.example.jp/" },
+    { title: "群馬県太田市の不動産｜大森不動産", url: "https://www.omori.example.jp/" },
+    { title: "テスト工業のページ", url: "https://www.test-kogyo.example.jp/" });
+  anthropicReply = ok('[{"i":0,"company":"群馬総合保険株式会社"},{"i":1,"company":"大森不動産"},{"i":2,"company":"株式会社"}]');
+  const r = await callDiscover({});
+  const byUrl = Object.fromEntries(r.body.results.map((x) => [x.url, x]));
+  assert.equal(byUrl["https://www.gunma-sougou.example.jp/"].name, "群馬総合保険株式会社");
+  assert.equal(byUrl["https://www.gunma-sougou.example.jp/"].title_raw, "群馬総合保険株式会社は損害保険・生命保険を幅広く提供する");
+  assert.equal(byUrl["https://www.omori.example.jp/"].name, "大森不動産");
+  // 宛名として使えない会社名(法人格だけ)は使わず、元のタイトルのまま(送るときに宛名の検査で「ご担当者様」になる)
+  assert.equal(byUrl["https://www.test-kogyo.example.jp/"].name, "テスト工業のページ");
+});
+
+test("除外: 検索結果・ランキング・おすすめ・まとめ・比較・導入事例・プレスリリース・【20xx年】のタイトルは企業ではないとして除外する", async () => {
+  WEB.splice(0, WEB.length,
+    { title: "群馬県のおすすめシステム開発会社12社", url: "https://a1.example.jp/" },
+    { title: "「製造業」の検索結果 - マッチング", url: "https://a2.example.jp/" },
+    { title: "外壁塗装ランキング", url: "https://a3.example.jp/" },
+    { title: "工務店まとめ", url: "https://a4.example.jp/" },
+    { title: "保険比較サイト", url: "https://a5.example.jp/" },
+    { title: "導入事例 アーカイブ", url: "https://a6.example.jp/" },
+    { title: "新工場のプレスリリース", url: "https://a7.example.jp/" },
+    { title: "人気の会社【2024年最新版】", url: "https://a8.example.jp/" },
+    { title: "株式会社ふつうの製作所", url: "https://ok.example.jp/" });
+  anthropicReply = () => ({ ok: false, status: 400, text: async () => "credit balance" }); // 絞り込みなしで除外だけを見る
+  const r = await callDiscover({});
+  assert.deepEqual(r.body.results.map((x) => x.url), ["https://ok.example.jp/"]);
 });

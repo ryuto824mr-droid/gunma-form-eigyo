@@ -1,3 +1,4 @@
+const { fillCompanyName } = require("../lib/greeting-name");
 const { sql, isExcludedDomain, getSettings } = require("../lib/db");
 const { submitForm } = require("../lib/form-submitter");
 const { loadSenderProfile, validateProfile, checkBodyName } = require("../lib/sender-profile");
@@ -140,7 +141,7 @@ module.exports = async function handler(req, res) {
     : [];
 
   // フィールド値の組み立て
-  const replace      = s => (s || "").replace(/\{\{company_name\}\}/g, company.company_info?.official_name || company.name);
+  // 宛名(企業名)は lib/greeting-name.js で判定し、使える名前が無ければ「ご担当者様」等に置き換える
   const fieldMapping = researchResult.fieldMapping || [];
 
   const VALUE_MAP = {
@@ -150,8 +151,8 @@ module.exports = async function handler(req, res) {
     contact_person_name_kana: hiraganaToKatakana(sender.person_name_kana),
     email:                    sender.email,
     phone:                    sender.phone,
-    subject:                  replace(variant.subject_template),
-    message:                  replace(variant.body_template),
+    subject:                  fillCompanyName(variant.subject_template, company, "subject"),
+    message:                  fillCompanyName(variant.body_template, company, "body"),
     agreement_checkbox:       true,
     other:                    "",
   };
