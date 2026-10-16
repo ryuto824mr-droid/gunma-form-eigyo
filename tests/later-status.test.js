@@ -167,7 +167,7 @@ test("並び順は 期限切れ→キュー待ち→保留中→予約済み→�
     scheduledRows: [sched(1, 4, "pending", FUTURE), sched(2, 5, "pending", PAST)],
   });
   assert.deepEqual(r.items.map((it) => it.state), ["overdue", "queued", "on_hold", "scheduled", "unsent", "unsent", "stopped"]);
-  assert.deepEqual(r.counts, { unsent: 2, email_followup: 0, scheduled: 1, overdue: 1, queued: 1, on_hold: 1, stopped: 1, total: 7, email_followup_ready: 0, with_warnings: 1 });
+  assert.deepEqual(r.counts, { unsent: 2, email_followup: 0, scheduled: 1, overdue: 1, queued: 1, on_hold: 1, stopped: 1, total: 7, email_followup_ready: 0, with_warnings: 1, ready: 2, review: 2, blocked: 1, active: 2, auto_candidate: 0 });
 });
 
 test("企業一覧に無い企業の行も落とさずに出す", () => {

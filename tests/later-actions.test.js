@@ -6,7 +6,7 @@ const {
 } = require("../lib/later-actions");
 
 const company = (extra = {}) => ({
-  id: 52, project: "ozukanzukan", status: "researched", archived: false, action_status: "none",
+  id: 52, name: "株式会社高商", project: "ozukanzukan", status: "researched", archived: false, action_status: "none",
   automatable: "true", rejection_detected: "false", ...extra,
 });
 const row = (extra = {}) => ({ id: 339, company_id: 52, variant_id: 7, project: "ozukanzukan", status: "pending", ...extra });

@@ -31,6 +31,10 @@ function fakeSql(strings, ...v) {
   if (text.includes("FROM responses r JOIN send_logs sl ON sl.id = r.send_log_id WHERE sl.company_id = ?")) {
     return ok((db.responses && db.responses[v[0]]) || []);
   }
+  // 「送れる」企業をまとめて送信待ちに入れるときの、過去の失敗・停止の履歴
+  if (text.includes("FROM send_logs WHERE company_id = ? AND status = 'failed'")) {
+    return ok([(db.history && db.history[v[0]]) || { failed: 0, stopped: 0 }]);
+  }
   if (text.includes("FROM message_variants WHERE id = ?")) return ok(db.variants[v[0]] ? [db.variants[v[0]]] : []);
   if (text.includes("FROM send_queue WHERE company_id = ? AND status IN ('pending', 'sending', 'on_hold')")) {
     return ok(q.filter((r) => r.company_id === v[0] && ["pending", "sending", "on_hold"].includes(r.status)));
@@ -57,7 +61,9 @@ function fakeSql(strings, ...v) {
     return ok([{ ...r }]);
   }
   if (text.startsWith("INSERT INTO send_queue (project, company_id, variant_id, channel, status, error_message)")) {
-    const r = { id: 900 + q.length, project: v[0], company_id: v[1], variant_id: v[2], channel: "form", status: "on_hold", error_message: "[保留] 「あとで送る」画面から追加" };
+    const r = text.includes("'pending', NULL")
+      ? { id: 900 + q.length, project: v[0], company_id: v[1], variant_id: v[2], channel: "form", status: "pending", error_message: null }
+      : { id: 900 + q.length, project: v[0], company_id: v[1], variant_id: v[2], channel: "form", status: "on_hold", error_message: "[保留] 「あとで送る」画面から追加" };
     q.push(r);
     return ok([{ ...r }]);
   }
@@ -346,4 +352,51 @@ test("宛名(企業名)が不確かな企業は、保留への追加・送信待
   db.companies[1941] = company(1941, { name: "株式会社ジーシーシー", official_name: "株式会社" });
   r = await call("POST", { hold: true, company_id: 1941, project: "ozukanzukan", variant_id: 8 });
   assert.equal(r.status, 201);
+});
+
+// ---- 「送れる」企業をまとめて送信待ちへ(「あとで送る」画面) ----
+test("まとめて送信待ちへ: 送れる企業は pending で作る(送信はしない)", async () => {
+  reset();
+  db.companies[90] = company(90, { name: "株式会社テスト", url: "https://takasho1.jp/", contact_form_url: "https://takasho1.jp/contact", email: "info@takasho1.jp" });
+  const r = await call("POST", { ready: true, company_id: 90, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.status, "pending");
+  assert.equal(db.queue.filter((x) => x.company_id === 90).length, 1);
+  // 2回目は、すでに入っているので断る
+  const again = await call("POST", { ready: true, company_id: 90, project: "ozukanzukan", variant_id: 8 });
+  assert.equal(again.status, 409);
+  assert.equal(again.body.type, "already_queued");
+});
+
+test("まとめて送信待ちへ: 送れない企業は断り、行を作らない", async () => {
+  reset();
+  const base = { url: "https://takasho1.jp/", contact_form_url: "https://takasho1.jp/contact", email: "info@takasho1.jp" };
+  db.companies[91] = company(91, { ...base, name: "株式会社へ" });
+  db.companies[92] = company(92, { ...base, name: "株式会社テスト", contact_form_url: "https://portal.jp/form" });
+  db.companies[93] = company(93, { ...base, name: "株式会社テスト", email: "info@example.com" });
+  db.companies[94] = company(94, { ...base, name: "株式会社テスト" });
+  db.history = { 94: { failed: 2, stopped: 0 } };
+  db.companies[95] = company(95, { ...base, name: "株式会社テスト" });
+  db.records.add(95);
+  db.companies[96] = company(96, { ...base, name: "株式会社テスト" });
+  db.emailRecords = { 96: emailSummary(96, 30) };
+  const expect = { 91: "greeting_uncertain", 92: "not_ready", 93: "not_ready", 94: "not_ready", 95: "has_record", 96: "email_sent" };
+  for (const [id, type] of Object.entries(expect)) {
+    const r = await call("POST", { ready: true, company_id: Number(id), project: "ozukanzukan", variant_id: 8 });
+    assert.equal(r.body.type, type, `企業${id}`);
+    assert.equal(db.queue.filter((x) => x.company_id === Number(id)).length, 0, `企業${id}`);
+  }
+  assert.equal((await call("POST", { ready: true, company_id: 60, project: "ozukanzukan", variant_id: 8 })).body.type, "ineligible");
+  assert.equal((await call("POST", { ready: true, company_id: 999, project: "ozukanzukan", variant_id: 8 })).status, 404);
+  assert.equal((await call("POST", { ready: true, company_id: 52, project: "locle", variant_id: 8 })).status, 400);
+});
+
+test("再開: 宛名が不確かな企業の保留は再開しない", async () => {
+  reset();
+  db.companies[37] = company(37, { name: "株式会社へ", official_name: "株式会社" });
+  db.records.delete(37);
+  const r = await call("PATCH", { id: 347, status: "pending" });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.type, "greeting_uncertain");
+  assert.equal(rowOf(347).status, "on_hold");
 });

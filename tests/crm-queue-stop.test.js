@@ -42,6 +42,9 @@ stub("api/submit-form", async (req, res) => {
   const r = responses.shift() || MISSING;
   return res.status(r.status).json(r.body);
 });
+// 毎日の送信は Vercel の cron の鍵(CRON_SECRET)が必要。テスト用の値で呼ぶ
+const TEST_CRON_SECRET = "test-cron-secret";
+process.env.CRON_SECRET = TEST_CRON_SECRET;
 const handler = require("../api/crm");
 
 function runCron() {
@@ -52,7 +55,7 @@ function runCron() {
       json(d) { resolve({ status: this.statusCode, body: d }); return this; },
       setHeader() {},
     };
-    handler({ method: "GET", query: { action: "run-scheduled-sends" }, headers: {} }, res);
+    handler({ method: "GET", query: { action: "run-scheduled-sends" }, headers: { authorization: `Bearer ${TEST_CRON_SECRET}` } }, res);
   });
 }
 

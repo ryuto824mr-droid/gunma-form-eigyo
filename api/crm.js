@@ -22,7 +22,7 @@ const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
 const { pickSearchCondition } = require("../lib/search-rotation");
 const { resolveGreetingName } = require("../lib/greeting-name");
-const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd } = require("../lib/later-actions");
+const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd, checkReadyAdd } = require("../lib/later-actions");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
 const { isPlaceholderEmail } = require("../lib/email-placeholder");
@@ -2379,7 +2379,27 @@ const RUN_SCHEDULED_SENDS_TOTAL_BUDGET_MS = 290000; // maxDuration=300秒に対�
 const SCHEDULED_SENDS_TIME_BUDGET_MS = 130000; // スケジュール送信に割り当てる目安時間(130秒)
 const SEND_QUEUE_MIN_TIME_MS = 5000; // これを下回る残り時間ならsend_queue処理自体を今回はスキップ
 
+// 毎日の送信(run-scheduled-sends)は、Vercel の cron からの呼び出しだけを受け付ける。
+// Vercel の cron は、環境変数 CRON_SECRET が登録されていると「Authorization: Bearer <その値>」を付けて呼ぶ。
+// 鍵が無い・違う・CRON_SECRET が未登録のときは、送信・自動パイプライン・詰まりの復旧のどれも行わない
+// (URL を開いただけで送信が始まらないようにするため。未登録のときに通すと、設定忘れに気づけない)
+function isCronAuthorized(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const header = String((req.headers && (req.headers.authorization || req.headers.Authorization)) || "");
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const actual = Buffer.from(header);
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
 async function handleRunScheduledSends(req, res) {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({
+      error: process.env.CRON_SECRET
+        ? "認証に失敗しました(毎日の送信は Vercel の cron からだけ実行できます)"
+        : "CRON_SECRET が登録されていないため実行しません(Vercel の環境変数に登録してください)",
+    });
+  }
   const requestStart = Date.now();
 
   // 詰まったsendingレコードの復旧は、外部への送信を一切伴わない内部処理のため、
@@ -2835,7 +2855,7 @@ const SEND_QUEUE_STATUSES = ["pending", "sending", "sent", "failed", "skipped", 
 // 「あとで送る」画面の判定(lib/later-actions.js)に渡す形で企業を読み込む
 async function loadCompanyForLater(companyId) {
   const [company] = await sql`
-    SELECT id, name, project, status, archived, action_status,
+    SELECT id, name, project, status, archived, action_status, url, contact_form_url, email,
            company_info->>'official_name'         AS official_name,
            research_result->>'automatable'        AS automatable,
            research_result->>'rejection_detected' AS rejection_detected
@@ -2917,8 +2937,50 @@ async function handleQueueHoldAdd(req, res) {
   }
 }
 
+// 「送れる」企業を保留にせず送信待ち(pending)に入れる(「あとで送る」画面の「選んだ企業を送信待ちへ」)。
+// ここでは送信しない。実際の送信は毎日の送信処理(run-scheduled-sends)が行う。
+// 画面は1社ずつ呼ぶ(1回の操作は最大20社。上限は画面側で持つ)
+async function handleQueueReadyAdd(req, res) {
+  const { company_id, project, variant_id } = req.body || {};
+  const companyId = parseInt(company_id, 10);
+  const variantId = parseInt(variant_id, 10);
+  if (!companyId || !variantId || !PROJECTS.includes(project)) {
+    return res.status(400).json({ error: "有効なcompany_id, variant_id, project（locleまたはozukanzukan）が必要です" });
+  }
+  try {
+    const company = await loadCompanyForLater(companyId);
+    const [variant] = await sql`SELECT id, name, project FROM message_variants WHERE id = ${variantId}`;
+    let history = { failed: 0, stopped: 0 };
+    if (company) {
+      const [h] = await sql`
+        SELECT
+          (SELECT COUNT(*)::int FROM send_logs WHERE company_id = ${companyId} AND status = 'failed') AS failed,
+          ((SELECT COUNT(*)::int FROM send_queue WHERE company_id = ${companyId} AND status IN ('failed', 'dismissed', 'skipped')) +
+           (SELECT COUNT(*)::int FROM scheduled_sends WHERE company_id = ${companyId} AND status IN ('cancelled', 'failed'))) AS stopped
+      `;
+      if (h) history = { failed: Number(h.failed) || 0, stopped: Number(h.stopped) || 0 };
+    }
+    const check = checkReadyAdd({
+      company, project, variant, history, now: Date.now(),
+      records: company ? await loadSendRecords(companyId) : null,
+      activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
+    });
+    if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
+    const [created] = await sql`
+      INSERT INTO send_queue (project, company_id, variant_id, channel, status, error_message)
+      VALUES (${project}, ${companyId}, ${variantId}, 'form', 'pending', NULL)
+      RETURNING *
+    `;
+    return res.status(201).json(created);
+  } catch (err) {
+    if (isUniqueViolation(err)) return res.status(409).json({ error: "この企業はすでに送信待ち・保留に入っています", type: "already_queued" });
+    return res.status(500).json({ error: `DB登録エラー: ${err.message}` });
+  }
+}
+
 async function handleSendQueue(req, res) {
   if (req.method === "POST" && req.body?.hold === true) return handleQueueHoldAdd(req, res);
+  if (req.method === "POST" && req.body?.ready === true) return handleQueueReadyAdd(req, res);
 
   if (req.method === "POST") {
     // companies.htmlの一括「キューに登録」から、選択企業を1社ずつキューに追加するために呼ばれる。
@@ -3538,7 +3600,11 @@ async function handleLaterList(req, res) {
                research_result->>'rejection_detected' AS rejection_detected,
                research_result->>'mappingSource'      AS mapping_source,
                research_result->>'aiError'            AS ai_error,
-               research_result->>'appealError'        AS appeal_error
+               research_result->>'appealError'        AS appeal_error,
+               research_result->>'captchaDetected'    AS captcha_detected,
+               research_result->'needsReview'         AS needs_review,
+               research_result->'imageAuthFields'     AS image_auth_fields,
+               company_info->>'phone_number'          AS phone_number
         FROM companies WHERE project = ${project}
       `,
       sql`

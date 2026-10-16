@@ -36,6 +36,8 @@
     --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
   }
   * { box-sizing: border-box; }
+  /* hidden 属性を付けた要素は必ず隠す(.bulk-bar などの display 指定より優先する) */
+  [hidden] { display: none !important; }
   body { font-family: "Inter", "Noto Sans JP", sans-serif; background: var(--gray-50); margin: 0; color: var(--gray-900); line-height: 1.6; }
 
   .page-header {
@@ -92,6 +94,25 @@
   .state-tab .count { font-weight: 700; color: var(--gray-900); }
   .state-tab.active { background: var(--green-600); border-color: var(--green-600); color: #fff; }
   .state-tab.active .count { color: #fff; }
+
+  .category-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .category-tab {
+    border: 2px solid var(--gray-200); background: var(--white); color: var(--gray-700);
+    border-radius: var(--radius-md); padding: 8px 16px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .category-tab .count { font-weight: 700; color: var(--gray-900); }
+  .category-tab.cat-ready.active   { background: var(--green-600); border-color: var(--green-600); color: #fff; }
+  .category-tab.cat-review.active  { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+  .category-tab.cat-blocked.active { background: var(--gray-200); border-color: var(--gray-400); color: var(--gray-900); }
+  .category-tab.active .count { color: inherit; }
+  .active-summary { font-size: 13px; color: var(--gray-700); margin-bottom: 10px; }
+  .category-note { font-size: 12px; color: var(--gray-500); margin: 0 0 12px; }
+  details.detail-tabs { margin-bottom: 14px; }
+  details.detail-tabs > summary { font-size: 12px; color: var(--gray-500); cursor: pointer; margin-bottom: 8px; }
+  .cand-badge { display: inline-block; margin: 4px 0 0 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; border: 1px solid #f59e0b; color: #92400e; background: #fffbeb; }
+  .cand-off { display: inline-block; margin: 4px 0 0 4px; font-size: 11px; color: var(--gray-400); cursor: help; }
+  html.dark .cand-badge { background: #3a2a0a; color: #fde68a; border-color: #a16207; }
 
   .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
   .toolbar input[type="search"], .toolbar select, .bulk-bar select, td select {
@@ -212,7 +233,7 @@
 <div class="container">
   <div class="later-header">
     <h1>あとで送る<button type="button" class="list-project-label" id="listProjectLabel" title="クリックしてプロジェクトを切り替え"></button></h1>
-    <p>送信待ちリスト・予約・まだ送っていない企業を、状態別に1つの一覧で表示します。ここでは送信はしません。送信待ち・保留の行のバリアント変更、保留・再開・却下、未送信の企業の保留への追加ができます(保留中の行は毎日の自動送信では送られません)。</p>
+    <p>まだ送っていない企業と保留中の行を「送れる・要確認・送れない」に分けて表示します。ここでは送信はしません。「送れる」企業は、まとめて送信待ちに入れられます(送信は毎日の自動送信で行います)。状態別のタブは「詳細」から開けます。</p>
   </div>
 
   <div class="banner" id="senderProfileBanner" hidden>
@@ -223,13 +244,31 @@
 
   <div class="action-msg" id="actionMsg" hidden></div>
 
-  <div class="state-tabs" id="stateTabs"></div>
+  <div class="active-summary" id="activeSummary"></div>
+  <div class="category-tabs" id="categoryTabs"></div>
+  <p class="category-note" id="categoryNote"></p>
+  <details class="detail-tabs" id="detailTabs" ontoggle="onDetailToggle()">
+    <summary>詳細(状態別のタブ・選別の目安)</summary>
+    <div class="state-tabs" id="stateTabs"></div>
+  </details>
 
   <div class="toolbar">
     <input type="search" id="searchInput" placeholder="企業名で絞り込み" oninput="renderTable()" />
     <select id="hintFilter" onchange="renderTable()" hidden aria-label="選別の目安で絞り込み"></select>
+    <select id="reasonFilter" onchange="renderTable()" hidden aria-label="理由で絞り込み"></select>
+    <label id="candidateOnlyLabel" hidden><input type="checkbox" id="candidateOnly" onchange="renderTable()" /> ★候補のみ</label>
     <label><input type="checkbox" id="warningsOnly" onchange="renderTable()" /> 警告ありのみ(参考情報は除く)</label>
     <span class="result-count" id="resultCount"></span>
+  </div>
+
+  <div class="bulk-bar" id="readyBar" hidden>
+    <label><input type="checkbox" id="readySelectAll" onchange="toggleReadyAll(this.checked)" /> 表示中をすべて選択</label>
+    <span>未送信の企業は</span>
+    <select id="readyVariant" aria-label="送信待ちに入れるときのバリアント"></select>
+    <span>で</span>
+    <button type="button" class="btn primary" id="readyAddBtn" onclick="addSelectedToQueue()">選んだ企業を送信待ちへ</button>
+    <span id="readyCount" class="sub"></span>
+    <span class="note">送信待ちに入れた企業は、次の平日18:00の自動送信で送られます。1回に選べるのは最大20社です。保留中の行は、今のバリアントのまま送信待ちに戻します。★候補は「自動で入れても良さそうな企業」の印です(印だけで、自動では入りません)。</span>
   </div>
 
   <div class="bulk-bar" id="bulkBar" hidden>
@@ -283,9 +322,29 @@
   const HINT_ORDER = ["limit_only", "no_failure", "failed_1_2", "branch", "maybe_sent", "failed_3plus", "not_company", "dismissed_before"];
   const HINT_CLASS = { limit_only: "hint-good", no_failure: "hint-good", maybe_sent: "hint-bad", failed_3plus: "hint-bad", not_company: "hint-bad", dismissed_before: "hint-bad" };
 
+  // 3区分(lib/later-status.js の category)。active(送信待ち・予約済み)は件数だけ上に出す
+  const CATEGORY_TABS = [
+    { key: "ready",   label: "送れる",   note: "警告がなく、そのまま送信待ちに入れられる企業です。" },
+    { key: "review",  label: "要確認",   note: "直せば送れる企業です。理由を見て、企業名の修正・保留・却下などをしてください。" },
+    { key: "blocked", label: "送れない", note: "送信記録・人からの反応・停止などで、送れない行です(理由だけ表示します)。" },
+  ];
+  // 理由(警告の種類)の表示名
+  const REASON_LABELS = {
+    greeting_uncertain: "宛名が不確か", form_domain_mismatch: "フォームのドメインが違う", placeholder_email: "仮のメール",
+    past_failures: "過去の失敗", previously_stopped: "停止の履歴", last_failure: "直近の失敗理由",
+    email_followup: "メール後のフォーム", overdue: "期限切れ", email_sent: "メール送信済み", auto_click: "リンクの自動クリック",
+    has_send_record: "送信記録あり", human_response: "人からの反応", ineligible: "送信対象外", duplicate: "重複",
+    variant_project_mismatch: "バリアント違い", no_sender_profile: "送信者プロフィールなし", stopped: "停止中",
+  };
+  const READY_MAX = 20;
+
   let laterData = null;
   let activeTab = "all";
+  // 表示のしかた: "category"(3区分) / "state"(詳細の状態別タブ)
+  let viewMode = "category";
+  let activeCategory = "ready";
   const selectedCompanies = new Set();
+  const selectedReady = new Set(); // 「送れる」で選んだ行の key
   let busy = false;
 
   function esc(s) {
@@ -370,6 +429,8 @@
       const unsentIds = new Set(data.items.filter(it => it.state === "unsent" ||
         (it.state === "email_followup" && it.followup && it.followup.status === "ready")).map(it => it.company_id));
       for (const id of [...selectedCompanies]) if (!unsentIds.has(id)) selectedCompanies.delete(id);
+      const readyKeys = new Set(data.items.filter(isReadySelectable).map(it => it.key));
+      for (const key of [...selectedReady]) if (!readyKeys.has(key)) selectedReady.delete(key);
       document.getElementById("senderProfileBanner").hidden = data.sender_profile_valid !== false;
       renderAIStatus(data.ai_status);
       renderVariantOptions();
@@ -390,9 +451,62 @@
   }
 
   function renderVariantOptions() {
-    const sel = document.getElementById("bulkVariant");
+    for (const id of ["bulkVariant", "readyVariant"]) {
+      const sel = document.getElementById(id);
+      const prev = sel.value;
+      sel.innerHTML = variantOptionsHtml(prev || (laterData.variants[0] && laterData.variants[0].id));
+    }
+  }
+
+  // 「送れる」で選べる行(未送信の企業と、保留中の行)
+  function isReadySelectable(it) {
+    return it.category === "ready" && (it.state === "unsent" || (it.source === "queue" && it.raw_status === "on_hold"));
+  }
+
+  function renderCategoryTabs() {
+    const counts = laterData ? laterData.counts : {};
+    document.getElementById("activeSummary").textContent = laterData
+      ? `送信待ち ${counts.queued || 0}件・予約 ${counts.scheduled || 0}件(送信待ちは次の平日18:00の自動送信で送られます)`
+      : "";
+    document.getElementById("categoryTabs").innerHTML = CATEGORY_TABS.map(t => {
+      const active = viewMode === "category" && t.key === activeCategory;
+      const extra = t.key === "ready" && counts.auto_candidate ? ` <span class="sub">★${counts.auto_candidate}</span>` : "";
+      return `<button type="button" class="category-tab cat-${t.key}${active ? " active" : ""}" onclick="selectCategory('${t.key}')">${esc(t.label)} <span class="count">${counts[t.key] || 0}</span>${extra}</button>`;
+    }).join("");
+    const t = CATEGORY_TABS.find(x => x.key === activeCategory);
+    document.getElementById("categoryNote").textContent = viewMode === "category" && t ? t.note : "状態別のタブで表示しています。";
+  }
+
+  function renderReasonFilter() {
+    const sel = document.getElementById("reasonFilter");
+    const show = viewMode === "category" && (activeCategory === "review" || activeCategory === "blocked");
+    sel.hidden = !show;
+    if (!show || !laterData) return;
     const prev = sel.value;
-    sel.innerHTML = variantOptionsHtml(prev || (laterData.variants[0] && laterData.variants[0].id));
+    const counts = {};
+    for (const it of laterData.items) {
+      if (it.category !== activeCategory) continue;
+      for (const c of it.category_codes || []) counts[c] = (counts[c] || 0) + 1;
+    }
+    const codes = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+    sel.innerHTML = '<option value="">理由: すべて</option>' +
+      codes.map(c => `<option value="${esc(c)}">${esc(REASON_LABELS[c] || c)} (${counts[c]})</option>`).join("");
+    sel.value = prev && counts[prev] ? prev : "";
+  }
+
+  function selectCategory(key) {
+    viewMode = "category";
+    activeCategory = key;
+    document.getElementById("detailTabs").open = false;
+    renderTabs();
+    renderTable();
+  }
+
+  function onDetailToggle() {
+    const open = document.getElementById("detailTabs").open;
+    viewMode = open ? "state" : "category";
+    renderTabs();
+    renderTable();
   }
 
   function renderHintFilter() {
@@ -413,12 +527,22 @@
       const n = t.key === "all" ? (counts.total || 0) : (counts[t.key] || 0);
       return `<button type="button" class="state-tab${t.key === activeTab ? " active" : ""}" data-tab="${t.key}" onclick="selectTab('${t.key}')">${esc(t.label)} <span class="count">${n}</span></button>`;
     }).join("");
-    document.getElementById("hintFilter").hidden = activeTab !== "unsent";
-    document.getElementById("bulkBar").hidden = activeTab !== "unsent" && activeTab !== "email_followup";
-    document.getElementById("followupNote").hidden = activeTab !== "email_followup";
+    const stateMode = viewMode === "state";
+    document.getElementById("hintFilter").hidden = !stateMode || activeTab !== "unsent";
+    // 保留への追加は、詳細の「未送信」「メール後のフォーム」タブと、区分の「要確認」で使える
+    document.getElementById("bulkBar").hidden = stateMode
+      ? (activeTab !== "unsent" && activeTab !== "email_followup")
+      : activeCategory !== "review";
+    document.getElementById("followupNote").hidden = !stateMode || activeTab !== "email_followup";
+    const readyMode = viewMode === "category" && activeCategory === "ready";
+    document.getElementById("readyBar").hidden = !readyMode;
+    document.getElementById("candidateOnlyLabel").hidden = !readyMode;
+    renderCategoryTabs();
+    renderReasonFilter();
   }
 
   function selectTab(key) {
+    viewMode = "state";
     activeTab = key;
     renderTabs();
     renderTable();
@@ -428,6 +552,16 @@
     if (!laterData) return [];
     const q = document.getElementById("searchInput").value.trim().toLowerCase();
     const warningsOnly = document.getElementById("warningsOnly").checked;
+    if (viewMode === "category") {
+      const reason = activeCategory === "ready" ? "" : document.getElementById("reasonFilter").value;
+      const candOnly = activeCategory === "ready" && document.getElementById("candidateOnly").checked;
+      return laterData.items.filter(it =>
+        it.category === activeCategory &&
+        (!q || String(it.company_name || "").toLowerCase().includes(q)) &&
+        (!warningsOnly || it.warnings.some(w => w.level !== "info")) &&
+        (!reason || (it.category_codes || []).includes(reason)) &&
+        (!candOnly || (it.auto_candidate && it.auto_candidate.ok)));
+    }
     const hint = activeTab === "unsent" ? document.getElementById("hintFilter").value : "";
     return laterData.items.filter(it =>
       (activeTab === "all" || it.state === activeTab) &&
@@ -437,6 +571,12 @@
   }
 
   function actionsHtml(it) {
+    if (viewMode === "category" && it.category === "blocked") return '<span class="no-warn">-</span>';
+    if (viewMode === "category" && it.category === "ready") {
+      if (!isReadySelectable(it)) return '<span class="no-warn">-</span>';
+      const checked = selectedReady.has(it.key) ? " checked" : "";
+      return `<label class="row-actions"><input type="checkbox" class="ready-check" value="${esc(it.key)}"${checked} onchange="toggleReady('${esc(it.key)}', this.checked)" /> 送信待ちへ</label>`;
+    }
     if (it.source === "queue" && (it.raw_status === "pending" || it.raw_status === "on_hold")) {
       const toggle = it.raw_status === "pending"
         ? `<button type="button" class="btn" onclick="setQueueStatus(${it.source_id}, 'on_hold')">保留にする</button>`
@@ -483,6 +623,12 @@
         ? `<span class="hint-badge ${fu[1]}">${esc(fu[0])}${it.followup.status === "waiting" ? `(あと${esc(it.followup.days_left)}日)` : ""}</span>` +
           (it.followup.reason ? `<span class="sub">${esc(it.followup.reason)}</span>` : "")
         : "";
+    const cand = it.auto_candidate;
+    const candHtml = cand
+      ? (cand.ok
+        ? '<span class="cand-badge" title="自動で送信待ちに入れても良さそうな企業(印だけです)">★候補</span>'
+        : `<span class="cand-off" title="${esc("候補にならない理由: " + cand.reasons.join("・"))}">候補外(理由)</span>`)
+      : "";
     const variantHtml = it.variant_name
       ? `${esc(it.variant_name)}<span class="sub">ID ${esc(it.variant_id)}・${it.channel === "email" ? "メール" : "フォーム"}</span>`
       : '<span class="no-warn">(未指定)</span>';
@@ -497,7 +643,7 @@
       : '<span class="no-warn">-</span>';
     return `
       <tr data-key="${esc(it.key)}" data-state="${esc(it.state)}">
-        <td data-label="状態"><div class="cell"><span class="state-badge state-${esc(it.state)}">${esc(it.state_label)}</span>${detail}${hintHtml}</div></td>
+        <td data-label="状態"><div class="cell"><span class="state-badge state-${esc(it.state)}">${esc(it.state_label)}</span>${detail}${hintHtml}${candHtml}</div></td>
         <td data-label="企業" class="company"><div class="cell">${companyHtml}<span class="sub">企業ID ${esc(it.company_id)}</span></div></td>
         <td data-label="バリアント"><div class="cell">${variantHtml}</div></td>
         <td data-label="日時"><div class="cell">${dateHtml}</div></td>
@@ -524,6 +670,22 @@
   function updateBulkCount() {
     document.getElementById("bulkCount").textContent = `${selectedCompanies.size}社を選択中`;
     document.getElementById("bulkHoldBtn").disabled = busy || selectedCompanies.size === 0;
+    const n = selectedReady.size;
+    document.getElementById("readyCount").textContent = n > READY_MAX ? `${n}社を選択中(最大${READY_MAX}社まで)` : `${n}社を選択中`;
+    document.getElementById("readyAddBtn").disabled = busy || n === 0 || n > READY_MAX;
+  }
+
+  function toggleReady(key, checked) {
+    if (checked) selectedReady.add(key); else selectedReady.delete(key);
+    updateBulkCount();
+  }
+
+  function toggleReadyAll(checked) {
+    for (const it of filteredItems()) {
+      if (!isReadySelectable(it)) continue;
+      if (checked) selectedReady.add(it.key); else selectedReady.delete(it.key);
+    }
+    renderTable();
   }
 
   // ---- 操作(送信はしない。送信待ちリスト・予約の行を書き換えるだけ) ----
@@ -628,6 +790,46 @@
         else lines.push(`・${it ? it.company_name : companyId}: ${r.data.error || r.status}`);
       }
       showMsg(`${added}社を保留に追加しました` + (lines.length ? `\n追加できなかった企業:\n${lines.join("\n")}` : ""), lines.length ? "error" : "ok");
+    });
+  }
+
+  // 選んだ「送れる」行を送信待ち(pending)に入れる。送信はしない(毎日の自動送信が送る)。
+  // 未送信の企業は追加(サーバーが条件を確かめ直す)、保留中の行は今のバリアントのまま再開する
+  function addSelectedToQueue() {
+    const items = [...selectedReady].map(key => itemByKey(key)).filter(Boolean);
+    if (!items.length) return;
+    if (items.length > READY_MAX) {
+      showMsg(`1回に送信待ちへ入れられるのは最大${READY_MAX}社です(今${items.length}社を選択中)`, "error");
+      return;
+    }
+    const variantId = Number(document.getElementById("readyVariant").value);
+    const unsentCount = items.filter(it => it.source === "company").length;
+    if (unsentCount && !variantId) {
+      showMsg("未送信の企業に使うバリアントを選んでください", "error");
+      return;
+    }
+    const name = (laterData.variants.find(v => Number(v.id) === variantId) || {}).name || variantId;
+    const holdCount = items.length - unsentCount;
+    const lines = [
+      `選んだ${items.length}社を送信待ちに入れますか？`,
+      unsentCount ? `・未送信の企業 ${unsentCount}社: バリアント「${name}」で追加` : "",
+      holdCount ? `・保留中 ${holdCount}社: 今のバリアントのまま再開` : "",
+      "次の平日18:00の自動送信で送られます(ここでは送信しません)。",
+    ].filter(Boolean);
+    if (!confirm(lines.join("\n"))) return;
+    runAction(async () => {
+      const failed = [];
+      let added = 0;
+      for (const it of items) {
+        const r = it.source === "company"
+          ? await callApi("/api/crm?action=send-queue", "POST", {
+              ready: true, company_id: it.company_id, variant_id: variantId, project: getCurrentProject(),
+            })
+          : await callApi("/api/crm?action=send-queue", "PATCH", { id: it.source_id, status: "pending" });
+        if (r.ok) { added++; selectedReady.delete(it.key); }
+        else failed.push(`・${it.company_name}: ${r.data.error || r.status}`);
+      }
+      showMsg(`${added}社を送信待ちに入れました` + (failed.length ? `\n入れられなかった企業:\n${failed.join("\n")}` : ""), failed.length ? "error" : "ok");
     });
   }
 

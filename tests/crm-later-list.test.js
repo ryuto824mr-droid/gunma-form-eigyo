@@ -66,7 +66,7 @@ test("状態別に振り分けた一覧と件数を返す", async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.project, "ozukanzukan");
   assert.equal(r.body.sender_profile_valid, true);
-  assert.deepEqual(r.body.counts, { unsent: 0, email_followup: 0, scheduled: 0, overdue: 0, queued: 1, on_hold: 0, stopped: 2, total: 3, email_followup_ready: 0, with_warnings: 2 });
+  assert.deepEqual(r.body.counts, { unsent: 0, email_followup: 0, scheduled: 0, overdue: 0, queued: 1, on_hold: 0, stopped: 2, total: 3, email_followup_ready: 0, with_warnings: 2, ready: 0, review: 0, blocked: 2, active: 1, auto_candidate: 0 });
   const keys = Object.fromEntries(r.body.items.map((it) => [it.key, it]));
   assert.equal(keys["queue-339"].state, "queued");
   assert.equal(keys["queue-347"].state, "stopped");
@@ -184,4 +184,20 @@ test("AI判定の状況: 企業探しのAIの絞り込みに失敗して登録�
   assert.equal(r.body.ai_status.discover_failing, true);
   assert.equal(r.body.ai_status.discover_last_failure_label, "クレジット不足");
   assert.ok(calls.some((c) => /FROM auto_pipeline_logs/.test(c.text) && c.values.includes("ozukanzukan")));
+});
+
+test("3区分と候補の印: 各行に category・category_reasons・auto_candidate、件数を返す。候補の判定に使う項目を読む", async () => {
+  reset();
+  const r = await call("GET", { project: "ozukanzukan" });
+  assert.equal(r.status, 200);
+  const keys = Object.fromEntries(r.body.items.map((it) => [it.key, it]));
+  assert.equal(keys["queue-339"].category, "active");
+  assert.equal(keys["queue-347"].category, "blocked");
+  assert.equal(keys["queue-339"].auto_candidate, null);
+  assert.equal(r.body.counts.active, 1);
+  assert.equal(r.body.counts.blocked, 2);
+  const q = calls.find((c) => c.text.includes("FROM companies WHERE project"));
+  for (const col of ["captcha_detected", "needs_review", "image_auth_fields", "phone_number", "mapping_source", "updated_at"]) {
+    assert.match(q.text, new RegExp(col), col);
+  }
 });
