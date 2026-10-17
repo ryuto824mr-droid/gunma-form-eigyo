@@ -23,8 +23,10 @@ test("宛名として使える名前(本番の実在の企業名の例)", () => 
   for (const n of [
     "群馬総合保険株式会社", "株式会社ジーシーシー", "有限会社多胡設計", "社会福祉法人 愛友会 妙義もみじ学園",
     "Tomioka Silk Mill Clinic", "株式会社桐生タイムス社", "中央労働金庫 高崎ローンセンター", "株式会社情報通信総合研究所",
-    "Farmdo（ファームドゥ）", "めん処 酒処 ふる川 暮六つ", "株式会社LeafLink", "阪急阪神ホールディングス株式会社",
+    "めん処 酒処 ふる川 暮六つ", "株式会社LeafLink", "阪急阪神ホールディングス株式会社",
     "大森不動産", "森建コーポレーション",
+    // 中黒を含む実在の名前・法人格の略記・スペース入りの正式表記・「の」を含む社名はそのまま使える
+    "株式会社G・Mフーズ", "（株）住吉製作所", "(株)丸山機械製作所", "株式会社 協和", "株式会社Room’s", "森の工房株式会社", "株式会社AB",
   ]) assert.equal(checkGreetingName(n).ok, true, n);
 });
 
@@ -78,4 +80,46 @@ test("あとで送る: 宛名が不確かな企業の未送信の行に、赤い
   assert.equal(w(2267).level, "danger");
   assert.match(w(2267).message, /送ると「ご担当者様」だけになります/);
   assert.equal(w(1941), undefined, "登録名が使えれば警告しない");
+});
+
+test("途中で切れた名前・事業の説明・事業所名・括弧つきは不確か(送信待ちに実際に入っていた形)", () => {
+  const cases = [
+    ["株式会社G", "法人格と1文字だけ(途中で切れた疑い)"],
+    ["G株式会社", "法人格と1文字だけ(途中で切れた疑い)"],
+    ["樹脂加工の植木プラスチック株式会社", "事業の説明が頭に付いている"],
+    ["株式会社阿部製作 本社", "本社・工場などの事業所名が付いている"],
+    ["（株）冨士ハム伊勢崎工場", "本社・工場などの事業所名が付いている"],
+    ["㈱ティー･エス･ケー 本社工場", "本社・工場などの事業所名が付いている"],
+    ["植木プラスチック株式会社 伊勢崎工場", "本社・工場などの事業所名が付いている"],
+    ["池田製作所（群馬県太田市）", "括弧つき"],
+    ["Farmdo（ファームドゥ）", "括弧つき"],
+    ["株式会社Ｒｏｏｍ’ｓ（ルームス）", "括弧つき"],
+  ];
+  for (const [name, reason] of cases) assert.deepEqual(checkGreetingName(name), { ok: false, reason }, name);
+});
+
+test("正式名称が登録名の中黒の直前で切れていたら使わず、登録名を使う(使えなければ「ご担当者様」)", () => {
+  const gm = resolveGreetingName({ name: "株式会社G・Mフーズ", company_info: { official_name: "株式会社G" } });
+  assert.equal(gm.name, "株式会社G・Mフーズ");
+  assert.equal(gm.source, "name");
+  const tsk = resolveGreetingName({ name: "㈱ティー･エス･ケー 本社工場", company_info: { official_name: "株式会社ティー" } });
+  assert.equal(tsk.name, null);
+  assert.deepEqual(tsk.rejected.map((r) => r.reason), ["途中で切れている(登録名では中黒などが続く)", "本社・工場などの事業所名が付いている"]);
+  // 切れていない正式名称はそのまま使う(登録名が正式名称で始まっても、続きが中黒でなければ切れていない)
+  assert.equal(resolveGreetingName({ name: "株式会社ハヤセ 桐生工場", company_info: { official_name: "株式会社ハヤセ" } }).name, "株式会社ハヤセ");
+  assert.equal(resolveGreetingName({ name: "（株）ピーエルエム 群馬工場", company_info: { official_name: "株式会社ピーエルエム" } }).name, "株式会社ピーエルエム");
+  const { truncatedAgainst } = require("../lib/greeting-name");
+  assert.equal(truncatedAgainst("株式会社ティー", "㈱ティー･エス･ケー"), true);
+  assert.equal(truncatedAgainst("株式会社G", "株式会社G・Mフーズ"), true);
+  assert.equal(truncatedAgainst("株式会社ハヤセ", "株式会社ハヤセ 桐生工場"), false);
+  assert.equal(truncatedAgainst("株式会社ハヤセ", "株式会社ハヤセ"), false);
+  assert.equal(truncatedAgainst("", "株式会社G・Mフーズ"), false);
+});
+
+test("置き換え: 宛名が不確かになった企業は「ご担当者様」で送る(株式会社G 様 にならない)", () => {
+  const c = { name: "㈱ティー･エス･ケー 本社工場", company_info: { official_name: "株式会社ティー" } };
+  assert.equal(fillCompanyName("{{company_name}} 様｜群馬の若手10万人に届く採用SNS", c, "subject"), "群馬の若手10万人に届く採用SNS");
+  assert.equal(fillCompanyName("{{company_name}} ご担当者様", c, "body"), "ご担当者様");
+  const gm = { name: "株式会社G・Mフーズ", company_info: { official_name: "株式会社G" } };
+  assert.equal(fillCompanyName("{{company_name}} ご担当者様", gm, "body"), "株式会社G・Mフーズ ご担当者様");
 });
