@@ -102,6 +102,13 @@
     outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px var(--green-100);
   }
 
+  .btn-report {
+    padding: 9px 16px; background: var(--white); color: var(--green-700); border: 1px solid var(--green-500);
+    border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+  }
+  .btn-report:hover:not(:disabled) { background: var(--green-50); }
+  .btn-report:disabled { opacity: .45; cursor: not-allowed; }
+  .wl-report-note { font-size: 12px; color: var(--gray-500); }
   .btn-primary {
     padding: 10px 22px; background: linear-gradient(135deg, var(--green-500), var(--green-700));
     box-shadow: 0 4px 12px rgba(var(--green-500-rgb), 0.3);
@@ -679,6 +686,8 @@
         </div>
       </div>
       <button type="button" class="btn-primary" id="wlExportExcelBtn" onclick="exportSummaryToExcel()">📥 Excelでダウンロード</button>
+      <button type="button" class="btn-report" id="wlSummaryReportBtn" onclick="openSummaryReport()" title="月ごとの稼働報告書(A4)を開きます。印刷画面から PDF として保存できます">🖨 PDF用の表示</button>
+      <span class="wl-report-note" id="wlSummaryReportNote" hidden>PDF用の表示は「今月」「先月」のときに使えます</span>
     </div>
     <div class="wl-form-grid wl-custom-period-group" id="wlCustomPeriodGroup" hidden>
       <div class="wl-form-group">
@@ -740,8 +749,12 @@
     <div class="wl-cal-grid" id="wlCalGrid"></div>
     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px;">
       <a href="/calendar.html" style="font-size:12px; color:var(--gray-500);">全体カレンダー(予定・議事録含む)を見る →</a>
-      <button type="button" class="btn-primary" id="wlCalExportBtn" onclick="exportCalendarMonthToExcel()">📥 この月をExcel出力</button>
+      <span style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button type="button" class="btn-report" id="wlCalReportBtn" onclick="openCalendarMonthReport()" title="この月の稼働報告書(A4)を開きます。印刷画面から PDF として保存できます">🖨 この月をPDF用に表示</button>
+        <button type="button" class="btn-primary" id="wlCalExportBtn" onclick="exportCalendarMonthToExcel()">📥 この月をExcel出力</button>
+      </span>
     </div>
+    <div id="wlCalReportChoices" style="display:none; margin-top:10px; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end;"></div>
     <div class="wl-cal-day-panel" id="wlCalDayPanel" style="display:none;">
       <p class="wl-section-title" id="wlCalDayPanelTitle" style="font-size:15px; margin-bottom:10px;"></p>
       <div id="wlCalDayPanelBody"></div>
@@ -1826,6 +1839,7 @@
     document.getElementById("wlPeriodLastYear").classList.toggle("active", period === "lastYear");
     document.getElementById("wlPeriodCustom").classList.toggle("active", period === "custom");
     document.getElementById("wlCustomPeriodGroup").hidden = period !== "custom";
+    updateSummaryReportButton();
     if (period === "custom") {
       // 初めてカスタム期間を選んだ際、開始日・終了日が未入力なら今月の範囲を初期値として入れておく
       const fromEl = document.getElementById("wlCustomFrom");
@@ -1837,6 +1851,49 @@
       }
     }
     loadSummary();
+  }
+
+  // ===== 稼働報告書(PDF用の表示) =====
+  // 印刷用ページ(work-report.html)を新しいタブで開く。PDF は印刷画面の「PDFに保存」で作る
+  function openWorkReport(userName, month) {
+    const url = `/work-report.html?user=${encodeURIComponent(userName)}&month=${encodeURIComponent(month)}`;
+    window.open(url, "_blank", "noopener");
+  }
+
+  // 月次サマリーの期間が「今月」「先月」のときだけ使える(今年・去年・カスタム期間は月ごとではないため)
+  function updateSummaryReportButton() {
+    const ok = summaryPeriod === "this" || summaryPeriod === "last";
+    document.getElementById("wlSummaryReportBtn").disabled = !ok;
+    document.getElementById("wlSummaryReportNote").hidden = ok;
+  }
+
+  function openSummaryReport() {
+    const userName = getSummaryUserName();
+    if (!userName) { showToast("氏名を選択または入力してください", "error"); return; }
+    if (summaryPeriod !== "this" && summaryPeriod !== "last") {
+      showToast("PDF用の表示は「今月」「先月」のときに使えます", "error");
+      return;
+    }
+    openWorkReport(userName, getMonthRange(summaryPeriod).from.slice(0, 7));
+  }
+
+  // カレンダーで表示中の月。1人ならその人の報告書を開き、「全員」なら1人ずつ開くボタンを出す
+  function openCalendarMonthReport() {
+    const names = getCalUserNames();
+    if (names.length === 0) { showToast("氏名を選択または入力してください", "error"); return; }
+    const month = `${wlCalYear}-${String(wlCalMonth).padStart(2, "0")}`;
+    const box = document.getElementById("wlCalReportChoices");
+    if (names.length === 1) {
+      box.style.display = "none";
+      openWorkReport(names[0], month);
+      return;
+    }
+    box.innerHTML = `<span class="wl-report-note">${wlCalYear}年${wlCalMonth}月の報告書を1人ずつ開きます:</span>` +
+      names.map((n) => `<button type="button" class="btn-report" data-name="${esc(n)}">${esc(n)}</button>`).join("");
+    box.querySelectorAll("button[data-name]").forEach((b) => {
+      b.addEventListener("click", () => openWorkReport(b.dataset.name, month));
+    });
+    box.style.display = "flex";
   }
 
   function isYearlyPeriod(period) {
@@ -2144,6 +2201,7 @@
   }
 
   function onCalUserSelectChange() {
+    document.getElementById("wlCalReportChoices").style.display = "none";
     const isOther = document.getElementById("wlCalUserSelect").value === "__other__";
     document.getElementById("wlCalUserOtherGroup").hidden = !isOther;
     wlCalSelectedDate = null;
@@ -2170,6 +2228,7 @@
   }
 
   function changeWlCalMonth(delta) {
+    document.getElementById("wlCalReportChoices").style.display = "none";
     wlCalMonth += delta;
     if (wlCalMonth < 1) { wlCalMonth = 12; wlCalYear -= 1; }
     if (wlCalMonth > 12) { wlCalMonth = 1; wlCalYear += 1; }
