@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex" />
+<title>ログイン - LOCLE営業ツール</title>
+<!-- 守りの外のページ(lib/auth-gate.js)。守りの中のファイル(project-context.js・nav-menu.css 等)は読めないため、
+     見た目はこのファイルの中だけで完結させる -->
+<style>
+  :root {
+    --green-700: #2F8A2A; --green-500: #44B13F; --green-50: #f0faf0;
+    --gray-50: #f8fafc; --gray-200: #e2e8f0; --gray-500: #64748b; --gray-900: #0f172a;
+    --white: #ffffff; --red-600: #dc2626; --red-50: #fef2f2;
+    --bg: var(--gray-50); --card: var(--white); --text: var(--gray-900); --muted: var(--gray-500); --border: var(--gray-200);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8; --border: #334155; --red-50: #3b1414; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Inter","Noto Sans JP",sans-serif; background: var(--bg); color: var(--text);
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 32px 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08);
+  }
+  .logo { display: block; height: 40px; margin: 0 auto 16px; }
+  h1 { font-size: 18px; text-align: center; margin: 0 0 4px; }
+  p.lead { font-size: 13px; color: var(--muted); text-align: center; margin: 0 0 24px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  input[type=password] {
+    width: 100%; font-size: 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); color: var(--text);
+  }
+  input[type=password]:focus { outline: 2px solid var(--green-500); outline-offset: 1px; }
+  button {
+    width: 100%; margin-top: 16px; padding: 11px; font-size: 15px; font-weight: 600; color: #fff;
+    background: var(--green-700); border: 0; border-radius: 8px; cursor: pointer;
+  }
+  button:hover { background: var(--green-500); }
+  .error {
+    font-size: 13px; color: var(--red-600); background: var(--red-50); border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="/logo.jpg" alt="LOCLE" />
+    <h1>ログイン</h1>
+    <p class="lead">共通のパスワードを入力してください</p>
+    <div class="error" id="loginError" hidden></div>
+    <form method="POST" action="/auth/login">
+      <label for="password">パスワード</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required autofocus />
+      <input type="hidden" id="next" name="next" value="/" />
+      <button type="submit">ログイン</button>
+    </form>
+  </main>
+<script>
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    document.getElementById("next").value = params.get("next") || "/";
+    var error = params.get("error");
+    if (error) {
+      var box = document.getElementById("loginError");
+      box.textContent = error === "config"
+        ? "ログインの設定(環境変数)が登録されていません。管理者に連絡してください"
+        : "パスワードが違います";
+      box.hidden = false;
+    }
+  })();
+</script>
+</body>
+</html>

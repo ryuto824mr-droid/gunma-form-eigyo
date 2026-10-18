@@ -4572,9 +4572,9 @@ async function handleProductionTaskHistory(req, res) {
 
 // 不正なurlパラメータ(スキームが危険、値が無い、改ざんされている等)の場合の
 // 安全なフォールバック先。エラーJSONをそのまま返すとメール受信者が生のAPIエラー画面を
-// 見ることになってしまうため、代わりにこのツール自体のホーム画面(LOCLEブランドの
-// ダッシュボード)へ誘導する
-const TRACK_CLICK_FALLBACK_URL = "https://gunma-form-eigyo.vercel.app/home.html";
+// 見ることになってしまうため、代わりに「リンクを開けませんでした」の案内ページへ誘導する。
+// ツールのページはパスワードで守られている(lib/auth-gate.js)ため、守りの外に置いたこのページを使う
+const TRACK_CLICK_FALLBACK_URL = "https://gunma-form-eigyo.vercel.app/link-invalid.html";
 
 // http:// または https:// で始まるURLのみを安全とみなす。javascript:, data:, file: 等の
 // 危険なスキームは明示的に拒否する。URLとして解析できない値(改ざん等)も安全でないとみなす
