@@ -32,6 +32,18 @@ test("メール: mailto: のリンクを先に、本文の候補を後に、重�
   assert.deepEqual(emailsFromSources(null), []);
 });
 
+test("メール: mailto: のアドレスも形を確かめ、URLの符号・改行・見えない文字は直し、伏せ字は拾わない", () => {
+  assert.deepEqual(emailsFromSources({ mailtos: ["info@○○○○○○○.co.jp"], text: "" }), [], "1805 の伏せ字");
+  assert.deepEqual(emailsFromSources({ mailtos: ["info@noguch%69f\n.com"], text: "" }), ["info@noguchif.com"], "1817: 符号(%69=i)と改行を直す");
+  assert.deepEqual(emailsFromSources({ mailtos: ["\u200binfo@kaisha.co.jp"], text: "" }), ["info@kaisha.co.jp"], "見えない文字を除く");
+  assert.deepEqual(emailsFromSources({ mailtos: ["info%40kaisha.co.jp"], text: "" }), ["info@kaisha.co.jp"], "@ が符号になったリンク");
+  assert.deepEqual(emailsFromSources({ mailtos: ["info@kaisha.co.jp,sales@kaisha.co.jp"], text: "" }), ["info@kaisha.co.jp", "sales@kaisha.co.jp"], "複数のアドレス");
+  assert.deepEqual(emailsFromSources({ mailtos: ["info@kai sha.co.jp"], text: "" }), ["info@kaisha.co.jp"], "紛れ込んだ空白を除く");
+  assert.deepEqual(emailsFromSources({ mailtos: ["%E0%A4%A", "info@", "@kaisha.co.jp", "info@会社.jp", "", null], text: "" }), [], "直せない形は拾わない");
+  // mailto: が伏せ字でも、本文に本物があれば本物を拾う
+  assert.deepEqual(emailsFromSources({ mailtos: ["info@○○○.co.jp"], text: "お問い合わせ: info@witheight.com" }), ["info@witheight.com"]);
+});
+
 test("ドメイン: 同じ会社の別ドメインを見分け、別の会社・掲載サイトとは見分ける", () => {
   for (const [a, b] of [
     ["kelloggs.jp", "kelloggs.com"], ["fdk.co.jp", "fdk.com"], ["agf.ajinomoto.co.jp", "agf.jp"],

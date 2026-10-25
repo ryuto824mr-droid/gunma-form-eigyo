@@ -35,6 +35,29 @@ test("実在のアドレス・よく使われる@の前は入力例と判定し�
   }
 });
 
+test("形の崩れたアドレス(伏せ字のドメイン・URLの符号・改行・見えない文字)は入力例と同じ扱い(1805・1817・1219)", () => {
+  for (const [e, reason] of [
+    ["info@○○○○○○○.co.jp", /伏せ字/],
+    ["info@＊＊＊＊.jp", /伏せ字/],
+    ["info@●●.co.jp", /伏せ字/],
+    ["info@noguch%69f\n.com", /アドレスの形でない/],
+    ["\u200binfo@mysite.co.jp", /アドレスの形でない/],
+    ["info@kai sha.co.jp", /アドレスの形でない/],
+    ["info@会社.jp", /アドレスの形でない/],
+    ["ｉｎｆｏ@kaisha.co.jp", /アドレスの形でない/],
+  ]) {
+    const r = isPlaceholderEmail(e);
+    assert.equal(r.placeholder, true, JSON.stringify(e));
+    assert.match(r.reason, reason, JSON.stringify(e));
+  }
+  // 見えない文字を除いた後の形(mysite.co.jp)も、ひな形の仮アドレスとして扱う
+  assert.equal(isPlaceholderEmail("info@mysite.co.jp").placeholder, true);
+  // 形が正しく、伏せ字でもないアドレスはこれまでどおり
+  for (const e of ["info@noguchif.com", "nagayama-kenntiku@nifty.com", "chigira@tiara.ocn.ne.jp", "info_sales+web@kaisha.co.jp"]) {
+    assert.equal(isPlaceholderEmail(e).placeholder, false, e);
+  }
+});
+
 test("大文字・前後の空白・形式不正", () => {
   assert.equal(isPlaceholderEmail("  SAMPLE@Gku.co.jp ").placeholder, true);
   assert.equal(isPlaceholderEmail("INFO@MYSITE.COM").placeholder, true);
