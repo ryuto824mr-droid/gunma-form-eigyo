@@ -57,3 +57,60 @@
   .page-nav a.nav-primary { display: none; }
   .nav-mobile-only { display: block; }
 }
+
+/* ==================== 各ページの上部の説明(nav-menu.js の renderPageIntro) ==================== */
+.page-intro {
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+  max-width: 1200px; margin: 12px auto 0; padding: 10px 14px; box-sizing: border-box;
+  background: var(--green-50, #f0faf0); border: 1px solid var(--green-200, #b7e4b0); border-radius: 8px;
+  color: var(--gray-700, #334155); font-size: 13px; line-height: 1.6;
+}
+.page-intro[hidden] { display: none; }
+.page-intro-title { display: block; color: var(--green-800, #277025); margin-bottom: 2px; }
+.page-intro p { margin: 0; }
+.page-intro-help { font-weight: 600; color: var(--green-700, #2F8A2A); }
+.page-intro-close, .page-intro-mini {
+  flex-shrink: 0; background: transparent; border: 1px solid var(--gray-300, #cbd5e1); border-radius: 6px;
+  color: var(--gray-500, #64748b); font-size: 12px; padding: 3px 8px; cursor: pointer;
+}
+.page-intro-mini { display: block; margin: 8px auto 0; }
+.page-intro-mini[hidden] { display: none; }
+@media (max-width: 600px) {
+  .page-intro { margin: 8px 16px 0; flex-direction: column; }
+}
+html.dark .page-intro { background: #0f2a12; border-color: #2f5f2a; color: #e2e8f0; }
+html.dark .page-intro-title { color: #86efac; }
+html.dark .page-intro-help { color: #86efac; }
+html.dark .page-intro-close, html.dark .page-intro-mini { color: #cbd5e1; border-color: #475569; }
+
+/* ==================== 初めてログインしたときの案内(nav-menu.js の showOnboarding) ==================== */
+.onboarding-overlay {
+  position: fixed; inset: 0; z-index: 1100; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.onboarding-card {
+  width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-sizing: border-box;
+  background: #fff; color: #0f172a; border-radius: 12px; padding: 22px 22px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25); font-size: 14px; line-height: 1.7;
+}
+.onboarding-card h2 { margin: 0 0 8px; font-size: 18px; }
+.onboarding-card h3 { margin: 14px 0 4px; font-size: 14px; color: var(--green-800, #277025); }
+.onboarding-card p { margin: 0 0 8px; }
+.onboarding-card ol, .onboarding-card ul { margin: 0 0 6px; padding-left: 20px; }
+.onboarding-card a { color: var(--green-700, #2F8A2A); font-weight: 600; }
+.onboarding-roles { display: grid; gap: 8px; margin-top: 8px; }
+.onboarding-role {
+  text-align: left; background: var(--green-50, #f0faf0); border: 1px solid var(--green-200, #b7e4b0);
+  border-radius: 8px; padding: 10px 12px; cursor: pointer; color: inherit; font-size: 14px;
+}
+.onboarding-role strong { display: block; }
+.onboarding-role span { font-size: 12px; color: #475569; }
+.onboarding-role:hover { border-color: var(--green-500, #44B13F); }
+.onboarding-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.onboarding-back { background: transparent; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 12px; cursor: pointer; color: #475569; }
+.onboarding-done { background: var(--green-700, #2F8A2A); color: #fff; border: 0; border-radius: 6px; padding: 8px 18px; font-weight: 600; cursor: pointer; }
+html.dark .onboarding-card { background: #1e293b; color: #f1f5f9; }
+html.dark .onboarding-card h3, html.dark .onboarding-card a { color: #86efac; }
+html.dark .onboarding-role { background: #0f2a12; border-color: #2f5f2a; }
+html.dark .onboarding-role span { color: #cbd5e1; }
+html.dark .onboarding-back { color: #cbd5e1; border-color: #475569; }

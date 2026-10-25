@@ -1,0 +1,44 @@
+# 送信待ちの送信だけ(api/crm.js の run-send-queue)を、平日に1日2回呼ぶ GitHub Actions の雛形(段階1)。
+#
+# このファイルは雛形で、ここに置いたままでは動かない。使うときは docs/ops/外部から送信を呼ぶ手順.md の手順で
+#   1. CRON_SECRET を Vercel と GitHub の両方に同じ値で登録し
+#   2. このファイルを .github/workflows/send-queue.yml にコピーして push する
+# push した時点から、下の時刻に自動で動き始める(=実際に送信される)。
+#
+# - 1日の送信の上限(settings.daily_send_limit)・土日祝日の休み・1回最大20件は、送信の処理の中で効く。
+#   ここで回数を増やしても、上限を超えては送られない
+# - 時刻は UTC で書く(日本時間 - 9時間)。GitHub の定時実行は数分〜数十分遅れることがある
+# - 毎日の処理(Vercel の cron。日本時間 18:00)とは時刻を分けてある。実行が重なっても、
+#   送信の処理は「まだ送信待ちの行」だけをロックして送るため、同じ行を二重に送らない
+name: send-queue
+
+on:
+  schedule:
+    # 平日(月〜金)の 日本時間 10:30 と 14:30(UTC 1:30 と 5:30)
+    - cron: "30 1,5 * * 1-5"
+  # 手動でも動かせる(Actions の画面の「Run workflow」)。手動で動かしても実際に送信される
+  workflow_dispatch: {}
+
+# 同じ workflow が重ならないようにする(前の実行が終わるまで次を始めない)
+concurrency:
+  group: send-queue
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    # 送信の処理は1回最大約290秒。応答を待ちきれるよう、少し長めにする
+    timeout-minutes: 8
+    steps:
+      - name: run-send-queue を呼ぶ
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET が GitHub の Secrets に登録されていません" >&2
+            exit 1
+          fi
+          # 結果(送った件数・失敗・止まった理由)を Actions の記録に残す。鍵の値は表示しない
+          curl -fsS --max-time 320 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://gunma-form-eigyo.vercel.app/api/crm?action=run-send-queue"

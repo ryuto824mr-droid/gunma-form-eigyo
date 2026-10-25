@@ -1,9 +1,11 @@
-// 入口の守り(lib/auth-gate.js と middleware.js)のテスト。Web 標準の Request を作って gate() に渡すだけで、
-// ページ・API・DB には触れない
+// 入口の守り(lib/auth-gate.js)のテスト。Web 標準の Request を作って gate() に渡すだけで、
+// ページ・API・DB には触れない。
+// いまはログインの守りを外している(middleware.js が無い)。lib/auth-gate.js は戻すときのために残し、
+// このテストで動きを確かめ続ける。戻し方は末尾のテストのコメントを見る
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("fs");
 const path = require("path");
-const { pathToFileURL } = require("url");
 const { gate, createSessionValue, verifySessionValue, safeNextPath, COOKIE_NAME } = require("../lib/auth-gate");
 
 const BASE = "https://gunma-form-eigyo.vercel.app";
@@ -215,21 +217,17 @@ test("クリック計測は重ね指定・似た名前・別の入口・GET 以�
   }
 });
 
-// ---- middleware.js ----
+// ---- middleware.js(いまは外している) ----
 
-test("middleware.js は gate の結果を返し、通すときは何も返さない", async () => {
-  const saved = { ...process.env };
-  Object.assign(process.env, ENV);
-  try {
-    const mod = await import(pathToFileURL(path.join(__dirname, "..", "middleware.js")).href);
-    assert.equal(mod.config.runtime, "nodejs");
-    assert.equal(await mod.default(req("/login.html")), undefined);
-    assert.equal((await mod.default(req("/api/companies"))).status, 401);
-    assert.equal(await mod.default(req("/api/crm?action=run-scheduled-sends", { headers: { Authorization: "Bearer cron-key-123" } })), undefined);
-  } finally {
-    for (const k of Object.keys(ENV)) {
-      if (k in saved) process.env[k] = saved[k];
-      else delete process.env[k];
-    }
-  }
+// 戻すときは、リポジトリ直下に次の middleware.js を置く(Vercel の関数の数に1つ数えられる):
+//   import authGate from "./lib/auth-gate.js";
+//   export default async function middleware(request) { return authGate.gate(request, process.env); }
+//   export const config = { runtime: "nodejs" };
+// 戻すまでは、ログイン画面・ログアウトは使われない
+test("ログインの守りは外している: middleware.js は無く、戻すための部品は残っている", () => {
+  const root = path.join(__dirname, "..");
+  assert.equal(fs.existsSync(path.join(root, "middleware.js")), false);
+  assert.equal(typeof gate, "function");
+  assert.ok(fs.existsSync(path.join(root, "public", "login.html")));
+  assert.ok(fs.existsSync(path.join(root, "public", "link-invalid.html")));
 });

@@ -310,12 +310,18 @@
     <div class="sidebar-inner">
       <p>目次</p>
       <a href="#intro">はじめに</a>
+      <a href="#role-guide">役割から探す</a>
+      <a href="#access">ログインについて(URL の扱い)</a>
       <a href="#daily-flow">毎日の流れ</a>
       <a href="#project">プロジェクトについて</a>
       <a href="#companies">企業リスト</a>
       <a href="#variants">メッセージ管理</a>
       <a href="#send">送信管理</a>
       <a href="#later">あとで送る</a>
+      <a href="#send-schedule">自動送信の時刻と1日の上限</a>
+      <a href="#hold-release">保留から自動で送信待ちへ</a>
+      <a href="#checks">宛名と住所の検査</a>
+      <a href="#archive">アーカイブ</a>
       <a href="#auto-pipeline">自動パイプライン</a>
       <a href="#crm">CRM</a>
       <a href="#content-studio">コンテンツ制作</a>
@@ -361,6 +367,46 @@
       <p>このツールは「LOCLE」「群馬お仕事図鑑」の2つのプロジェクトで使えます。<span class="code-inline">app.html</span>でプロジェクトを選ぶと、企業リストからCRM・分析まで、選んだプロジェクトのデータのみが表示されます。詳しくは<a href="#project">「プロジェクトについて」</a>をご覧ください。</p>
     </section>
 
+    <section class="help-section reveal-on-scroll" id="role-guide">
+      <h2>役割から探す</h2>
+      <p>自分の役割の「毎日」「週に1回」「困ったとき」の手順です。くわしい操作は、各ページの説明を見てください。初めてログインしたときの案内は、メニューの「はじめての案内」からいつでも開き直せます。</p>
+
+      <p class="sub-h3" id="role-admin"><i data-lucide="shield"></i>管理者</p>
+      <ul>
+        <li><strong>毎日：</strong><a href="#later">あとで送る</a>で警告と★候補を確かめる。<a href="#send">送信管理</a>で失敗と「送れたか不明」を確かめる。</li>
+        <li><strong>週に1回：</strong>送り先として不適切な企業(自治体・情報サイト・大手の事業所・県外)を<a href="#archive">アーカイブ</a>する。1日の送信の上限を見直す(<a href="#send-schedule">自動送信の時刻と1日の上限</a>)。</li>
+        <li><strong>管理者だけが変えるもの：</strong>1日の送信の上限(<span class="code-inline">daily_send_limit</span>)、保留から自動で送信待ちへの入/切(<span class="code-inline">auto_release_hold</span>)、送信者の情報(CRMの設定)、データベースの直し(SQL)。</li>
+        <li><strong>困ったとき：</strong>送信を止めたいときは、送信待ちの行を保留にするか、1日の上限を下げる。</li>
+      </ul>
+
+      <p class="sub-h3" id="role-sales"><i data-lucide="briefcase"></i>営業担当</p>
+      <ul>
+        <li><strong>毎日：</strong><a href="#later">あとで送る</a>の「送れる」から選んで送信待ちに入れる。「要確認」は理由を見て直すか、見送る。</li>
+        <li><strong>毎日：</strong>返信があった企業は<a href="#crm">CRM</a>で対応する。</li>
+        <li><strong>週に1回：</strong><a href="#analytics">分析</a>で文面ごとの反応率を確かめ、<a href="#variants">メッセージ管理</a>で文面を直す(送信記録のある文面はコピーして新しく作る)。</li>
+        <li><strong>困ったとき：</strong>「送れたか不明」「送信記録あり」の企業には、もう一度送らない。迷ったら管理者に聞く。</li>
+      </ul>
+
+      <p class="sub-h3" id="role-everyone"><i data-lucide="users"></i>全員</p>
+      <ul>
+        <li><strong>毎日：</strong><a href="#work-logs">稼働管理</a>で出勤・退勤と作業内容を記録する。</li>
+        <li><strong>打ち合わせのあと：</strong><a href="#meeting-notes">議事録</a>に残す。予定は<a href="#calendar">カレンダー</a>へ。</li>
+        <li><strong>月末：</strong>稼働管理から1か月分の稼働報告書を開き、印刷画面から PDF にする。</li>
+        <li><strong>してはいけないこと：</strong>このツールの URL を社外の人に教えない(ログインが無いため、URL を知っていれば誰でも開けます。<a href="#access">ログインについて</a>)。</li>
+      </ul>
+    </section>
+
+    <section class="help-section reveal-on-scroll" id="access">
+      <h2>ログインについて(URL の扱い)</h2>
+      <p>このツールには<strong>ログインがありません</strong>。URL を知っていれば、誰でも画面を開いて操作できます。</p>
+      <ul>
+        <li><strong>URL を社外の人に渡さない：</strong>メール・チャット・資料に URL を貼るときは、相手が社内の人か確かめてください。</li>
+        <li><strong>共有のパソコン：</strong>使い終わったら、ブラウザのタブを閉じてください(ログアウトはありません)。</li>
+        <li><strong>自動で動く処理は鍵で守られている：</strong>毎日の処理・送信だけの処理・企業探しだけの処理は、鍵(Vercel の環境変数 <span class="code-inline">CRON_SECRET</span>)を持つ呼び出し(Vercel の自動実行と、管理者が設定した外部の定時実行)からしか動きません。</li>
+      </ul>
+      <p>人ごとのアカウントはありません。初めての案内で選んだ役割・閉じた説明は、使っているブラウザにだけ覚えます。</p>
+    </section>
+
     <section class="help-section reveal-on-scroll" id="daily-flow">
       <h2>毎日の流れ</h2>
       <p>自動で動くことと、人がすることを分けて書きます。</p>
@@ -383,7 +429,7 @@
       </ol>
 
       <p class="sub-h3"><i data-lucide="lock"></i>ログインについて</p>
-      <p>このツールには<strong>ログインがありません</strong>。URL を知っていれば誰でも画面を開いて操作できるため、URL を外部の人に渡さないでください。毎日の自動送信だけは鍵(Vercel の環境変数 <span class="code-inline">CRON_SECRET</span>)で守られていて、Vercel の自動実行以外からは動きません。</p>
+      <p>このツールにはログインがありません。URL の扱いと、自動で動く処理の鍵については<a href="#access">ログインについて(URL の扱い)</a>を見てください。</p>
     </section>
 
     <section class="help-section reveal-on-scroll" id="project">
@@ -594,7 +640,7 @@
 
     <section class="help-section reveal-on-scroll" id="later">
       <h2>あとで送るページ</h2>
-      <p>「あとで送る」ページ(<span class="code-inline">later.html</span>)では、まだ送っていない企業と保留中の行を「送れる・要確認・送れない」の3つに分けて表示します。<strong>このページでは送信しません。</strong>送信待ちに入れた企業は、次の平日 18:00 の自動送信で送られます。</p>
+      <p>「あとで送る」ページ(<span class="code-inline">later.html</span>)では、まだ送っていない企業と保留中の行を「送れる・要確認・送れない」の3つに分けて表示します。<strong>このページでは送信しません。</strong>送信待ちに入れた企業は、次の平日の自動送信で送られます(<a href="#send-schedule">自動送信の時刻と1日の上限</a>)。</p>
 
       <p class="sub-h3"><i data-lucide="layers"></i>3つの区分</p>
       <ul>
@@ -621,7 +667,8 @@
         <li>警告が1つもない(参考情報も含む)</li>
         <li>その企業への送信記録が一度もない(成功・不明・失敗すべて)</li>
         <li>フォームが企業と同じドメインか、フォームサービス</li>
-        <li>電話番号が群馬県の市外局番(027)。住所は保存していないため、電話番号で判定します</li>
+        <li>電話番号が群馬県の市外局番(027)</li>
+        <li>会社概要の住所の県が群馬県と違わない(住所が見つからない企業は、電話番号だけで判定します。<a href="#checks">宛名と住所の検査</a>)</li>
         <li>企業の更新から30日以内(リサーチ日の代わりの目安)</li>
       </ul>
 
@@ -638,6 +685,66 @@
         <li><strong>送信者プロフィールが未登録：</strong>登録するまでフォーム送信は止まります(CRMの設定)。</li>
         <li><strong>過去の失敗・停止の履歴(参考)：</strong>前に失敗・却下・停止したことがあります。理由を見てから送ってください。</li>
         <li><strong>リンクのクリックを自動記録(参考)：</strong>送信直後のクリックは、相手のセキュリティ機能による自動確認のことがあります。</li>
+      </ul>
+    </section>
+
+    <section class="help-section reveal-on-scroll" id="send-schedule">
+      <h2>自動送信の時刻と1日の上限</h2>
+      <p>送信待ちの行は、平日に自動で送られます。土日・祝日は送りません。</p>
+      <ul>
+        <li><strong>毎日の処理(平日 18:00)：</strong>送信待ちの送信のほか、返信の確認・予約送信・企業探し(自動パイプライン)を行います。</li>
+        <li><strong>送信だけの処理：</strong>管理者が設定すると、昼にも送信待ちの送信だけを行います(1日に何回か)。企業探しは行いません。</li>
+        <li><strong>1回に送る数：</strong>最大20件。1件に15〜20秒かかるため、実際には1回に15件ほどです。送りきれなかった行は、次の回に送られます。</li>
+        <li><strong>1日の上限：</strong>設定の「1日の送信の上限」(<span class="code-inline">daily_send_limit</span>)を超えては送りません。上限は、失敗した送信も含めた「今日の送信記録の件数」で数えます。上限は管理者が決めます。</li>
+        <li><strong>二重送信の防止：</strong>送る直前に、その行がまだ送信待ちかを確かめてから送ります。処理が重なっても、同じ行を二度送りません。</li>
+      </ul>
+    </section>
+
+    <section class="help-section reveal-on-scroll" id="hold-release">
+      <h2>保留から自動で送信待ちへ</h2>
+      <p>自動パイプラインが見つけた企業は、まず<strong>保留</strong>で積まれます(人が確かめてから送るため)。管理者が「入」にすると、保留から1営業日たった行のうち、条件をすべて満たすものを自動で送信待ちに移します。<strong>初めは「切」で、何も動きません。</strong></p>
+      <p class="sub-h3"><i data-lucide="check-circle"></i>移す行の条件(すべて)</p>
+      <ul>
+        <li>自動パイプラインが足した保留の行(「あとで送る」で人が保留にした行は移しません)</li>
+        <li>保留にしてから1営業日以上たっている(土日・祝日は数えません)</li>
+        <li>「あとで送る」で★候補(警告がない・送信記録がない・宛名が確か・電話番号が群馬県 等)</li>
+        <li>会社概要の住所の県が群馬県と違わない</li>
+        <li>同じ企業がほかに送信待ち・予約に入っていない</li>
+      </ul>
+      <p class="sub-h3"><i data-lucide="pause-circle"></i>止まる場合・止め方</p>
+      <ul>
+        <li>土日・祝日、今日の送信が1日の上限に達した日、直近に自動で移した行の失敗が半分を超えたときは、その日は移しません。</li>
+        <li>1日に移すのは最大5件です(管理者が変えられます)。</li>
+        <li>1件だけ止めたいときは、その行を「あとで送る」で保留にし直すか、外してください。全体を止めるときは、管理者が「切」にします。</li>
+      </ul>
+    </section>
+
+    <section class="help-section reveal-on-scroll" id="checks">
+      <h2>宛名と住所の検査</h2>
+      <p class="sub-h3"><i data-lucide="user-check"></i>宛名(企業名)の検査</p>
+      <p>文面の <span class="code-inline">{{company_name}}</span> には、正式名称か登録名のうち、宛名として使える方が入ります。どちらも使えないときは名前を入れず「ご担当者様」で送ります。次のような名前は使えないと判定します。</p>
+      <ul>
+        <li>ページのタイトルや説明文(「会社概要｜〇〇」「〇〇なら△△」「しゅんせつは〇〇建設」など)</li>
+        <li>法人格だけ・途中で切れた名前(「株式会社」「株式会社G」など)</li>
+        <li>本社・工場などの事業所名が付いた名前、括弧つきの名前</li>
+      </ul>
+      <p>宛名が不確かな企業は「あとで送る」に赤い警告が出ます。企業名を直すと送れるようになります。</p>
+      <p class="sub-h3"><i data-lucide="map-pin"></i>住所の検査</p>
+      <ul>
+        <li><strong>リサーチ：</strong>会社概要の住所(「所在地」「本社」「工場」や郵便番号のすぐ後の住所)の県が群馬県でなければ、自動送信の対象から外し、警告を出します。群馬県内の工場・事業所の住所が載っていれば、本社が県外でも外しません。住所が見つからない企業は外しません。</li>
+        <li><strong>企業探し：</strong>Google の地図検索の結果から、群馬県以外の住所と、郵便局・役所・コンビニ・スーパー・銀行などを外します。</li>
+      </ul>
+      <p class="sub-h3"><i data-lucide="mail-x"></i>メールアドレスの検査</p>
+      <p>入力例のアドレス(sample@・toiawase@domain.co.jp 等)や、伏せ字(info@○○○.co.jp)・見えない文字などで形の崩れたアドレスは、送らずに止め、警告を出します。</p>
+    </section>
+
+    <section class="help-section reveal-on-scroll" id="archive">
+      <h2>アーカイブ</h2>
+      <p>送り先として不適切な企業は、削除せずに<strong>アーカイブ</strong>します。アーカイブした企業は一覧・送信の対象から外れますが、送信記録は残ります。元に戻すこともできます。</p>
+      <ul>
+        <li><strong>アーカイブする企業の目安：</strong>自治体・公共機関、情報サイト・ポータル・まとめ記事、大手企業の事業所・店舗、群馬県外の会社(同じ名前の町村の取り違えを含む)。</li>
+        <li><strong>判断が割れる企業：</strong>農協・社会福祉法人・県外が本社の会社の群馬の工場などは、管理者が1社ずつ決めます。</li>
+        <li><strong>まとめてアーカイブするとき：</strong>管理者が、確認・実行・確認・元に戻すの4つの SQL で行います。送信待ち・保留・予約に入っている企業は変えません。</li>
       </ul>
     </section>
 

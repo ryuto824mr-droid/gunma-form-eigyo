@@ -53,6 +53,7 @@ module.exports = async function handler(req, res) {
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
     case "run-send-queue": return handleRunSendQueue(req, res);
+    case "run-discover": return handleRunDiscover(req, res);
     case "auto-pipeline-config": return handleAutoPipelineConfig(req, res);
     case "auto-pipeline-logs": return handleAutoPipelineLogs(req, res);
     case "run-auto-pipeline": return handleRunAutoPipeline(req, res);
@@ -79,7 +80,7 @@ module.exports = async function handler(req, res) {
     case "send-logs":        return handleSendLogsList(req, res);
     case "track-click":      return handleTrackClick(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, run-send-queue, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, later-list, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, run-send-queue, run-discover, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, later-list, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
   }
 };
 
@@ -2822,7 +2823,8 @@ async function queueCompanyForSend(company, project, variantId, options = {}) {
   }
 }
 
-async function runAutoPipelineForProject(project, settings, skipReason, deadline) {
+// options.limit: この実行で調べる企業の数の上限(企業探しだけの処理 run-discover が、1日の残りの数を渡す)
+async function runAutoPipelineForProject(project, settings, skipReason, deadline, options = {}) {
   const [config] = await sql`SELECT * FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
   if (!config || !config.enabled) {
     return { project, enabled: false };
@@ -2846,7 +2848,8 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
     } else {
       // auto_pipeline_config.daily_limitが、このプロジェクトで1日に自動調査・送信待ちリストへの
       // 追加を行う上限(実際の送信は行わないため、送信上限(settings.daily_send_limit)とは無関係)
-      const effectiveLimit = Math.min(parseInt(config.daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, AUTO_PIPELINE_HARD_CAP);
+      const configLimit = Math.min(parseInt(config.daily_limit, 10) || AUTO_PIPELINE_DEFAULT_DAILY_LIMIT, AUTO_PIPELINE_HARD_CAP);
+      const effectiveLimit = Number.isFinite(options.limit) ? Math.min(configLimit, options.limit) : configLimit;
 
       if (effectiveLimit <= 0) {
         errorMessage = "1日の上限が0以下のため実行をスキップしました";
@@ -2972,6 +2975,58 @@ async function handleRunAutoPipeline(req, res) {
   } catch (err) {
     return res.status(500).json({ error: `自動パイプライン実行エラー: ${err.message}` });
   }
+}
+
+// ==================== run-discover (企業探しとリサーチだけ。cron の鍵が必要) ====================
+// 毎日の処理(run-scheduled-sends)の中の企業探しは、1プロジェクトあたり48秒しか動けず、1回に1〜2社しか
+// リサーチできない。送る企業を増やすため、企業探しとリサーチだけを長い時間(約280秒。2つのプロジェクトで半分ずつ)
+// 行う処理を別にする。外から1日に何回か呼ぶ前提で、1日に調べる数の合計は設定 discover_daily_limit
+// (1プロジェクトあたり。初期40社)で止める(今日の auto_pipeline_logs の researched_count の合計を差し引く)。
+// 新しく見つけた企業は、これまでどおり保留(on_hold)で積む。送信・予約送信・送信待ちの処理は行わない
+const RUN_DISCOVER_BUDGET_MS = 280000; // maxDuration=300秒に対して20秒の余裕を残す
+const DISCOVER_DEFAULT_DAILY_LIMIT = 40;
+
+async function handleRunDiscover(req, res) {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({
+      error: process.env.CRON_SECRET
+        ? "認証に失敗しました(企業探しだけの処理は cron の鍵が必要です)"
+        : "CRON_SECRET が登録されていないため実行しません(Vercel の環境変数に登録してください)",
+    });
+  }
+  const start = Date.now();
+  let settings;
+  try {
+    settings = await getSettings();
+  } catch (err) {
+    return res.status(500).json({ error: `実行エラー: ${err.message}` });
+  }
+  const skipReason = computeWeekendHolidaySkipReason(settings);
+  if (skipReason) return res.status(200).json({ skipped: true, reason: skipReason, results: [] });
+  const dailyLimitSetting = parseInt(settings.discover_daily_limit, 10);
+  const dailyLimit = Number.isFinite(dailyLimitSetting) && dailyLimitSetting >= 0 ? dailyLimitSetting : DISCOVER_DEFAULT_DAILY_LIMIT;
+  const results = [];
+  for (let i = 0; i < AUTO_PIPELINE_PROJECTS.length; i++) {
+    const project = AUTO_PIPELINE_PROJECTS[i];
+    // 2つのプロジェクトで時間を半分ずつ使う(先のプロジェクトが全部使い切らないように)
+    const deadline = start + Math.round((RUN_DISCOVER_BUDGET_MS * (i + 1)) / AUTO_PIPELINE_PROJECTS.length);
+    try {
+      const [{ done }] = await sql`
+        SELECT COALESCE(SUM(researched_count), 0)::int AS done FROM auto_pipeline_logs
+        WHERE project = ${project} AND run_date = CURRENT_DATE
+      `;
+      const remaining = dailyLimit - done;
+      if (remaining <= 0) {
+        results.push({ project, skipped: true, reason: `今日の上限(${dailyLimit}社)まで調べた`, researched_today: done });
+        continue;
+      }
+      const r = await runAutoPipelineForProject(project, settings, null, deadline, { limit: remaining });
+      results.push({ ...r, researched_today_before: done, daily_limit: dailyLimit });
+    } catch (err) {
+      results.push({ project, error: `企業探しエラー: ${err.message}` });
+    }
+  }
+  return res.status(200).json({ skipped: false, results });
 }
 
 // ==================== send-queue ====================

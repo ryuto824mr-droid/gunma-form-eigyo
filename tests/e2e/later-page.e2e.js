@@ -103,6 +103,9 @@ async function openPage() {
   // 外部(フォント等)へは出さない
   await page.setRequestInterception(true);
   page.on("request", (r) => (r.url().startsWith(base) ? r.continue() : r.abort()));
+  // 初めて開いたときの案内(nav-menu.js)は、このテストでは見たことにする(画面を覆うため)。
+  // 案内そのものは tests/e2e/nav-guide.e2e.js で確かめる
+  await page.evaluateOnNewDocument(() => { try { localStorage.setItem("gfe_onboarding_v1", "1"); } catch (e) {} });
   await page.goto(`${base}/later.html`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => document.querySelectorAll("#laterBody tr[data-key]").length > 0);
   return { page, errors };
