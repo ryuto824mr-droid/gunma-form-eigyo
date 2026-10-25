@@ -125,21 +125,79 @@ const FIXTURES = {
   },
 };
 
+// 送信者プロフィールの値の試験に使うフォーム(下の send_logs の記録の試験もこれらで行う)
+const VALUE_FIXTURES = Object.keys(FIXTURES);
+
+// ---- 送信ボタンの取り違え・確認画面の取り違えの試験用(2165 新和・2146 サカエ理研の形) ----
+// 問い合わせフォームより前に、Googleのサイト内検索(id="search"・欄の名前 q・文字の無い送信ボタン)がある
+const searchForm = (name) => `<form method="get" action="/search/${name}" id="search">
+<input type="text" name="q" value="" id="searchbox"><input type="submit" name="btnG" id="searchstart" value=""></form>`;
+const contactRows = row("お名前", '<input type="text" name="name">') + row("メールアドレス", '<input type="text" name="email">') +
+  '<p><label for="message">お問い合わせ内容</label><textarea id="message" name="message"></textarea></p>';
+const CONTACT_MAPPING = [
+  { role: "contact_person_name", name: "name" },
+  { role: "email", name: "email" },
+  { role: "message", name: "message" },
+];
+Object.assign(FIXTURES, {
+  // 検索フォームが先にあっても、本文を入れたフォームの送信ボタンを押す
+  searchfirst: {
+    html: `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>searchfirst</title></head><body>
+${searchForm("searchfirst")}
+<h1>お問い合わせ</h1><form method="post" action="/done/searchfirst">${contactRows}
+<input type="submit" value="　　送信　　"></form></body></html>`,
+    fieldMapping: CONTACT_MAPPING,
+  },
+  // 本文を入れたフォームに送信ボタンが無ければ、検索フォームのボタンは押さずに失敗にする
+  searchnobutton: {
+    html: `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>searchnobutton</title></head><body>
+${searchForm("searchnobutton")}
+<h1>お問い合わせ</h1><form method="post" action="/done/searchnobutton">${contactRows}</form></body></html>`,
+    fieldMapping: CONTACT_MAPPING,
+  },
+  // 「確認する」→ 確認画面(/kakunin/)。確認画面の最終送信ボタンは文字の無い画像ボタンで見分けられず、
+  // 案内文「後日担当者よりご連絡いたします」がある。送信済みにせず「送れたか不明」にする
+  confirmweak: {
+    html: `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>confirmweak</title></head><body>
+<h1>お問い合わせ</h1><form method="post" action="/kakunin/confirmweak">${contactRows}
+<p><button type="submit">確認する</button></p></form></body></html>`,
+    fieldMapping: CONTACT_MAPPING,
+  },
+  // 「確認」の付くボタンでも、そのまま送信完了ページ(送信が完了しました)に進むフォームは送信済み
+  directsend: {
+    html: `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>directsend</title></head><body>
+<h1>お問い合わせ</h1><form method="post" action="/done/directsend">${contactRows}
+<p><button type="submit">確認して送信</button></p></form></body></html>`,
+    fieldMapping: CONTACT_MAPPING,
+  },
+});
+const weakConfirmScreen = (values) => `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>入力内容</title></head>
+<body><h1>入力内容</h1><p>内容をご確認のうえ、下のボタンを押してください。後日担当者よりご連絡いたします。</p>
+<form method="post" action="/done/confirmweak">
+${Object.entries(values).map(([k, v]) => `<p>${escapeHtml(k)}: ${escapeHtml(v)}</p><input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("")}
+<p><input type="image" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="" width="120" height="40"></p></form></body></html>`;
+
 // ---- テスト用フォームのサーバー(127.0.0.1のみ) ----
 const received = {}; // フォーム名 → 受け取った値
+const searchHits = {}; // フォーム名 → 検索フォームが送られた回数
 let server;
 let baseUrl;
 function startServer() {
   return new Promise((resolve) => {
     server = http.createServer((req, res) => {
-      const m = req.url.match(/^\/(form|confirm|done)\/(\w+)$/);
+      const m = req.url.match(/^\/(form|confirm|kakunin|done|search)\/(\w+)(\?.*)?$/);
       if (!m || !FIXTURES[m[2]]) { res.statusCode = 404; return res.end(); }
       res.setHeader("content-type", "text/html; charset=utf-8");
       if (m[1] === "form") return res.end(FIXTURES[m[2]].html);
+      if (m[1] === "search") {
+        searchHits[m[2]] = (searchHits[m[2]] || 0) + 1;
+        return res.end("<!doctype html><html><head><meta charset='utf-8'><title>検索結果</title></head><body><p>検索結果</p></body></html>");
+      }
       let body = "";
       req.on("data", (c) => { body += c; });
       req.on("end", () => {
         if (m[1] === "confirm") return res.end(confirmScreen(querystring.parse(body)));
+        if (m[1] === "kakunin") return res.end(weakConfirmScreen(querystring.parse(body)));
         (received[m[2]] = received[m[2]] || []).push(querystring.parse(body));
         res.end("<!doctype html><html><head><meta charset='utf-8'><title>送信完了</title></head><body><p>お問い合わせありがとうございました。送信が完了しました。</p></body></html>");
       });
@@ -246,9 +304,44 @@ test("電話番号: 数値の欄・最大文字数11・pattern・3分割", { tim
   assert.deepEqual([v.tel1, v.tel2, v.tel3], ["027", "212", "2117"]);
 });
 
+test("検索フォームが先にあるページ: 本文を入れたフォームの送信ボタンを押し、検索は送らない(2165 新和の形)", { timeout: 90000 }, async () => {
+  const r = await submit("searchfirst");
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.submitStatus, "sent");
+  assert.equal(searchHits.searchfirst, undefined, "検索フォームは送られていない");
+  const [v] = received.searchfirst;
+  assert.equal(v.name, "松崎流空");
+  assert.equal(v.email, "matsuzaki9283@gmail.com");
+  assert.match(v.message, /ご担当者様/);
+});
+
+test("本文を入れたフォームに送信ボタンが無い: 検索フォームのボタンは押さず、失敗にする", { timeout: 90000 }, async () => {
+  const r = await submit("searchnobutton");
+  assert.equal(r.status, 500, JSON.stringify(r.body));
+  assert.match(r.body.error, /送信ボタンが見つかりませんでした/);
+  assert.equal(searchHits.searchnobutton, undefined, "検索フォームは送られていない");
+  assert.equal(received.searchnobutton, undefined);
+});
+
+test("確認画面型: 確認画面を見分けられず案内文だけがある場合は、送信済みにせず「送れたか不明」(2146 サカエ理研の形)", { timeout: 90000 }, async () => {
+  const r = await submit("confirmweak");
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.submitStatus, "uncertain");
+  assert.equal(r.body.log.confirm_step, false);
+  assert.match(r.body.log.result_url, /\/kakunin\/confirmweak$/);
+  assert.equal(received.confirmweak, undefined, "最終送信はされていない");
+});
+
+test("「確認」の付くボタンでそのまま送信完了ページに進むフォームは、これまでどおり送信済み", { timeout: 90000 }, async () => {
+  const r = await submit("directsend");
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.submitStatus, "sent");
+  assert.equal(received.directsend.length, 1);
+});
+
 test("send_logsに送信者の写しと実際の入力値が記録される", () => {
   const byFixture = Object.fromEntries(inserts.map(i => [i.fixture, i.values]));
-  for (const fixture of Object.keys(FIXTURES)) {
+  for (const fixture of VALUE_FIXTURES) {
     assert.ok(byFixture[fixture], `${fixture}のINSERTがある`);
     const [profileId, snapshotJson, filledJson] = byFixture[fixture].slice(-3);
     assert.equal(profileId, 1);
@@ -263,7 +356,7 @@ test("send_logsに送信者の写しと実際の入力値が記録される", ()
   assert.ok(basicRoles.includes("email_confirm=matsuzaki9283@gmail.com"));
   const phoneSplit = filled("phone").find(f => f.role === "phone_split");
   assert.equal(phoneSplit.value, "027 / 212 / 2117");
-  console.log(JSON.stringify(Object.fromEntries(Object.keys(FIXTURES).map(f => [f, filled(f)])), null, 1));
+  console.log(JSON.stringify(Object.fromEntries(VALUE_FIXTURES.map(f => [f, filled(f)])), null, 1));
 });
 
 test("送信結果(確認画面を最後まで進めたか・結果のURL)が記録される", () => {
