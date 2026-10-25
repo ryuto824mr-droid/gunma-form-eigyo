@@ -152,3 +152,22 @@ test("置き換え: 宛名が不確かになった企業は「ご担当者様」
   const gm = { name: "株式会社G・Mフーズ", company_info: { official_name: "株式会社G" } };
   assert.equal(fillCompanyName("{{company_name}} ご担当者様", gm, "body"), "株式会社G・Mフーズ ご担当者様");
 });
+
+test("法人格のある名前の末尾に「へ」が付いた形(〜へのお問い合わせ が切れた形)は不確か(292 杜丸不動産)", () => {
+  for (const v of ["株式会社杜丸不動産へ", "株式会社高崎不動産へ", "有限会社渡部仕切店へ", "有限会社マルシゲ物産へ", "杜丸不動産株式会社へ", "（株）テストへ", "株式会社ABCへ"]) {
+    const r = checkGreetingName(v);
+    assert.equal(r.ok, false, v);
+    assert.match(r.reason, /末尾が助詞「へ」/, v);
+  }
+  // 正式名称が使えなければ登録名を使う(登録名も使えなければ「ご担当者様」)
+  assert.equal(resolveGreetingName({ name: "杜丸不動産", company_info: { official_name: "株式会社杜丸不動産へ" } }).name, "杜丸不動産");
+  assert.equal(fillCompanyName("{{company_name}} ご担当者様", { name: "高崎市の不動産売却・買取・購入は株式会社高崎不動産へ", company_info: { official_name: "株式会社高崎不動産へ" } }, "body"), "ご担当者様");
+});
+
+test("「へ」で終わる形でも、法人格が無い・「へ」の前がひらがなの社名は、この判定では外さない(誤検出しない)", () => {
+  for (const v of ["株式会社みらいへ", "有限会社ひかりへ", "株式会社へいわ", "平和建設株式会社"]) {
+    assert.doesNotMatch(String(checkGreetingName(v).reason), /末尾が助詞「へ」/, v);
+  }
+  assert.equal(checkGreetingName("株式会社みらいへ").ok, true);
+  assert.equal(checkGreetingName("平和建設株式会社").ok, true);
+});
