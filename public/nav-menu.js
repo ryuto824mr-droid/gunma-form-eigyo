@@ -27,6 +27,8 @@ var NAV_SECONDARY_ITEMS = [
   { key: "calendar",         href: "/calendar.html",         label: "カレンダー" },
   { key: "help",              href: "/help.html",              label: "ヘルプ" },
   { key: "demo",              href: "/index.html",             label: "デモ", external: true },
+  // ログインの Cookie を消してログイン画面へ戻る(middleware.js / lib/auth-gate.js が処理する)
+  { key: "logout",            href: "/auth/logout",            label: "ログアウト" },
 ];
 
 function _navLinkHtml(item, extraClass) {

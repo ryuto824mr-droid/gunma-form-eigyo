@@ -23,6 +23,11 @@ const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER
 const { pickSearchCondition } = require("../lib/search-rotation");
 const { resolveGreetingName } = require("../lib/greeting-name");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd, checkReadyAdd } = require("../lib/later-actions");
+const {
+  isEnabled: isHoldReleaseEnabled, selectHoldReleases,
+  RELEASE_MARK: HOLD_RELEASE_MARK, AUTO_PIPELINE_HOLD_PREFIX: HOLD_AUTO_PIPELINE_PREFIX,
+} = require("../lib/hold-release");
+const { prefectureBlockReason } = require("../lib/prefecture");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
 const { isPlaceholderEmail } = require("../lib/email-placeholder");
@@ -47,6 +52,7 @@ module.exports = async function handler(req, res) {
     case "attachments":       return handleAttachments(req, res);
     case "company-clusters": return handleCompanyClusters(req, res);
     case "run-scheduled-sends": return handleRunScheduledSends(req, res);
+    case "run-send-queue": return handleRunSendQueue(req, res);
     case "auto-pipeline-config": return handleAutoPipelineConfig(req, res);
     case "auto-pipeline-logs": return handleAutoPipelineLogs(req, res);
     case "run-auto-pipeline": return handleRunAutoPipeline(req, res);
@@ -73,7 +79,7 @@ module.exports = async function handler(req, res) {
     case "send-logs":        return handleSendLogsList(req, res);
     case "track-click":      return handleTrackClick(req, res);
     default:
-      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, later-list, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
+      return res.status(400).json({ error: "有効なaction（db-setup, contacts, deals, activities, excluded-domains, tasks, pipeline-stats, reports, settings, ab-tests, ab-test-stats, api-usage, attachments, company-clusters, run-scheduled-sends, run-send-queue, auto-pipeline-config, auto-pipeline-logs, run-auto-pipeline, send-queue, generate-message, followup-suggestions, generate-followup, generate-content, saved-content, sender-accounts, sender-profiles, later-list, work-logs, work-sessions, work-session-edits, work-logs-todos-summary, work-logs-unconfirmed, parse-work-log, meeting-notes, summarize-meeting, calendar-events, production-tasks, production-task-history, send-logs, track-click）を指定してください" });
   }
 };
 
@@ -566,6 +572,16 @@ async function handleDbSetup(req, res) {
     // (確認画面が無いフォームはfalse)と送信後のページURLを記録する。失敗時・既存の行はNULLのまま）
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS confirm_step BOOLEAN");
     await dbSql.query("ALTER TABLE send_logs ADD COLUMN IF NOT EXISTS result_url TEXT");
+    // hold_releases: 保留から送信待ちへ自動で移した記録(設定 auto_release_hold が「入」のときだけ書かれる)。
+    // 送信の結果で send_queue.error_message が書き換わるため、移したこと・移した日は別の表に残し、
+    // 直近に移した行の失敗の割合と、1日に移す件数の上限の判定に使う
+    await dbSql.query(`CREATE TABLE IF NOT EXISTS hold_releases (
+      id          SERIAL PRIMARY KEY,
+      queue_id    INTEGER NOT NULL,
+      company_id  INTEGER NOT NULL,
+      project     TEXT NOT NULL,
+      released_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`);
 
     // ==================== セットアップ後の存在確認 ====================
     // db-setupは「SQLエラーが出なかった」ことしか保証しないため、例えば新しいデプロイの
@@ -2318,7 +2334,17 @@ async function processSendQueueBatch(deadline, skipReason) {
       // 実際の送信を試みる前にロックする。これ以降に関数が強制終了されても、
       // このレコードはpendingには戻らず(=自動で再送信されず)、上記の復旧ロジックで
       // 一定時間後にfailedとして扱われる
-      await sql`UPDATE send_queue SET status = 'sending', updated_at = NOW() WHERE id = ${item.id}`;
+      // まだ送信待ち(pending)のときだけロックする。送信だけの処理(run-send-queue)を外から1日に何回か呼ぶため、
+      // 実行が重なっても、ほかの実行が先にロックした行(同じ企業)を二重に送らない
+      const locked = await sql`
+        UPDATE send_queue SET status = 'sending', updated_at = NOW()
+        WHERE id = ${item.id} AND status = 'pending'
+        RETURNING id
+      `;
+      if (locked.length === 0) {
+        processed--;
+        continue;
+      }
 
       try {
         let result;
@@ -2430,6 +2456,9 @@ async function handleRunScheduledSends(req, res) {
     autoPipelineResult = { error: `自動パイプライン実行エラー: ${err.message}` };
   }
 
+  // 保留から1営業日たった行を自動で送信待ちに移す(設定 auto_release_hold が「入」のときだけ。初期は「切」)
+  const holdReleaseResult = await releaseHeldQueueItems(settings, skipReason);
+
   let sendQueueResult;
   try {
     const remainingMs = RUN_SCHEDULED_SENDS_TOTAL_BUDGET_MS - (Date.now() - requestStart);
@@ -2449,8 +2478,109 @@ async function handleRunScheduledSends(req, res) {
     send_queue_recovery: recoveryResult,
     scheduled_sends: scheduledSendsResult,
     auto_pipeline: autoPipelineResult,
+    hold_release: holdReleaseResult,
     send_queue: sendQueueResult,
   });
+}
+
+// ==================== run-send-queue (送信待ちの送信だけ。cron の鍵が必要) ====================
+// 毎日の処理(run-scheduled-sends)は、呼ばれるたびに企業探し(自動パイプライン)も動かすため、
+// 1日に何回も呼ぶと企業探しもその回数だけ動く。送信の回数を増やすために外から呼ぶのはこちら:
+// 詰まった送信中の行の復旧 → 保留からの自動の移し替え(設定が「入」のときだけ) → 送信待ちの送信、だけを行う。
+// 1日の送信の上限(settings.daily_send_limit)・土日祝日の休み・1回あたりの件数(SEND_QUEUE_BATCH_MAX_ITEMS)は
+// 毎日の処理と同じ。企業探し・予約送信は行わない
+const RUN_SEND_QUEUE_BUDGET_MS = 290000; // maxDuration=300秒に対して10秒の余裕を残す
+
+async function handleRunSendQueue(req, res) {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({
+      error: process.env.CRON_SECRET
+        ? "認証に失敗しました(送信だけの処理は cron の鍵が必要です)"
+        : "CRON_SECRET が登録されていないため実行しません(Vercel の環境変数に登録してください)",
+    });
+  }
+  const requestStart = Date.now();
+  let recoveryResult;
+  try {
+    recoveryResult = await recoverStuckSendingQueueItems();
+  } catch (err) {
+    recoveryResult = { error: `送信中レコードの復旧エラー: ${err.message}` };
+  }
+  let settings;
+  try {
+    settings = await getSettings();
+  } catch (err) {
+    return res.status(500).json({ error: `実行エラー: ${err.message}`, send_queue_recovery: recoveryResult });
+  }
+  const skipReason = computeWeekendHolidaySkipReason(settings);
+  const holdReleaseResult = await releaseHeldQueueItems(settings, skipReason);
+  let sendQueueResult;
+  try {
+    sendQueueResult = await processSendQueueBatch(requestStart + RUN_SEND_QUEUE_BUDGET_MS, skipReason);
+  } catch (err) {
+    sendQueueResult = { error: `send_queue処理エラー: ${err.message}` };
+  }
+  return res.status(200).json({ send_queue_recovery: recoveryResult, hold_release: holdReleaseResult, send_queue: sendQueueResult });
+}
+
+// ==================== 保留から送信待ちへの自動の移し替え(2-B) ====================
+// 自動パイプラインが保留で積んだ行を、1営業日待ってから送信待ちに移す。対象の条件と止まる場合は lib/hold-release.js。
+// 設定 auto_release_hold が "true" のときだけ動く(初期は「切」)。切のときは DB に何も問い合わせずに戻る
+async function releaseHeldQueueItems(settings, skipReason) {
+  if (!isHoldReleaseEnabled(settings)) return { enabled: false, released: 0 };
+  if (skipReason) return { enabled: true, released: 0, skipped: true, reason: skipReason };
+  const results = [];
+  try {
+    const dailySendLimit = parseInt(settings.daily_send_limit, 10) || 20;
+    const [{ count: todaySendCount }] = await sql`
+      SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
+    `;
+    const today = currentJstDateString();
+    for (const project of PROJECTS) {
+      const { items } = await loadLaterList(project);
+      const holdCompanyIds = items.filter((it) => it.state === "on_hold").map((it) => it.company_id);
+      const prefectureBlock = new Map();
+      if (holdCompanyIds.length > 0) {
+        const infos = await sql`SELECT id, company_info FROM companies WHERE id = ANY(${holdCompanyIds})`;
+        for (const r of infos) {
+          const reason = prefectureBlockReason(r.company_info || null);
+          if (reason) prefectureBlock.set(r.id, reason);
+        }
+      }
+      // 直近(7日)に自動で移した行の今の状態と、今日すでに移した件数(hold_releases は db-setup で作る記録の表。
+      // 送信の結果で send_queue.error_message が書き換わるため、移したことは別の表に残す)。
+      // 表が無い(db-setup の前)ときは、ここで例外になり何も移さない
+      const released = await sql`
+        SELECT sq.status, (hr.released_at AT TIME ZONE 'Asia/Tokyo')::date::text AS released_date
+        FROM hold_releases hr JOIN send_queue sq ON sq.id = hr.queue_id
+        WHERE hr.project = ${project} AND hr.released_at >= NOW() - INTERVAL '7 days'
+      `;
+      const releasedToday = released.filter((r) => r.released_date === today).length;
+      const decision = selectHoldReleases({
+        settings, items, prefectureBlock, now: Date.now(), isHoliday: isJapaneseHoliday,
+        todaySendCount, dailySendLimit, recentReleased: released, releasedToday,
+      });
+      let releasedCount = 0;
+      for (const r of decision.release) {
+        // 移す直前にもう一度、自動パイプラインの保留のままかを確かめる(人が外した・送信待ちにした行は触らない)
+        const updated = await sql`
+          UPDATE send_queue
+          SET status = 'pending', updated_at = NOW(),
+              error_message = ${`${HOLD_RELEASE_MARK} ${today}(1営業日の保留のあと) `} || COALESCE(error_message, '')
+          WHERE id = ${r.queue_id} AND status = 'on_hold' AND error_message LIKE ${HOLD_AUTO_PIPELINE_PREFIX + "%"}
+          RETURNING id
+        `;
+        if (updated.length) {
+          await sql`INSERT INTO hold_releases (queue_id, company_id, project) VALUES (${r.queue_id}, ${r.company_id}, ${project})`;
+          releasedCount++;
+        }
+      }
+      results.push({ project, released: releasedCount, stopped: decision.stopped, skipped: decision.skipped.length });
+    }
+  } catch (err) {
+    return { enabled: true, error: `保留の移し替えエラー: ${err.message}`, results };
+  }
+  return { enabled: true, released: results.reduce((n, r) => n + r.released, 0), results };
 }
 
 // ==================== auto-pipeline ====================
@@ -3583,6 +3713,81 @@ async function handleSenderProfiles(req, res) {
 // lib/later-status.jsで状態別(未送信・予約済み・期限切れ・キュー待ち・保留中・停止中)に振り分け、
 // 送信記録あり・送信対象外・重複などの警告を付けて返す。何も書き換えない
 
+// 「あとで送る」の一覧(lib/later-status.js)を作るためのデータを読み、一覧を作る。読み取りだけで何も書き換えない。
+// later-list の画面と、保留から送信待ちへの自動の移し替え(releaseHeldQueueItems)の両方で使う
+async function loadLaterList(project) {
+  const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
+    sql`
+      SELECT id, name, url, contact_form_url, email, status, archived, action_status, project, updated_at,
+             company_info->>'official_name'         AS official_name,
+             research_result->>'automatable'        AS automatable,
+             research_result->>'rejection_detected' AS rejection_detected,
+             research_result->>'mappingSource'      AS mapping_source,
+             research_result->>'aiError'            AS ai_error,
+             research_result->>'appealError'        AS appeal_error,
+             research_result->>'captchaDetected'    AS captcha_detected,
+             research_result->'needsReview'         AS needs_review,
+             research_result->'imageAuthFields'     AS image_auth_fields,
+             company_info->>'phone_number'          AS phone_number
+      FROM companies WHERE project = ${project}
+    `,
+    sql`
+      SELECT sl.company_id, sl.channel, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at,
+             array_agg(DISTINCT sl.variant_id) AS variant_ids
+      FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+      WHERE c.project = ${project}
+      GROUP BY sl.company_id, sl.channel, sl.status
+    `,
+    sql`
+      SELECT sq.id, sq.company_id, sq.variant_id, mv.name AS variant_name, mv.project AS variant_project,
+             sq.channel, sq.status, sq.created_at, sq.updated_at, sq.error_message
+      FROM send_queue sq LEFT JOIN message_variants mv ON mv.id = sq.variant_id
+      WHERE sq.project = ${project}
+    `,
+    sql`
+      SELECT ss.id, ss.company_id, ss.variant_id, mv.name AS variant_name, mv.project AS variant_project,
+             ss.channel, ss.status, ss.scheduled_at, ss.created_at, ss.error_message
+      FROM scheduled_sends ss
+      JOIN companies c ON c.id = ss.company_id
+      LEFT JOIN message_variants mv ON mv.id = ss.variant_id
+      WHERE c.project = ${project}
+    `,
+    sql`
+      SELECT id, name, channel, project FROM message_variants
+      WHERE project = ${project} ORDER BY created_at DESC
+    `,
+    // 企業ごとの直近の失敗理由(送信待ちリストのfailedの行に残っているエラー内容)
+    sql`
+      SELECT DISTINCT ON (company_id) company_id, error_message, updated_at
+      FROM send_queue
+      WHERE project = ${project} AND status = 'failed' AND error_message IS NOT NULL
+      ORDER BY company_id, updated_at DESC NULLS LAST, id DESC
+    `,
+    // 反応(人からの返信・手動の記録と、リンククリックの自動記録を lib/response-kind.js で区別する)
+    sql`
+      SELECT sl.company_id, r.classification, r.raw_excerpt, r.message_id, r.received_at, sl.sent_at
+      FROM responses r
+      JOIN send_logs sl ON sl.id = r.send_log_id
+      JOIN companies c ON c.id = sl.company_id
+      WHERE c.project = ${project}
+    `,
+  ]);
+
+  // 送信者プロフィール(未登録・不完全ならフォーム送信は止まるため警告に使う)
+  let senderProfileValid = false;
+  try {
+    const row = await loadSenderProfile(sql, project);
+    senderProfileValid = !!row && validateProfile(row).ok;
+  } catch {
+    senderProfileValid = false;
+  }
+
+  const { items, counts } = buildLaterList({
+    companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
+  });
+  return { companies, items, counts, variants, senderProfileValid };
+}
+
 async function handleLaterList(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "GETのみ対応しています(この一覧は読み取り専用です)" });
@@ -3592,75 +3797,7 @@ async function handleLaterList(req, res) {
     return res.status(400).json({ error: `projectは ${PROJECTS.join(" / ")} のいずれかを指定してください` });
   }
   try {
-    const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
-      sql`
-        SELECT id, name, url, contact_form_url, email, status, archived, action_status, project, updated_at,
-               company_info->>'official_name'         AS official_name,
-               research_result->>'automatable'        AS automatable,
-               research_result->>'rejection_detected' AS rejection_detected,
-               research_result->>'mappingSource'      AS mapping_source,
-               research_result->>'aiError'            AS ai_error,
-               research_result->>'appealError'        AS appeal_error,
-               research_result->>'captchaDetected'    AS captcha_detected,
-               research_result->'needsReview'         AS needs_review,
-               research_result->'imageAuthFields'     AS image_auth_fields,
-               company_info->>'phone_number'          AS phone_number
-        FROM companies WHERE project = ${project}
-      `,
-      sql`
-        SELECT sl.company_id, sl.channel, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at,
-               array_agg(DISTINCT sl.variant_id) AS variant_ids
-        FROM send_logs sl JOIN companies c ON c.id = sl.company_id
-        WHERE c.project = ${project}
-        GROUP BY sl.company_id, sl.channel, sl.status
-      `,
-      sql`
-        SELECT sq.id, sq.company_id, sq.variant_id, mv.name AS variant_name, mv.project AS variant_project,
-               sq.channel, sq.status, sq.created_at, sq.updated_at, sq.error_message
-        FROM send_queue sq LEFT JOIN message_variants mv ON mv.id = sq.variant_id
-        WHERE sq.project = ${project}
-      `,
-      sql`
-        SELECT ss.id, ss.company_id, ss.variant_id, mv.name AS variant_name, mv.project AS variant_project,
-               ss.channel, ss.status, ss.scheduled_at, ss.created_at, ss.error_message
-        FROM scheduled_sends ss
-        JOIN companies c ON c.id = ss.company_id
-        LEFT JOIN message_variants mv ON mv.id = ss.variant_id
-        WHERE c.project = ${project}
-      `,
-      sql`
-        SELECT id, name, channel, project FROM message_variants
-        WHERE project = ${project} ORDER BY created_at DESC
-      `,
-      // 企業ごとの直近の失敗理由(送信待ちリストのfailedの行に残っているエラー内容)
-      sql`
-        SELECT DISTINCT ON (company_id) company_id, error_message, updated_at
-        FROM send_queue
-        WHERE project = ${project} AND status = 'failed' AND error_message IS NOT NULL
-        ORDER BY company_id, updated_at DESC NULLS LAST, id DESC
-      `,
-      // 反応(人からの返信・手動の記録と、リンククリックの自動記録を lib/response-kind.js で区別する)
-      sql`
-        SELECT sl.company_id, r.classification, r.raw_excerpt, r.message_id, r.received_at, sl.sent_at
-        FROM responses r
-        JOIN send_logs sl ON sl.id = r.send_log_id
-        JOIN companies c ON c.id = sl.company_id
-        WHERE c.project = ${project}
-      `,
-    ]);
-
-    // 送信者プロフィール(未登録・不完全ならフォーム送信は止まるため警告に使う)
-    let senderProfileValid = false;
-    try {
-      const row = await loadSenderProfile(sql, project);
-      senderProfileValid = !!row && validateProfile(row).ok;
-    } catch {
-      senderProfileValid = false;
-    }
-
-    const { items, counts } = buildLaterList({
-      companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
-    });
+    const { companies, items, counts, variants, senderProfileValid } = await loadLaterList(project);
     // 直近7日のリサーチでAI(欄の判定・訴求タグの推定)が失敗した状況と、企業探しのAIの絞り込みに
     // 失敗して登録を止めた日。画面上部の警告に使う(記録の読み取りに失敗しても一覧は返す)
     const aiStatus = summarizeAIStatus(companies, Date.now());
@@ -4572,9 +4709,9 @@ async function handleProductionTaskHistory(req, res) {
 
 // 不正なurlパラメータ(スキームが危険、値が無い、改ざんされている等)の場合の
 // 安全なフォールバック先。エラーJSONをそのまま返すとメール受信者が生のAPIエラー画面を
-// 見ることになってしまうため、代わりにこのツール自体のホーム画面(LOCLEブランドの
-// ダッシュボード)へ誘導する
-const TRACK_CLICK_FALLBACK_URL = "https://gunma-form-eigyo.vercel.app/home.html";
+// 見ることになってしまうため、代わりに「リンクを開けませんでした」の案内ページへ誘導する。
+// ツールのページはパスワードで守られている(lib/auth-gate.js)ため、守りの外に置いたこのページを使う
+const TRACK_CLICK_FALLBACK_URL = "https://gunma-form-eigyo.vercel.app/link-invalid.html";
 
 // http:// または https:// で始まるURLのみを安全とみなす。javascript:, data:, file: 等の
 // 危険なスキームは明示的に拒否する。URLとして解析できない値(改ざん等)も安全でないとみなす

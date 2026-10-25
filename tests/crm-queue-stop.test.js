@@ -16,6 +16,10 @@ function fakeSql(strings, ...values) {
   if (text.startsWith("SELECT * FROM send_queue WHERE status = 'pending'")) {
     return Promise.resolve(queueItems.filter((i) => (i.status || "pending") === "pending"));
   }
+  // 送信前のロック(まだ pending のときだけ sending にする)。実際の DB と同じく、ロックできた行を返す
+  if (text.startsWith("UPDATE send_queue SET status = 'sending'") && text.includes("AND status = 'pending' RETURNING id")) {
+    return Promise.resolve([{ id: values[0] }]);
+  }
   return Promise.resolve([]);
 }
 fakeSql.query = async () => [];
