@@ -80,8 +80,9 @@ test("読み取り専用: 書き換えるSQL(INSERT/UPDATE/DELETE)を一切実�
   await call("GET", { project: "ozukanzukan" });
   assert.ok(calls.length >= 5);
   for (const c of calls) assert.doesNotMatch(c.text, /^(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP)\b/i, c.text);
-  // プロジェクトで絞り込んでいる
-  for (const c of calls) assert.ok(c.values.includes("ozukanzukan"), c.text);
+  // プロジェクトで絞り込んでいる(二重送信の防止のため、もう一方のプロジェクト(locle)の記録も読む)
+  for (const c of calls) assert.ok(c.values.includes("ozukanzukan") || c.values.includes("locle"), c.text);
+  assert.ok(calls.some((c) => c.values.includes("locle")), "もう一方のプロジェクトの記録を読む");
 });
 
 test("GET以外は405でDBに触れない", async () => {

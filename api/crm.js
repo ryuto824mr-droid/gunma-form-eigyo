@@ -22,6 +22,7 @@ const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
 const { pickSearchCondition } = require("../lib/search-rotation");
 const { selectBacklog, candidateOf, leftoverCandidates, hostnameOf } = require("../lib/discover-backlog");
+const { buildCrossProjectIndex, crossProjectBlock } = require("../lib/cross-project");
 const { resolveGreetingName, isGreetingUncertain } = require("../lib/greeting-name");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd, checkReadyAdd } = require("../lib/later-actions");
 const {
@@ -2343,6 +2344,7 @@ async function processSendQueueBatch(deadline, skipReason) {
     let success = 0;
     let failed = 0;
     let processed = 0;
+    let crossSkipped = 0;
     let stoppedReason = null;
 
     for (const item of pending) {
@@ -2362,6 +2364,24 @@ async function processSendQueueBatch(deadline, skipReason) {
       `;
       if (locked.length === 0) {
         processed--;
+        continue;
+      }
+
+      // 送る直前に、別のプロジェクトで同じ会社に送信済み・返信あり・保留・予約でないかを確かめる(二重送信の防止)。
+      // pending は除く(両方の同じ会社が同じ回にあると互いに止め合うため。先に送った方の送信記録で後の方が止まる)
+      let cross = null;
+      try {
+        const [company] = await sql`SELECT id, url, project FROM companies WHERE id = ${item.company_id}`;
+        cross = await crossBlockFor(company || null, { activeStatuses: ["sending", "on_hold"] });
+      } catch (err) {
+        cross = { reason: `二重送信の確認に失敗したため送らない: ${err.message}` };
+      }
+      if (cross) {
+        await sql`
+          UPDATE send_queue SET status = 'dismissed', updated_at = NOW(), error_message = ${"[二重送信の防止] " + cross.reason}
+          WHERE id = ${item.id} AND status = 'sending'
+        `;
+        crossSkipped++;
         continue;
       }
 
@@ -2405,7 +2425,7 @@ async function processSendQueueBatch(deadline, skipReason) {
       }
     }
 
-    return { processed, success, failed, remaining: pending.length - processed, ...(stoppedReason ? { stopped_reason: stoppedReason } : {}) };
+    return { processed, success, failed, cross_skipped: crossSkipped, remaining: pending.length - processed, ...(stoppedReason ? { stopped_reason: stoppedReason } : {}) };
   } catch (err) {
     return { error: `実行エラー: ${err.message}` };
   }
@@ -2789,6 +2809,9 @@ async function registerAndResearchCandidate(candidate, project) {
 async function queueCompanyForSend(company, project, variantId, options = {}) {
   // 宛名(企業名)が不確かな企業は積まない(企業名を直してから積む)。英数字だけの登録名は「ご担当者様」で送ってよい
   if (isGreetingUncertain(company)) return { ok: false, reason: "greeting_uncertain" };
+  // 別のプロジェクトで同じ会社に送信済み・返信あり・送信待ちなら積まない(二重送信の防止)
+  const cross = await crossBlockFor(company);
+  if (cross) return { ok: false, reason: "cross_project", detail: cross.reason };
   let channel;
   if (company?.research_result?.automatable === true) {
     channel = "form";
@@ -3232,6 +3255,7 @@ async function handleQueueHoldAdd(req, res) {
       company, project, variant, now: Date.now(),
       records: company ? await loadSendRecords(companyId) : null,
       activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
+      crossBlock: company ? await crossBlockFor(company) : null,
     });
     if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
     // 宛名(企業名)が不確かな企業は追加しない(企業名を直してから追加する)。送るときも名前を入れず
@@ -3281,6 +3305,7 @@ async function handleQueueReadyAdd(req, res) {
       company, project, variant, history, now: Date.now(),
       records: company ? await loadSendRecords(companyId) : null,
       activeRows: company ? await activeQueueRowsForCompany(companyId) : [],
+      crossBlock: company ? await crossBlockFor(company) : null,
     });
     if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
     const [created] = await sql`
@@ -3396,6 +3421,7 @@ async function handleSendQueue(req, res) {
         row, nextStatus: status, company, otherActiveRows, now: Date.now(),
         records: await loadSendRecords(row.company_id),
         confirmHasRecord: confirm_has_record === true,
+        crossBlock: status === "pending" && company ? await crossBlockFor(company) : null,
       });
       if (!check.ok) return res.status(check.status).json({ error: check.error, type: check.type || null });
       // 読み込んだ時点の状態のままの場合だけ更新する(送信処理が同時にsendingにした行は変えない)
@@ -3902,6 +3928,47 @@ async function handleSenderProfiles(req, res) {
 
 // 「あとで送る」の一覧(lib/later-status.js)を作るためのデータを読み、一覧を作る。読み取りだけで何も書き換えない。
 // later-list の画面と、保留から送信待ちへの自動の移し替え(releaseHeldQueueItems)の両方で使う
+// ==================== プロジェクトをまたいだ二重送信の防止(lib/cross-project.js) ====================
+// もう一方のプロジェクトの会社・送信記録・送信待ち・予約・返信を読み、会社(companyKey)ごとの記録を作る。
+// options.activeStatuses: 送信待ちの処理では ["sending", "on_hold"](pending を除く。lib/cross-project.js 参照)
+async function loadCrossProjectIndex(project, options = {}) {
+  const others = PROJECTS.filter((p) => p !== project);
+  const index = new Map();
+  for (const other of others) {
+    const [companies, sendLogSummary, queueRows, scheduledRows, responses] = await Promise.all([
+      sql`SELECT id, url, archived FROM companies WHERE project = ${other}`,
+      sql`
+        SELECT sl.company_id, sl.status, COUNT(*)::int AS count, MAX(sl.sent_at) AS last_sent_at
+        FROM send_logs sl JOIN companies c ON c.id = sl.company_id
+        WHERE c.project = ${other} AND sl.status IN ('sent', 'uncertain')
+        GROUP BY sl.company_id, sl.status
+      `,
+      sql`SELECT company_id, status FROM send_queue WHERE project = ${other} AND status IN ('pending', 'sending', 'on_hold')`,
+      sql`
+        SELECT ss.company_id, ss.status FROM scheduled_sends ss JOIN companies c ON c.id = ss.company_id
+        WHERE c.project = ${other} AND ss.status = 'pending'
+      `,
+      sql`
+        SELECT sl.company_id, r.classification, r.raw_excerpt
+        FROM responses r JOIN send_logs sl ON sl.id = r.send_log_id JOIN companies c ON c.id = sl.company_id
+        WHERE c.project = ${other}
+      `,
+    ]);
+    const part = buildCrossProjectIndex({
+      project: other, companies, sendLogSummary, queueRows, scheduledRows, responses,
+      ...(options.activeStatuses ? { activeStatuses: options.activeStatuses } : {}),
+    });
+    for (const [k, v] of part) if (!index.has(k)) index.set(k, v);
+  }
+  return index;
+}
+
+// この会社を、もう一方のプロジェクトの記録のために止めるか(止めるなら { reason, ids }、止めないなら null)
+async function crossBlockFor(company, options = {}) {
+  if (!company || !company.url || !company.project) return null;
+  return crossProjectBlock(company, await loadCrossProjectIndex(company.project, options));
+}
+
 async function loadLaterList(project) {
   const [companies, sendLogSummary, queueRows, scheduledRows, variants, lastFailures, responses] = await Promise.all([
     sql`
@@ -3969,8 +4036,9 @@ async function loadLaterList(project) {
     senderProfileValid = false;
   }
 
+  const crossProject = await loadCrossProjectIndex(project);
   const { items, counts } = buildLaterList({
-    companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, now: Date.now(),
+    companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, crossProject, now: Date.now(),
   });
   return { companies, items, counts, variants, senderProfileValid };
 }

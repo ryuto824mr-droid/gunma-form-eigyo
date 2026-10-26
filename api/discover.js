@@ -2,6 +2,7 @@ const { filterResultsWithAIDetailed } = require("../lib/discover-ai-filter");
 const { checkGreetingName } = require("../lib/greeting-name");
 const { searchPlacesAPI } = require("../lib/places-search");
 const { sql, getSettings } = require("../lib/db");
+const { companyKey } = require("../lib/domain-utils");
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
 
@@ -125,6 +126,8 @@ const EXCLUDE_PATH_KEYWORDS = ["job", "recruit", "career", "koyou", "キャリ�
 module.exports = handler;
 module.exports.getExclusionReason = getExclusionReason;
 module.exports.EXCLUDE_DOMAINS = EXCLUDE_DOMAINS;
+// 全国展開の試験(本番の DB に書かない手元のスクリプト)から、Brave の検索だけを呼ぶため
+module.exports.searchViaBrave = searchViaBrave;
 
 async function handler(req, res) {
   if (req.method === "GET" && req.query.action === "search-history") {
@@ -217,6 +220,12 @@ async function handler(req, res) {
     merged = merged.filter(r => !knownHostnames.has(getHostname(r.url)));
     const excludedKnownCount = beforeKnownFilterCount - merged.length;
 
+    // 5b. 別のプロジェクトで同じ会社(companyKey)に送信済みの候補も除外する(二重送信の防止。リサーチの費用も使わない)
+    const crossSentKeys = await getCrossProjectSentKeys(project);
+    const beforeCrossFilterCount = merged.length;
+    merged = merged.filter(r => !crossSentKeys.has(companyKey(r.url)));
+    const excludedCrossCount = beforeCrossFilterCount - merged.length;
+
     // 6. 自動パイプラインのみ、直近(設定可能な日数、既定7日)に発見済みの候補も除外する。
     // 手動検索で同じ条件を検索したときに毎回同じ結果しか出ないという不便を避けるため、
     // この除外は自動パイプライン経由の呼び出し(source==="auto_pipeline")限定で適用する
@@ -240,7 +249,7 @@ async function handler(req, res) {
     // 再確認する手段が企業名からの推測しかなかった)。記録の失敗は検索処理自体に影響させない
     await recordSearchHistory(project, params, merged.length);
 
-    const payload = { configured: true, results: merged, excluded_duplicate_count: excludedKnownCount + excludedRecentCount };
+    const payload = { configured: true, results: merged, excluded_duplicate_count: excludedKnownCount + excludedRecentCount, excluded_cross_project_count: excludedCrossCount };
     if (aiFilter.error) payload.ai_filter_error = aiFilter.error;
     if (debugAuthorized) {
       payload.debug = {
@@ -272,6 +281,20 @@ function resolveResultCount(value) {
   const n = parseInt(value, 10);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_RESULT_COUNT;
   return Math.min(n, MAX_RESULT_COUNT);
+}
+
+// 別のプロジェクトで送信記録(sent・uncertain)がある会社の companyKey(lib/domain-utils.js)。読めなければ空(除外しない)
+async function getCrossProjectSentKeys(project) {
+  try {
+    const rows = await sql`
+      SELECT DISTINCT c.url FROM companies c
+      JOIN send_logs sl ON sl.company_id = c.id AND sl.status IN ('sent', 'uncertain')
+      WHERE c.project <> ${project}
+    `;
+    return new Set(rows.map((r) => companyKey(r.url)).filter(Boolean));
+  } catch {
+    return new Set();
+  }
 }
 
 async function getKnownHostnames(project) {
