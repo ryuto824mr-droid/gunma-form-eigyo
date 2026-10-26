@@ -21,6 +21,7 @@ const { PROJECTS, validateProfile, checkBodyName, loadSenderProfile } = require(
 const { buildLaterList, buildRecords } = require("../lib/later-status");
 const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER_STOP_PREFIX } = require("../lib/ai-error");
 const { pickSearchCondition } = require("../lib/search-rotation");
+const { selectBacklog, candidateOf, leftoverCandidates, hostnameOf } = require("../lib/discover-backlog");
 const { resolveGreetingName } = require("../lib/greeting-name");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd, checkReadyAdd } = require("../lib/later-actions");
 const {
@@ -548,6 +549,23 @@ async function handleDbSetup(req, res) {
         searched_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `);
+    // discover_backlogテーブル追加（自動パイプラインが上限・時間切れで処理しなかった候補を翌日以降に回す。
+    // runAutoPipelineForProject 側でも CREATE TABLE IF NOT EXISTS するため、db-setup の前でも動く）
+    await dbSql.query(`
+      CREATE TABLE IF NOT EXISTS discover_backlog (
+        id           SERIAL PRIMARY KEY,
+        project      TEXT NOT NULL,
+        url_hostname TEXT NOT NULL,
+        url          TEXT NOT NULL,
+        name         TEXT,
+        candidate    JSONB,
+        search_label TEXT,
+        found_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        status       TEXT NOT NULL DEFAULT 'pending',
+        processed_at TIMESTAMPTZ,
+        UNIQUE (project, url_hostname)
+      )
+    `);
     // sender_profilesテーブル追加（フォーム送信で名乗る送信者情報をプロジェクトごとに管理する。
     // 以前の環境変数1組(SENDER_PERSON_NAME等)を置き換える。初期データは入れず、設定画面から登録する）
     await dbSql.query(`
@@ -605,7 +623,7 @@ async function handleDbSetup(req, res) {
       "generated_content", "sender_accounts", "meeting_notes",
       "auto_pipeline_config", "auto_pipeline_logs", "send_queue",
       "production_tasks", "production_task_history", "link_clicks",
-      "search_history", "sender_profiles",
+      "search_history", "sender_profiles", "discover_backlog",
     ];
     const expectedTables = [...schemaTables, ...additionalTables];
 
@@ -2838,7 +2856,9 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
   let found = 0, researched = 0, queued = 0, skipped = 0, attempted = 0;
   let errorMessage = null;
   let searchUsed = null;
+  let searchSkipped = null;
   let holdNew = true;
+  let backlog = null;
 
   try {
     if (!config.variant_id) {
@@ -2887,54 +2907,77 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
           source: "auto_pipeline",
         });
 
-        searchUsed = nextParams();
-        let discoverResult = await runDiscover(searchUsed);
-        // 新しい候補が0件で時間に余裕があれば、次の組み合わせでもう1回だけ探す
-        if (rotation && discoverResult.ok && !discoverResult.body?.ai_filter_error &&
-            Array.isArray(discoverResult.body?.results) && discoverResult.body.results.length === 0 &&
-            deadline - Date.now() > AUTO_PIPELINE_RETRY_MIN_MS) {
-          const second = nextParams();
-          if (second) {
-            searchUsed = second;
-            discoverResult = await runDiscover(second);
+        // 1件の候補を登録・リサーチし、送信待ちリストに積む(検索の結果と持ち越しで共通)
+        const processCandidate = async (candidate, searchLabel) => {
+          attempted++;
+          let company;
+          try {
+            company = await registerAndResearchCandidate(candidate, project);
+            researched++;
+          } catch (err) {
+            skipped++;
+            return;
           }
+          const queueResult = await queueCompanyForSend(company, project, config.variant_id, {
+            hold: holdNew,
+            note: `[保留] 自動パイプラインで追加(検索: ${searchLabel})`,
+          });
+          if (queueResult.ok) queued++; else skipped++;
+        };
+        const outOfTime = () => {
+          if (Date.now() <= deadline) return false;
+          errorMessage = `実行時間の都合により処理を打ち切りました(${attempted}/${effectiveLimit}社処理)`;
+          return true;
+        };
+
+        // 前日までに見つけて処理しきれなかった候補(持ち越し)を、検索より先に処理する(lib/discover-backlog.js)。
+        // 持ち越しの読み書きに失敗しても、今までどおり検索して処理する
+        backlog = await loadBacklogForRun(project);
+        for (const row of backlog.process) {
+          if (attempted >= effectiveLimit || outOfTime()) break;
+          await processCandidate(candidateOf(row), `${row.search_label || "固定の条件"}・持ち越し`);
+          backlog.processed++;
+          await markBacklogRows([row.id], "processed", backlog);
         }
 
-        if (!discoverResult.ok) {
-          errorMessage = discoverResult.body?.error || "企業検索に失敗しました";
-        } else if (discoverResult.body?.ai_filter_error) {
-          // 企業ではないページを登録しないよう、AIの絞り込みに失敗した日は登録しない
-          const info = classifyAIError(discoverResult.body.ai_filter_error);
-          errorMessage = `${AI_FILTER_STOP_PREFIX}(${info.label})ため、今日の企業の登録を止めました: ${String(discoverResult.body.ai_filter_error).slice(0, 150)}`;
-        } else if (discoverResult.body?.configured === false) {
-          errorMessage = discoverResult.body?.message || "検索機能が設定されていません";
+        // 持ち越しだけで上限か時間に届いた日は検索しない(検索の回数と「業種×市町村」の組み合わせを使わない)
+        if (attempted >= effectiveLimit || errorMessage) {
+          searchSkipped = attempted >= effectiveLimit ? "持ち越しの処理で今日の上限に達した" : "持ち越しの処理で時間を使い切った";
         } else {
-          const candidates = Array.isArray(discoverResult.body?.results) ? discoverResult.body.results : [];
-          found = candidates.length;
-
-          for (const candidate of candidates) {
-            if (attempted >= effectiveLimit) break;
-            if (Date.now() > deadline) {
-              errorMessage = `実行時間の都合により処理を打ち切りました(${attempted}/${effectiveLimit}社処理)`;
-              break;
+          searchUsed = nextParams();
+          let discoverResult = await runDiscover(searchUsed);
+          // 新しい候補が0件で時間に余裕があれば、次の組み合わせでもう1回だけ探す
+          if (rotation && discoverResult.ok && !discoverResult.body?.ai_filter_error &&
+              Array.isArray(discoverResult.body?.results) && discoverResult.body.results.length === 0 &&
+              deadline - Date.now() > AUTO_PIPELINE_RETRY_MIN_MS) {
+            const second = nextParams();
+            if (second) {
+              searchUsed = second;
+              discoverResult = await runDiscover(second);
             }
-            attempted++;
+          }
 
-            let company;
-            try {
-              company = await registerAndResearchCandidate(candidate, project);
-              researched++;
-            } catch (err) {
-              skipped++;
-              continue;
-            }
-
+          if (!discoverResult.ok) {
+            errorMessage = discoverResult.body?.error || "企業検索に失敗しました";
+          } else if (discoverResult.body?.ai_filter_error) {
+            // 企業ではないページを登録しないよう、AIの絞り込みに失敗した日は登録しない
+            const info = classifyAIError(discoverResult.body.ai_filter_error);
+            errorMessage = `${AI_FILTER_STOP_PREFIX}(${info.label})ため、今日の企業の登録を止めました: ${String(discoverResult.body.ai_filter_error).slice(0, 150)}`;
+          } else if (discoverResult.body?.configured === false) {
+            errorMessage = discoverResult.body?.message || "検索機能が設定されていません";
+          } else {
+            const candidates = Array.isArray(discoverResult.body?.results) ? discoverResult.body.results : [];
+            found = candidates.length;
             const searchLabel = [searchUsed && searchUsed.industry, searchUsed && searchUsed.city].filter(Boolean).join("×") || "固定の条件";
-            const queueResult = await queueCompanyForSend(company, project, config.variant_id, {
-              hold: holdNew,
-              note: `[保留] 自動パイプラインで追加(検索: ${searchLabel})`,
-            });
-            if (queueResult.ok) queued++; else skipped++;
+
+            let used = 0;
+            for (const candidate of candidates) {
+              if (attempted >= effectiveLimit || outOfTime()) break;
+              used++;
+              await processCandidate(candidate, searchLabel);
+            }
+            // 上限・時間切れで処理しなかった残りは、翌日以降に回す
+            await saveBacklogLeftovers(project, leftoverCandidates(candidates, used), searchLabel, backlog);
           }
         }
       }
@@ -2950,8 +2993,97 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
   return {
     project, enabled: true, found, researched, queued, skipped, error: errorMessage,
     search: searchUsed ? { industry: searchUsed.industry || null, prefecture: searchUsed.prefecture || null, city: searchUsed.city || null } : null,
+    search_skipped: searchSkipped,
+    backlog: backlog ? {
+      processed: backlog.processed, known: backlog.known, expired: backlog.expired,
+      carried_over: backlog.carriedOver, error: backlog.error,
+    } : null,
     held: holdNew,
   };
+}
+
+// ==================== 企業探しの持ち越し(discover_backlog) ====================
+// 上限・時間切れで処理しなかった候補を翌日以降に回す。判定は lib/discover-backlog.js。
+// search_history と同じく、db-setup を待たずに使えるよう、ここでも CREATE TABLE IF NOT EXISTS する
+async function ensureBacklogTable() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS discover_backlog (
+      id           SERIAL PRIMARY KEY,
+      project      TEXT NOT NULL,
+      url_hostname TEXT NOT NULL,
+      url          TEXT NOT NULL,
+      name         TEXT,
+      candidate    JSONB,
+      search_label TEXT,
+      found_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      status       TEXT NOT NULL DEFAULT 'pending',
+      processed_at TIMESTAMPTZ,
+      UNIQUE (project, url_hostname)
+    )
+  `;
+}
+
+// 今回処理する持ち越しを選ぶ。登録済み・期限切れの行はここで状態を変える。
+// 戻り値: { process: [行], processed, known, expired, carriedOver, error }
+async function loadBacklogForRun(project) {
+  const out = { process: [], processed: 0, known: 0, expired: 0, carriedOver: 0, error: null };
+  try {
+    await ensureBacklogTable();
+    const rows = await sql`
+      SELECT id, project, url_hostname, url, name, candidate, search_label, found_at, status
+      FROM discover_backlog
+      WHERE project = ${project} AND status = 'pending'
+      ORDER BY found_at ASC, id ASC
+    `;
+    if (!rows || rows.length === 0) return out;
+    const companies = await sql`SELECT url FROM companies WHERE project = ${project}`;
+    const knownHosts = new Set((companies || []).map((c) => hostnameOf(c.url)).filter(Boolean));
+    const sel = selectBacklog({ rows, knownHosts });
+    out.process = sel.process;
+    out.known = sel.known.length;
+    out.expired = sel.expired.length;
+    await markBacklogRows(sel.known.map((r) => r.id), "known", out);
+    await markBacklogRows(sel.expired.map((r) => r.id), "expired", out);
+  } catch (err) {
+    out.error = `持ち越しの読み込みに失敗: ${err.message}`;
+    out.process = [];
+  }
+  return out;
+}
+
+async function markBacklogRows(ids, status, backlog) {
+  if (!ids || ids.length === 0) return;
+  try {
+    await sql`
+      UPDATE discover_backlog SET status = ${status}, processed_at = NOW()
+      WHERE id = ANY(${ids}) AND status = 'pending'
+    `;
+  } catch (err) {
+    if (backlog && !backlog.error) backlog.error = `持ち越しの更新に失敗: ${err.message}`;
+  }
+}
+
+// 処理しなかった残りの候補を持ち越しに入れる。待ち・処理済み・登録済みの同じホスト名があれば何もしない
+// (期限切れの行だけ、待ちに戻して見つけた日時を今にする)
+async function saveBacklogLeftovers(project, leftovers, searchLabel, backlog) {
+  if (!leftovers || leftovers.length === 0) return;
+  try {
+    await ensureBacklogTable();
+    for (const { candidate, url_hostname } of leftovers) {
+      const rows = await sql`
+        INSERT INTO discover_backlog (project, url_hostname, url, name, candidate, search_label)
+        VALUES (${project}, ${url_hostname}, ${candidate.url}, ${candidate.name || null}, ${JSON.stringify(candidate)}, ${searchLabel})
+        ON CONFLICT (project, url_hostname) DO UPDATE
+          SET status = 'pending', found_at = NOW(), processed_at = NULL,
+              url = EXCLUDED.url, name = EXCLUDED.name, candidate = EXCLUDED.candidate, search_label = EXCLUDED.search_label
+          WHERE discover_backlog.status = 'expired'
+        RETURNING id
+      `;
+      if (rows && rows.length > 0 && backlog) backlog.carriedOver++;
+    }
+  } catch (err) {
+    if (backlog && !backlog.error) backlog.error = `持ち越しの保存に失敗: ${err.message}`;
+  }
 }
 
 async function runAutoPipelineAllProjects(settings, skipReason, deadline) {

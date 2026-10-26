@@ -171,3 +171,49 @@ test("「へ」で終わる形でも、法人格が無い・「へ」の前が�
   assert.equal(checkGreetingName("株式会社みらいへ").ok, true);
   assert.equal(checkGreetingName("平和建設株式会社").ok, true);
 });
+
+test("空白をはさんだダッシュは、ページのタイトルの区切りとして不確か(2192 たかまえ病院・2041 群馬漁業協同組合)", () => {
+  for (const v of [
+    "医療法人ゆかり たかまえ病院 - 群馬県高崎市", "群馬漁業協同組合 – 群馬漁業協同組合", "トップ - 髙橋建設株式会社",
+    "HOME - アイティーエス株式会社", "株式会社長野フィナンシャル -", "三幸機械株式会社- 大型部品加工 - 群馬県高崎市",
+    "堤自動車運送株式会社 - 高崎市", "Sports Depo - Takasaki",
+  ]) {
+    const r = checkGreetingName(v);
+    assert.equal(r.ok, false, v);
+    assert.match(r.reason, /空白をはさんだダッシュ/, v);
+  }
+  // 正式名称が取れていれば、それを宛名に使う
+  assert.equal(resolveGreetingName({ name: "トップ - 髙橋建設株式会社", company_info: { official_name: "髙橋建設株式会社" } }).name, "髙橋建設株式会社");
+});
+
+test("空白をはさまないダッシュ・ダッシュで囲んだ読みは、この判定では外さない(誤検出しない)", () => {
+  for (const v of ["橙 -Dai Dai-", "株式会社K-ONE", "エー・ピー-ワン株式会社", "株式会社ティーエス-テック"]) {
+    assert.doesNotMatch(String(checkGreetingName(v).reason), /空白をはさんだダッシュ/, v);
+  }
+});
+
+test("法人格のある名前の後ろに、空白をはさんで事業所・部署の名前や地名が付いた形は不確か(2372 渡辺パイプ・2572 群馬丸魚)", () => {
+  const cases = [
+    ["渡辺パイプ（株） 伊勢崎サービスセンター", /事業所・部署/],
+    ["（株）群馬丸魚 営業本部", /事業所・部署/],
+    ["第一貨物(株) 前橋物流センター", /事業所・部署/],
+    ["（株）アルファ 群馬工場総務課", /事業所・部署/],
+    ["リス（株） 群馬オフィス", /事業所・部署/],
+    ["東洋アルミニウム(株) 群馬製造所", /事業所・部署/],
+    ["(株)石田屋藤岡店 賃貸部", /事業所・部署/],
+    ["日本不動産株式会社 群馬県高崎市", /地名/],
+  ];
+  for (const [v, re] of cases) {
+    const r = checkGreetingName(v);
+    assert.equal(r.ok, false, v);
+    assert.match(r.reason, re, v);
+  }
+});
+
+test("社名の中の「センター」等・法人格の無い名前・後ろが社名の続きの形は、この判定では外さない(誤検出しない)", () => {
+  for (const v of ["株式会社農業支援センター", "株式会社 協和", "（株）スカイ＆スターズ ソリューションズ", "（有）トータル ケアサービス", "株式会社廣神建設 WABIKA", "伊勢崎 地域活動支援センター"]) {
+    assert.doesNotMatch(String(checkGreetingName(v).reason), /事業所・部署|地名が付いている/, v);
+  }
+  assert.equal(checkGreetingName("株式会社農業支援センター").ok, true);
+  assert.equal(checkGreetingName("株式会社 協和").ok, true);
+});

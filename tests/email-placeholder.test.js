@@ -65,3 +65,12 @@ test("大文字・前後の空白・形式不正", () => {
     assert.equal(isPlaceholderEmail(bad).placeholder, false, String(bad));
   }
 });
+
+test("ドメインが「www.」で始まるアドレスは仮と同じ扱い(2365 info@www.21service.co.jp)", () => {
+  const r = isPlaceholderEmail("info@www.21service.co.jp");
+  assert.equal(r.placeholder, true);
+  assert.match(r.reason, /Webサーバーの名前/);
+  assert.equal(isPlaceholderEmail("info@21service.co.jp").placeholder, false);
+  assert.equal(isPlaceholderEmail("www@example-corp.co.jp").placeholder, false, "@の前の www は対象外");
+  assert.equal(isPlaceholderEmail("info@wwwork.co.jp").placeholder, false, "www で始まるだけのドメインは対象外");
+});
