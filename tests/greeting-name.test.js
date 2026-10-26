@@ -92,10 +92,10 @@ test("ひらがなの語＋「は」で始まる説明文は不確か(753 の正
   ]) {
     assert.deepEqual(checkGreetingName(name), { ok: false, reason: "説明文の形(ひらがなの語＋は)" }, name);
   }
-  // 753: 正式名称が使えないので、登録名(英字)を宛名にする
+  // 753: 正式名称が使えず、登録名は英字だけなので、名前を入れず「ご担当者様」で送る(宛名が不確かとはしない)
   const g = resolveGreetingName({ name: "Minashiro Construction", company_info: { official_name: "しゅんせつはみなしろ建設株式会社" } });
-  assert.equal(g.name, "Minashiro Construction");
-  assert.equal(g.source, "name");
+  assert.equal(g.name, null);
+  assert.equal(g.fallbackOk, true);
 });
 
 test("「は」を含む実在の形の社名は、これまでどおり宛名に使う(誤検出しない)", () => {
@@ -133,7 +133,9 @@ test("正式名称が登録名の中黒の直前で切れていたら使わず�
   assert.equal(gm.source, "name");
   const tsk = resolveGreetingName({ name: "㈱ティー･エス･ケー 本社工場", company_info: { official_name: "株式会社ティー" } });
   assert.equal(tsk.name, null);
-  assert.deepEqual(tsk.rejected.map((r) => r.reason), ["途中で切れている(登録名では中黒などが続く)", "本社・工場などの事業所名が付いている"]);
+  // 「株式会社ティー」は、法人格と英字1文字の読みだけの形としても外れる
+  assert.deepEqual(tsk.rejected.map((r) => r.reason), ["法人格と英字1文字の読みだけ(途中で切れた疑い)", "本社・工場などの事業所名が付いている"]);
+  assert.equal(tsk.fallbackOk, false);
   // 切れていない正式名称はそのまま使う(登録名が正式名称で始まっても、続きが中黒でなければ切れていない)
   assert.equal(resolveGreetingName({ name: "株式会社ハヤセ 桐生工場", company_info: { official_name: "株式会社ハヤセ" } }).name, "株式会社ハヤセ");
   assert.equal(resolveGreetingName({ name: "（株）ピーエルエム 群馬工場", company_info: { official_name: "株式会社ピーエルエム" } }).name, "株式会社ピーエルエム");
@@ -216,4 +218,78 @@ test("社名の中の「センター」等・法人格の無い名前・後ろ�
   }
   assert.equal(checkGreetingName("株式会社農業支援センター").ok, true);
   assert.equal(checkGreetingName("株式会社 協和").ok, true);
+});
+
+test("英数字だけの登録名は宛名に使わず「ご担当者様」で送る。宛名が不確か(送信待ちに入れられない)とはしない(2376・2380)", () => {
+  const { isGreetingUncertain } = require("../lib/greeting-name");
+  for (const name of ["Otakankosabisu", "Benriya At Home Service", "Kabushikigaisha G & G Otaeigyosho", "NETSUGEN", "Sports Depo - Takasaki"]) {
+    const c = { name, company_info: {} };
+    const g = resolveGreetingName(c);
+    assert.equal(g.name, null, name);
+    assert.equal(g.fallbackOk, true, name);
+    assert.equal(isGreetingUncertain(c), false, name);
+    assert.equal(fillCompanyName("{{company_name}} ご担当者様", c, "body"), "ご担当者様", name);
+    assert.equal(fillCompanyName("{{company_name}} 様｜群馬の若手10万人に届く採用SNS", c, "subject"), "群馬の若手10万人に届く採用SNS", name);
+  }
+  // 正式名称が使えればそれを使う(英数字だけの正式名称もサイトから取った社名なので使う)
+  assert.equal(resolveGreetingName({ name: "Ikoinoie Adult Day Care", company_info: { official_name: "株式会社ファストナーシング" } }).name, "株式会社ファストナーシング");
+  assert.equal(resolveGreetingName({ name: "UNIGRAD", company_info: { official_name: "UNIGRAD" } }).name, "UNIGRAD");
+  // 日本語の名前が崩れているときは、今までどおり宛名が不確か
+  const bad = { name: "医療法人ゆかり たかまえ病院 - 群馬県高崎市", company_info: {} };
+  assert.equal(resolveGreetingName(bad).fallbackOk, false);
+  assert.equal(isGreetingUncertain(bad), true);
+  // 全角の英字は英数字だけとはみなさない
+  assert.equal(resolveGreetingName({ name: "ＮＥＴＳＵＧＥＮ株式会社", company_info: {} }).name, "ＮＥＴＳＵＧＥＮ株式会社");
+});
+
+test("正式名称の頭が欠けた形は使わず、登録名を使う(2378 MYK SHOWA・2062 佐々木商事・2477 リス・ロジスティクス)", () => {
+  const { headTruncatedAgainst } = require("../lib/greeting-name");
+  const cases = [
+    ["MYK SHOWA株式会社", "SHOWA株式会社"],
+    ["佐々木商事株式会社", "木商事株式会社"],
+    ["リス・ロジスティクス株式会社", "ロジスティクス株式会社"],
+    ["Ｋ．エステート株式会社", "エステート株式会社"],
+    ["ひと・コミュニケーションズ株式会社", "コミュニケーションズ株式会社"],
+  ];
+  for (const [name, official] of cases) {
+    assert.equal(headTruncatedAgainst(official, name), true, name);
+    const g = resolveGreetingName({ name, company_info: { official_name: official } });
+    assert.equal(g.name, name, name);
+    assert.match(g.rejected[0].reason, /頭が欠けている/, name);
+  }
+  // 登録名も使えなければ「ご担当者様」(宛名は不確か)
+  assert.equal(resolveGreetingName({ name: "群馬丸太運輸 本社", company_info: { official_name: "丸太運輸株式会社" } }).name, null);
+});
+
+test("説明の後ろに助詞・空白をはさんで社名が続く形は、頭の欠けとみなさない(正式名称のほうが正しい)", () => {
+  const { headTruncatedAgainst } = require("../lib/greeting-name");
+  for (const [name, official] of [
+    ["群馬県 太田市 プラスチック製品の射出成形 興伸化成株式会社", "興伸化成株式会社"],
+    ["仮設足場工事 株式会社スーパーエンジニアリング", "株式会社スーパーエンジニアリング"],
+    ["AiTech 株式会社アイテク", "株式会社アイテク"],
+    ["会社概要 | 明和不動産", "株式会社明和不動産"],
+    ["群馬日化サービス（株） 本社", "群馬日化サービス株式会社"],
+    ["株式会社ハヤセ 桐生工場", "株式会社ハヤセ"],
+  ]) {
+    assert.equal(headTruncatedAgainst(official, name), false, name);
+  }
+  assert.equal(resolveGreetingName({ name: "仮設足場工事 株式会社スーパーエンジニアリング", company_info: { official_name: "株式会社スーパーエンジニアリング" } }).name, "株式会社スーパーエンジニアリング");
+});
+
+test("罫線の縦線「┃」は区切り記号(2387)。法人格と英字1文字の読みだけの名前は不確か(2385 エー株式会社)", () => {
+  assert.deepEqual(checkGreetingName("プロタイムズ渋川店┃有限会社カナイ建装工業"), { ok: false, reason: "区切り記号を含む(ページのタイトル)" });
+  for (const v of ["エー株式会社", "ケイ株式会社", "株式会社シー", "アイ株式会社", "株式会社 エム"]) {
+    assert.deepEqual(checkGreetingName(v), { ok: false, reason: "法人格と英字1文字の読みだけ(途中で切れた疑い)" }, v);
+  }
+  for (const v of ["エーワン株式会社", "株式会社シーエス", "セルフ・エー株式会社", "株式会社アイテク"]) {
+    assert.equal(checkGreetingName(v).ok, true, v);
+  }
+  // 2385: 正式名称「エー株式会社」は使わない。登録名は英数字だけなので「ご担当者様」で送る
+  const selfA = resolveGreetingName({ name: "self - A Gatajigyo Hanibishibukawa", company_info: { official_name: "エー株式会社" } });
+  assert.equal(selfA.name, null);
+  assert.equal(selfA.fallbackOk, true);
+  // 919: 登録名に前後の続きの無い形でそのまま載っていれば、本当の社名とみなして使う
+  assert.equal(resolveGreetingName({ name: "Q co.,ltd.【株式会社キュー】", company_info: { official_name: "株式会社キュー" } }).name, "株式会社キュー");
+  // 続きがある(中黒で続く)形はこれまでどおり使わない
+  assert.equal(resolveGreetingName({ name: "株式会社シー・ビー・エス", company_info: { official_name: "株式会社シー" } }).name, "株式会社シー・ビー・エス");
 });
