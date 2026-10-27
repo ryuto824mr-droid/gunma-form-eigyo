@@ -997,6 +997,13 @@
 
       <div class="autopipeline-search-grid" id="pipelineSearchLocle">
         <div class="autosend-form-group">
+          <label for="pipelineArea">営業の対象の地域</label>
+          <select id="pipelineArea">
+            <option value="">群馬県だけ(今までどおり)</option>
+            <option value="nationwide">全国(住所の県が分からない・見つけた県と違う・公共団体は要確認)</option>
+          </select>
+        </div>
+        <div class="autosend-form-group">
           <label for="pipelineIndustry">業種</label>
           <select id="pipelineIndustry">
             <option value="">業種を選択</option>
@@ -2139,6 +2146,7 @@
       document.getElementById("pipelineLocationOz").value = p.location || "";
       document.getElementById("pipelineSizeOz").value = p.size || "";
     } else {
+      document.getElementById("pipelineArea").value = p.area && p.area.mode === "nationwide" ? "nationwide" : "";
       document.getElementById("pipelineIndustry").value = p.industry || "";
       document.getElementById("pipelinePrefecture").value = p.prefecture || "";
       document.getElementById("pipelineCity").value = p.city || "";
@@ -2172,6 +2180,12 @@
     const prevParams = (pipelineConfig && pipelineConfig.search_params) || {};
     if (prevParams.rotation) searchParams.rotation = prevParams.rotation;
     if (prevParams.hold_new_companies !== undefined) searchParams.hold_new_companies = prevParams.hold_new_companies;
+    // 営業の対象の地域(lib/area.js)。LOCLE は画面で選ぶ。お仕事図鑑は画面に欄が無いので読み込んだ設定を引き継ぐ
+    if (project !== "ozukanzukan") {
+      if (document.getElementById("pipelineArea").value === "nationwide") searchParams.area = { mode: "nationwide" };
+    } else if (prevParams.area) {
+      searchParams.area = prevParams.area;
+    }
 
     if (enabled && !variantId) {
       showToast("有効にするにはバリアントを選択してください", "error");

@@ -1,3 +1,4 @@
+const { PREFECTURES } = require("../lib/prefecture");
 const { sql } = require("../lib/db");
 
 module.exports = async function handler(req, res) {
@@ -57,7 +58,7 @@ module.exports = async function handler(req, res) {
     }
 
     // 単件追加
-    const { name, url, email, project } = req.body || {};
+    const { name, url, email, project, found_prefecture } = req.body || {};
     if (!name || typeof name !== "string" || !name.trim()) {
       return res.status(400).json({ error: "name（文字列）が必要です" });
     }
@@ -77,12 +78,25 @@ module.exports = async function handler(req, res) {
 
     const projectToSet = project === "ozukanzukan" ? "ozukanzukan" : "locle";
 
+    // 企業探しで見つけた県(lib/area.js。全国のとき、住所の県と違えば要確認にするのに使う)。都道府県名だけ受け取る
+    const foundPrefecture = PREFECTURES.includes(found_prefecture) ? found_prefecture : null;
     try {
-      const [company] = await sql`
-        INSERT INTO companies (name, url, email, status, project)
-        VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending', ${projectToSet})
-        RETURNING *
-      `;
+      let company;
+      try {
+        [company] = await sql`
+          INSERT INTO companies (name, url, email, status, project, found_prefecture)
+          VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending', ${projectToSet}, ${foundPrefecture})
+          RETURNING *
+        `;
+      } catch (err) {
+        // db-setup で found_prefecture の列を足す前(デプロイ直後)は、列なしで登録する
+        if (!/found_prefecture/.test(String(err.message))) throw err;
+        [company] = await sql`
+          INSERT INTO companies (name, url, email, status, project)
+          VALUES (${name.trim()}, ${url.trim()}, ${email?.trim() || null}, 'pending', ${projectToSet})
+          RETURNING *
+        `;
+      }
       return res.status(201).json(company);
     } catch (err) {
       return res.status(500).json({ error: `DB登録エラー: ${err.message}` });

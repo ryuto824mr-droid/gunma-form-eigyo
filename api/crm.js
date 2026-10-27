@@ -23,13 +23,13 @@ const { summarizeAIStatus, summarizeDiscoverFailures, classifyAIError, AI_FILTER
 const { pickSearchCondition } = require("../lib/search-rotation");
 const { selectBacklog, candidateOf, leftoverCandidates, hostnameOf } = require("../lib/discover-backlog");
 const { buildCrossProjectIndex, crossProjectBlock } = require("../lib/cross-project");
+const { areaOf, areaBlockReason, areaReviewReasons } = require("../lib/area");
 const { resolveGreetingName, isGreetingUncertain } = require("../lib/greeting-name");
 const { checkQueueVariantChange, checkQueueStatusChange, checkHoldAdd, checkReadyAdd } = require("../lib/later-actions");
 const {
   isEnabled: isHoldReleaseEnabled, selectHoldReleases,
   RELEASE_MARK: HOLD_RELEASE_MARK, AUTO_PIPELINE_HOLD_PREFIX: HOLD_AUTO_PIPELINE_PREFIX,
 } = require("../lib/hold-release");
-const { prefectureBlockReason } = require("../lib/prefecture");
 const { checkEmailFollowup, hasFormRecord, hasEmailRecord } = require("../lib/email-followup");
 const { AUTO_CLICK_EXCERPT } = require("../lib/response-kind");
 const { isPlaceholderEmail } = require("../lib/email-placeholder");
@@ -138,6 +138,8 @@ async function handleDbSetup(req, res) {
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_action TEXT");
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS next_action_date DATE");
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS action_status TEXT DEFAULT 'none'");
+    // 企業探しで見つけた県(lib/area.js。全国のとき、会社概要の住所の県と違えば要確認にする)
+    await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS found_prefecture TEXT");
     // 企業タグ付け機能用カラム追加
     await dbSql.query("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_tags JSONB DEFAULT '[]'");
     // アーカイブ機能用カラム追加
@@ -2579,10 +2581,11 @@ async function releaseHeldQueueItems(settings, skipReason) {
       const { items } = await loadLaterList(project);
       const holdCompanyIds = items.filter((it) => it.state === "on_hold").map((it) => it.company_id);
       const prefectureBlock = new Map();
+      const area = await loadAreaForProject(project);
       if (holdCompanyIds.length > 0) {
         const infos = await sql`SELECT id, company_info FROM companies WHERE id = ANY(${holdCompanyIds})`;
         for (const r of infos) {
-          const reason = prefectureBlockReason(r.company_info || null);
+          const reason = areaBlockReason(r.company_info || null, area);
           if (reason) prefectureBlock.set(r.id, reason);
         }
       }
@@ -2779,6 +2782,7 @@ async function registerAndResearchCandidate(candidate, project) {
     name: candidate.name,
     url: candidate.url,
     project,
+    found_prefecture: candidate.found_prefecture || null,
   });
   if (!registerResult.ok || !registerResult.body?.id) {
     throw new Error(registerResult.body?.error || "企業登録に失敗しました");
@@ -2812,6 +2816,15 @@ async function queueCompanyForSend(company, project, variantId, options = {}) {
   // 別のプロジェクトで同じ会社に送信済み・返信あり・送信待ちなら積まない(二重送信の防止)
   const cross = await crossBlockFor(company);
   if (cross) return { ok: false, reason: "cross_project", detail: cross.reason };
+  // 全国のとき: 見つけた県と住所の県が違う・住所の県が不明・公共団体の会社は、送信待ちではなく保留に積む(人が確かめる)
+  const info = company.company_info && typeof company.company_info === "object" ? company.company_info
+    : (() => { try { return JSON.parse(company.company_info || "null") || {}; } catch { return {}; } })();
+  const areaReview = areaReviewReasons({
+    name: company.name, official_name: info.official_name, company_prefecture: info.prefecture, found_prefecture: company.found_prefecture,
+  }, await loadAreaForProject(project));
+  if (areaReview.length) {
+    options = { ...options, hold: true, note: `${options.note || "[保留]"}・要確認(全国): ${areaReview.join("・")}` };
+  }
   let channel;
   if (company?.research_result?.automatable === true) {
     channel = "form";
@@ -2989,7 +3002,9 @@ async function runAutoPipelineForProject(project, settings, skipReason, deadline
           } else if (discoverResult.body?.configured === false) {
             errorMessage = discoverResult.body?.message || "検索機能が設定されていません";
           } else {
-            const candidates = Array.isArray(discoverResult.body?.results) ? discoverResult.body.results : [];
+            // 見つけた県を候補に付ける(登録で保存する。持ち越しにも引き継ぐ)
+          const candidates = (Array.isArray(discoverResult.body?.results) ? discoverResult.body.results : [])
+            .map((c) => ({ ...c, found_prefecture: (searchUsed && searchUsed.prefecture) || null }));
             found = candidates.length;
             const searchLabel = [searchUsed && searchUsed.industry, searchUsed && searchUsed.city].filter(Boolean).join("×") || "固定の条件";
 
@@ -3474,7 +3489,7 @@ async function handleGenerateMessage(req, res) {
       return res.status(400).json({ error: "有効なcompany_idを指定してください" });
     }
     try {
-      [company] = await sql`SELECT name, company_info, company_tags FROM companies WHERE id = ${companyId}`;
+      [company] = await sql`SELECT name, company_info, company_tags, project FROM companies WHERE id = ${companyId}`;
     } catch (err) {
       return res.status(500).json({ error: `DB取得エラー: ${err.message}` });
     }
@@ -3492,6 +3507,8 @@ async function handleGenerateMessage(req, res) {
       industry,
       tone,
       length,
+      // 差出人の地域の説明を、企業のプロジェクトの営業の対象の地域から作る(企業の指定が無ければ今までどおり群馬県)
+      area: company?.project ? await loadAreaForProject(company.project) : undefined,
     });
 
     if (result.configured === false) {
@@ -3963,6 +3980,16 @@ async function loadCrossProjectIndex(project, options = {}) {
   return index;
 }
 
+// プロジェクトの営業の対象の地域(lib/area.js)。設定が無い・読めないときは群馬県だけ(今までどおり)
+async function loadAreaForProject(project) {
+  try {
+    const [config] = await sql`SELECT search_params FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
+    return areaOf(config || null);
+  } catch {
+    return areaOf(null);
+  }
+}
+
 // この会社を、もう一方のプロジェクトの記録のために止めるか(止めるなら { reason, ids }、止めないなら null)
 async function crossBlockFor(company, options = {}) {
   if (!company || !company.url || !company.project) return null;
@@ -3982,7 +4009,10 @@ async function loadLaterList(project) {
              research_result->>'captchaDetected'    AS captcha_detected,
              research_result->'needsReview'         AS needs_review,
              research_result->'imageAuthFields'     AS image_auth_fields,
-             company_info->>'phone_number'          AS phone_number
+             company_info->>'phone_number'          AS phone_number,
+             company_info->>'prefecture'            AS company_prefecture,
+             -- 見つけた県(db-setup で列を足す前でも読めるよう、行を JSON にして取り出す)
+             to_jsonb(companies.*)->>'found_prefecture' AS found_prefecture
       FROM companies WHERE project = ${project}
     `,
     sql`
@@ -4037,8 +4067,9 @@ async function loadLaterList(project) {
   }
 
   const crossProject = await loadCrossProjectIndex(project);
+  const area = await loadAreaForProject(project);
   const { items, counts } = buildLaterList({
-    companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, crossProject, now: Date.now(),
+    companies, sendLogSummary, responses, queueRows, scheduledRows, senderProfileValid, lastFailures, crossProject, area, now: Date.now(),
   });
   return { companies, items, counts, variants, senderProfileValid };
 }
