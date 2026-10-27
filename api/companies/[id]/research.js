@@ -1,5 +1,6 @@
 const { sql } = require("../../../lib/db");
 const { analyzeForm } = require("../../../lib/form-analyzer");
+const { areaOf } = require("../../../lib/area");
 const { classifyAppealPointsDetailed } = require("../../../lib/appeal-point-classifier");
 const { classifyAIError } = require("../../../lib/ai-error");
 const { isPlaceholderEmail } = require("../../../lib/email-placeholder");
@@ -22,19 +23,29 @@ const SLOW_RESPONSE_RE = /navigation timeout|ERR_CONNECTION_TIMED_OUT|ERR_TIMED_
 
 // ブラウザ側の一時的な失敗(資源不足・遷移中のクラッシュ)で終わった場合、残り時間が十分あれば
 // 1回だけやり直す(判定は lib/research-retry.js)。やり直した場合は結果の警告にその旨を残す
-async function analyzeFormWithRetry(url, deadline) {
+async function analyzeFormWithRetry(url, deadline, options = {}) {
   try {
-    return await analyzeForm(url);
+    return await analyzeForm(url, options);
   } catch (err) {
     if (!shouldRetryResearch(err, deadline - Date.now())) throw err;
     await new Promise((r) => setTimeout(r, 1500));
-    const result = await analyzeForm(url);
+    const result = await analyzeForm(url, options);
     result.analysisWarnings = [
       ...(result.analysisWarnings || []),
       `1回目がブラウザ側の失敗で終わったため再試行しました: ${String(err.message).slice(0, 200)}`,
       ...(err.diagnostics || []).map((line) => `1回目の${line}`),
     ];
     return result;
+  }
+}
+
+// 会社のプロジェクトの営業の対象の地域(lib/area.js)。設定が無い・読めないときは群馬県だけ(今までどおり)
+async function loadArea(project) {
+  try {
+    const [config] = await sql`SELECT search_params FROM auto_pipeline_config WHERE project = ${project} LIMIT 1`;
+    return areaOf(config || null);
+  } catch {
+    return areaOf(null);
   }
 }
 
@@ -67,7 +78,7 @@ module.exports = async function handler(req, res) {
   try {
     const deadline = Date.now() + RESEARCH_TIMEOUT_MS;
     result = await Promise.race([
-      analyzeFormWithRetry(company.url, deadline),
+      analyzeFormWithRetry(company.url, deadline, { area: await loadArea(company.project), foundPrefecture: company.found_prefecture || null }),
       new Promise((_, reject) => {
         setTimeout(() => reject(new Error(RESEARCH_TIMEOUT_SENTINEL)), RESEARCH_TIMEOUT_MS);
       }),
