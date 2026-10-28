@@ -1,0 +1,48 @@
+# 企業探しとリサーチだけ(api/crm.js の run-discover)を、平日の朝に2回(6:05・8:05)呼ぶ GitHub Actions の雛形。
+#
+# このファイルは雛形で、ここに置いたままでは動かない。使うときは docs/ops/外部から送信を呼ぶ手順.md の
+# 「5. 企業探しだけの処理を平日の朝に呼ぶ」の手順で
+#   1. CRON_SECRET を Vercel と GitHub の両方に同じ値で登録し(送信の workflow で登録済みなら同じ値を使う)
+#   2. このファイルを .github/workflows/discover.yml にコピーして push する
+# push した時点から、下の時刻に自動で動き始める。
+#
+# - この処理は送信しない。企業探し(Brave・Google Places)とリサーチ(サイトを開く)を行い、
+#   新しく見つけた企業を保留(on_hold)で積むだけ。送信・予約送信・送信待ちの処理は行わない
+# - 1日に調べる数は1プロジェクトあたり settings.discover_daily_limit(初期40社)まで。
+#   1回に調べる数は自動パイプラインの設定の daily_limit(初期12・最大15)まで。土日祝日(日本時間)は何もしない
+# - 自動パイプラインが「切」のプロジェクトは何もしない(今は locle が切。ozukanzukan だけが動く)
+# - 時刻は UTC で書く(日本時間 - 9時間)。日本時間の 6時・8時は、UTC では前の日の 21時・23時になるため、
+#   曜日の指定を1日ずらしてある(UTC の日〜木 = 日本時間の月〜金)
+# - 毎時0分は GitHub の定時実行が混んで遅れやすいため、5分にしてある。それでも数分〜数十分遅れることがある
+name: discover
+
+on:
+  schedule:
+    # 日本時間 月〜金の 6:05・8:05(UTC 日〜木の 21:05・23:05)
+    - cron: "5 21,23 * * 0-4"
+  # 手動でも動かせる(Actions の画面の「Run workflow」)。手動でも実際に企業探しを行う(外部の API の費用がかかる)
+  workflow_dispatch: {}
+
+# 前の実行が終わるまで次を始めない(遅れて重なったときも、同時に2つ動かさない)
+concurrency:
+  group: discover
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    # 企業探しの処理は1回最大約280秒。応答を待ちきれるよう、少し長めにする
+    timeout-minutes: 8
+    steps:
+      - name: run-discover を呼ぶ
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET が GitHub の Secrets に登録されていません" >&2
+            exit 1
+          fi
+          # 結果(プロジェクトごとの見つけた数・調べた数・保留に積んだ数・止まった理由)を Actions の記録に残す。鍵の値は表示しない
+          curl -fsS --max-time 320 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "https://gunma-form-eigyo.vercel.app/api/crm?action=run-discover"
