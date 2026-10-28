@@ -2573,10 +2573,12 @@ async function releaseHeldQueueItems(settings, skipReason) {
   const results = [];
   try {
     const dailySendLimit = parseInt(settings.daily_send_limit, 10) || 20;
-    const [{ count: todaySendCount }] = await sql`
-      SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
-    `;
     const today = currentJstDateString();
+    // 今日(日本時間)の送信の数。DB の日付(CURRENT_DATE)は DB の時刻の設定(Neon の既定は UTC)で決まり、日本時間の 0:00〜9:00 が前の日に数えられるため
+    const [{ count: todaySendCount }] = await sql`
+      SELECT COUNT(*)::int AS count FROM send_logs
+      WHERE (sent_at AT TIME ZONE 'Asia/Tokyo')::date = ${today}::date
+    `;
     for (const project of PROJECTS) {
       const { items } = await loadLaterList(project);
       const holdCompanyIds = items.filter((it) => it.state === "on_hold").map((it) => it.company_id);
@@ -2763,7 +2765,7 @@ async function logAutoPipelineRun(project, counts) {
       INSERT INTO auto_pipeline_logs
         (project, run_date, found_count, researched_count, sent_count, skipped_count, error_message)
       VALUES (
-        ${project}, CURRENT_DATE,
+        ${project}, ${currentJstDateString()}::date,
         ${counts.found_count || 0}, ${counts.researched_count || 0},
         ${counts.sent_count || 0}, ${counts.skipped_count || 0},
         ${counts.error_message || null}
@@ -3181,9 +3183,10 @@ async function handleRunDiscover(req, res) {
     // 2つのプロジェクトで時間を半分ずつ使う(先のプロジェクトが全部使い切らないように)
     const deadline = start + Math.round((RUN_DISCOVER_BUDGET_MS * (i + 1)) / AUTO_PIPELINE_PROJECTS.length);
     try {
+      // 今日(日本時間)に調べた数。記録の作られた時刻で数える(run_date を UTC の日付で書いていた以前の記録も正しく数えるため)
       const [{ done }] = await sql`
         SELECT COALESCE(SUM(researched_count), 0)::int AS done FROM auto_pipeline_logs
-        WHERE project = ${project} AND run_date = CURRENT_DATE
+        WHERE project = ${project} AND (created_at AT TIME ZONE 'Asia/Tokyo')::date = ${currentJstDateString()}::date
       `;
       const remaining = dailyLimit - done;
       if (remaining <= 0) {

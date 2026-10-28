@@ -54,8 +54,11 @@ module.exports = async function handler(req, res) {
   // 1日の送信上限チェック(自動パイプラインのみ適用。手動送信は上限なし)
   if (triggerSource === "auto_pipeline") {
     const dailyLimit = parseInt(settings.daily_send_limit, 10) || 20;
+    // 今日(日本時間)の送信の数。DB の日付(CURRENT_DATE)は DB の時刻の設定(Neon の既定は UTC)で決まり、日本時間の 0:00〜9:00 が前の日に数えられるため
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
     const [{ count: todaySendCount }] = await sql`
-      SELECT COUNT(*)::int AS count FROM send_logs WHERE sent_at::date = CURRENT_DATE
+      SELECT COUNT(*)::int AS count FROM send_logs
+      WHERE (sent_at AT TIME ZONE 'Asia/Tokyo')::date = ${today}::date
     `;
     if (todaySendCount >= dailyLimit) {
       return res.status(429).json({ error: `本日の送信上限(${dailyLimit}件)に達しました` });
